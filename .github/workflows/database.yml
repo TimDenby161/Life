@@ -1,0 +1,26 @@
+# Applies all migrations to a throwaway local Supabase stack and runs the
+# pgTAP security/behaviour tests. Never touches the hosted project.
+name: Database tests
+
+on:
+  pull_request:
+    paths: ['supabase/**', 'scripts/gen-recurrence-sql-test.mjs']
+  push:
+    branches: [main]
+    paths: ['supabase/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start -x studio,imgproxy,inbucket,vector,logflare,supavisor,edge-runtime
+      - run: supabase db reset
+      - run: node scripts/gen-recurrence-sql-test.mjs && supabase test db

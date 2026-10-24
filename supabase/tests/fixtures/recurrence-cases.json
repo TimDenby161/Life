@@ -1,0 +1,19 @@
+[
+  { "name": "daily every day",            "rule": { "freq": "daily" },                                "anchor": "2026-01-01", "after": "2026-01-01", "expected": "2026-01-02" },
+  { "name": "daily every 3 days",         "rule": { "freq": "daily", "interval": 3 },                 "anchor": "2026-01-01", "after": "2026-01-02", "expected": "2026-01-04" },
+  { "name": "daily before anchor",        "rule": { "freq": "daily", "interval": 3 },                 "anchor": "2026-01-10", "after": "2025-12-01", "expected": "2026-01-10" },
+  { "name": "weekly default weekday",     "rule": { "freq": "weekly" },                               "anchor": "2026-10-20", "after": "2026-10-20", "expected": "2026-10-27" },
+  { "name": "weekly Tuesdays",            "rule": { "freq": "weekly", "weekdays": [2] },              "anchor": "2026-10-20", "after": "2026-10-22", "expected": "2026-10-27" },
+  { "name": "weekly Mon+Thu",             "rule": { "freq": "weekly", "weekdays": [1, 4] },           "anchor": "2026-10-19", "after": "2026-10-19", "expected": "2026-10-22" },
+  { "name": "fortnightly Monday",         "rule": { "freq": "weekly", "interval": 2, "weekdays": [1] }, "anchor": "2026-10-19", "after": "2026-10-19", "expected": "2026-11-02" },
+  { "name": "fortnightly Sunday wraps",   "rule": { "freq": "weekly", "interval": 2, "weekdays": [7] }, "anchor": "2026-10-19", "after": "2026-10-19", "expected": "2026-10-25" },
+  { "name": "monthly on anchor day",      "rule": { "freq": "monthly" },                              "anchor": "2026-01-15", "after": "2026-01-15", "expected": "2026-02-15" },
+  { "name": "monthly 31st clamps to Feb", "rule": { "freq": "monthly" },                              "anchor": "2026-01-31", "after": "2026-01-31", "expected": "2026-02-28" },
+  { "name": "monthly 31st back to 31",    "rule": { "freq": "monthly" },                              "anchor": "2026-01-31", "after": "2026-02-28", "expected": "2026-03-31" },
+  { "name": "monthly explicit day",       "rule": { "freq": "monthly", "monthDay": 5 },               "anchor": "2026-01-20", "after": "2026-01-19", "expected": "2026-02-05" },
+  { "name": "quarterly",                  "rule": { "freq": "monthly", "interval": 3 },               "anchor": "2026-01-10", "after": "2026-01-10", "expected": "2026-04-10" },
+  { "name": "yearly",                     "rule": { "freq": "yearly" },                               "anchor": "2026-03-01", "after": "2026-03-01", "expected": "2027-03-01" },
+  { "name": "yearly leap day",            "rule": { "freq": "yearly" },                               "anchor": "2028-02-29", "after": "2028-02-29", "expected": "2029-02-28" },
+  { "name": "until stops the series",     "rule": { "freq": "weekly", "until": "2026-10-25" },        "anchor": "2026-10-20", "after": "2026-10-20", "expected": null },
+  { "name": "until is inclusive",         "rule": { "freq": "weekly", "until": "2026-10-27" },        "anchor": "2026-10-20", "after": "2026-10-20", "expected": "2026-10-27" }
+]
