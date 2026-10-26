@@ -1162,7 +1162,9 @@ export type Database = {
           name: string
           owner_id: string | null
           ownership: string
+          pot_id: string | null
           reached_at: string | null
+          sort_order: number
           target_date: string | null
           target_minor: number
           updated_at: string
@@ -1179,7 +1181,9 @@ export type Database = {
           name: string
           owner_id?: string | null
           ownership?: string
+          pot_id?: string | null
           reached_at?: string | null
+          sort_order?: number
           target_date?: string | null
           target_minor: number
           updated_at?: string
@@ -1196,7 +1200,9 @@ export type Database = {
           name?: string
           owner_id?: string | null
           ownership?: string
+          pot_id?: string | null
           reached_at?: string | null
+          sort_order?: number
           target_date?: string | null
           target_minor?: number
           updated_at?: string
@@ -1229,6 +1235,68 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "household_members"
             referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "savings_goals_pot_id_household_id_fkey"
+            columns: ["pot_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "savings_pots"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      savings_pots: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "savings_pots_account_id_household_id_fkey"
+            columns: ["account_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "financial_account_balances"
+            referencedColumns: ["account_id", "household_id"]
+          },
+          {
+            foreignKeyName: "savings_pots_account_id_household_id_fkey"
+            columns: ["account_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "savings_pots_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
           },
         ]
       }

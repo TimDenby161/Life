@@ -11,6 +11,7 @@ export type Transaction = Tables<'financial_transactions'>
 export type BalanceSnapshot = Tables<'account_balance_history'>
 export type Budget = Tables<'budgets'>
 export type SavingsGoal = Tables<'savings_goals'>
+export type SavingsPot = Tables<'savings_pots'>
 export type SheetSource = Tables<'finance_sheet_sources'>
 
 export const ACCOUNT_TYPES = [
@@ -39,6 +40,7 @@ export const financeKeys = {
   snapshots: ['finances', 'snapshots'] as const,
   budgets: ['finances', 'budgets'] as const,
   goals: ['finances', 'goals'] as const,
+  pots: ['finances', 'pots'] as const,
   sheetSource: ['finances', 'sheet-source'] as const,
   sheetLinks: ['finances', 'sheet-links'] as const,
 }
@@ -71,8 +73,9 @@ export async function fetchBudgets() {
   return unwrap(await supabase.from('budgets').select('*').order('starts_month'))
 }
 
+/** Standalone goals; items inside a savings pot are fetched with their pot. */
 export async function fetchGoals() {
-  return unwrap(await supabase.from('savings_goals').select('*').is('archived_at', null).order('created_at'))
+  return unwrap(await supabase.from('savings_goals').select('*').is('archived_at', null).is('pot_id', null).order('created_at'))
 }
 
 type WithoutHousehold<T> = Omit<T, 'household_id'>
@@ -222,4 +225,40 @@ export async function applySheetLinks(
   const skipped = links.filter((l) => !l.account_id).map((l) => l.row_key)
   unwrap(await supabase.from('finance_sheet_sources').update({ skipped_row_keys: skipped }).eq('id', args.sourceId))
   return args.plan.orphaned.length
+}
+
+// -----------------------------------------------------------------------------
+// Savings pots: an account's balance funds the pot's items in order (lib/pots.ts).
+// -----------------------------------------------------------------------------
+export async function fetchPots() {
+  const [pots, items] = await Promise.all([
+    supabase.from('savings_pots').select('*').order('sort_order').order('created_at'),
+    supabase.from('savings_goals').select('*').not('pot_id', 'is', null).is('archived_at', null).order('sort_order').order('created_at'),
+  ])
+  return { pots: unwrap(pots), items: unwrap(items) }
+}
+
+export async function savePot(householdId: string, input: { id?: string; name: string; account_id: string | null; sort_order?: number }) {
+  const { id, ...fields } = input
+  if (id) unwrap(await supabase.from('savings_pots').update(fields).eq('id', id))
+  else unwrap(await supabase.from('savings_pots').insert({ ...fields, household_id: householdId }))
+}
+export async function deletePot(id: string) {
+  unwrap(await supabase.from('savings_pots').delete().eq('id', id))
+}
+
+export async function savePotItem(
+  householdId: string,
+  input: { id?: string; pot_id: string; name: string; target_minor: number; target_date: string | null; sort_order: number },
+) {
+  const { id, pot_id, sort_order, ...fields } = input
+  if (id) unwrap(await supabase.from('savings_goals').update(fields).eq('id', id))
+  else unwrap(await supabase.from('savings_goals').insert({ ...fields, pot_id, sort_order, household_id: householdId, ownership: 'joint' }))
+}
+export async function deletePotItem(id: string) {
+  unwrap(await supabase.from('savings_goals').delete().eq('id', id))
+}
+/** Saves a pot's items in the given order. */
+export async function reorderPotItems(ids: readonly string[]) {
+  await Promise.all(ids.map(async (id, i) => unwrap(await supabase.from('savings_goals').update({ sort_order: i }).eq('id', id))))
 }
