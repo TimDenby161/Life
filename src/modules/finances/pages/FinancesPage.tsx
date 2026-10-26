@@ -3,7 +3,7 @@ import { Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisProps, BarList, ChartCard, ChartTooltip, gridProps, StatTile } from '@/components/charts'
+import { axisProps, BarList, ChartCard, ChartTooltip, gridProps } from '@/components/charts'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -11,11 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
 import { monthStart, todayISO, toISODate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
+import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { VALUED_TYPES } from '../api'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useBudgets, useFinanceCategories, useGoals, useSnapshots, useTransactions } from '../hooks'
-import { activeBudgets, balanceOn, goalProgress, monthlyFlows, netWorth, spendingByCategory } from '../lib/calc'
+import { activeBudgets, balanceOn, goalProgress, monthlyFlows, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, spendingByCategory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -91,12 +92,10 @@ function Overview() {
       }
       return { date, label: i === 11 ? 'Now' : format(parseISO(date), 'MMM'), value: any ? total : null }
     })
-    // House and car: shown separately, and flagged when valued by estimate so it's never mistaken for a statement.
+    // House and car valued by estimate: the breakdown marks them so they're never mistaken for a statement.
     const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
-    const assetAccounts = included.filter((a) => VALUED_TYPES.has(a.account_type))
-    const assets = assetAccounts.reduce((t, a) => t + (balances.data!.get(a.id) ?? 0), 0)
-    const assetsEstimated = assetAccounts.some((a) => latestSource.get(a.id) === 'estimate')
-    return { nw, flows, spend, history, month, assets, assetsEstimated }
+    const assetsEstimated = included.some((a) => VALUED_TYPES.has(a.account_type) && latestSource.get(a.id) === 'estimate')
+    return { nw, flows, spend, history, month, assetsEstimated }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -116,7 +115,7 @@ function Overview() {
     )
   }
 
-  const primary = derived.nw.find((n) => n.currency === currency) ?? { currency, total: 0, assets: 0, liabilities: 0, byOwner: {} }
+  const primary = derived.nw.find((n) => n.currency === currency) ?? { currency, total: 0, assets: 0, liabilities: 0, byOwner: {}, byGroup: {} }
   const others = derived.nw.filter((n) => n.currency !== currency)
   const thisMonth = derived.flows.at(-1)!
   const catName = new Map((categories.data ?? []).map((c) => [c.id, c.name]))
@@ -137,17 +136,23 @@ function Overview() {
           <p className="mt-1 text-xs text-muted-foreground tabular">
             {money(primary.assets)} assets · {money(-primary.liabilities)} owed
           </p>
-          {derived.assets ? (
-            <p className="mt-1 text-xs text-muted-foreground tabular">
-              Includes {money(derived.assets)} in property and vehicles{derived.assetsEstimated ? ' (estimated values)' : ''}
-            </p>
-          ) : null}
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
+          <Breakdown groups={primary.byGroup.all} money={money} estimated={derived.assetsEstimated} />
         </Card>
         {members.map((m) => (
-          <StatTile key={m.id} label={`${m.display_name}'s accounts`} value={money(primary.byOwner[m.id] ?? 0)} sub="personal net worth" />
+          <Card key={m.id} className="p-4">
+            <p className="text-xs font-medium text-muted-foreground">{m.display_name}'s accounts</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner[m.id] ?? 0)}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">personal net worth</p>
+            <Breakdown groups={primary.byGroup[m.id]} money={money} estimated={derived.assetsEstimated} />
+          </Card>
         ))}
-        <StatTile label="Joint" value={money(primary.byOwner.joint ?? 0)} sub="shared accounts" />
+        <Card className="p-4">
+          <p className="text-xs font-medium text-muted-foreground">Joint</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner.joint ?? 0)}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">shared accounts</p>
+          <Breakdown groups={primary.byGroup.joint} money={money} estimated={derived.assetsEstimated} />
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -256,6 +261,25 @@ function Overview() {
         </Card>
       </div>
     </div>
+  )
+}
+
+/** What a net worth figure is made of, in NET_WORTH_GROUPS order; empty groups are left out. */
+function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: boolean }) {
+  const rows = NET_WORTH_GROUPS.filter((g) => groups?.[g.key])
+  if (!rows.length) return null
+  return (
+    <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
+      {rows.map((g) => (
+        <li key={g.key} className="flex justify-between gap-2">
+          <span className="text-muted-foreground">
+            {g.label}
+            {g.key === 'property' && estimated ? ' (est.)' : ''}
+          </span>
+          <span className={cn('tabular', groups![g.key]! < 0 && 'text-destructive')}>{money(groups![g.key]!)}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

@@ -100,7 +100,21 @@ describe('net worth', () => {
       assets: 346_401,
       liabilities: -32_000,
       byOwner: { joint: 264_401, sophie: 50_000 },
+      byGroup: {
+        all: { cash: 346_401, cards: -32_000 },
+        joint: { cash: 296_401, cards: -32_000 },
+        sophie: { cash: 50_000 },
+      },
     })
+  })
+  it('groups property, pensions and mortgages for the breakdown', () => {
+    const house = acct({ id: 'house', account_type: 'property' })
+    const car = acct({ id: 'car', account_type: 'vehicle' })
+    const mortgage = acct({ id: 'mort', account_type: 'mortgage', is_liability: true })
+    const pension = acct({ id: 'pen', account_type: 'pension', ownership: 'personal', owner_id: 'tim' })
+    const [gbp] = netWorth([house, car, mortgage, pension], new Map([['house', 39_700_000], ['car', 525_000], ['mort', -23_342_767], ['pen', 2_875_800]]))
+    expect(gbp.byGroup.all).toEqual({ property: 40_225_000, loans: -23_342_767, pensions: 2_875_800 })
+    expect(gbp.byGroup.tim).toEqual({ pensions: 2_875_800 })
   })
   it('keeps currencies separate', () => {
     const usd = acct({ id: 'usd', currency: 'USD', opening_balance_minor: 100 })

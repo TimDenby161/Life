@@ -87,12 +87,30 @@ export function balanceSeries(
   return points.sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/** Net worth breakdown rows, in display order: what you have, then what you owe. */
+export const NET_WORTH_GROUPS = [
+  { key: 'cash', label: 'Current accounts & cash', types: ['current', 'cash'] },
+  { key: 'savings', label: 'Savings', types: ['savings'] },
+  { key: 'investments', label: 'Investments', types: ['investment'] },
+  { key: 'pensions', label: 'Pensions', types: ['pension'] },
+  { key: 'property', label: 'Property & vehicles', types: ['property', 'vehicle'] },
+  { key: 'other', label: 'Other', types: ['other'] },
+  { key: 'cards', label: 'Credit cards', types: ['credit_card'] },
+  { key: 'loans', label: 'Mortgage & loans', types: ['mortgage', 'loan'] },
+] as const
+
+export type NetWorthGroup = (typeof NET_WORTH_GROUPS)[number]['key']
+
+const groupOf = (type: string): NetWorthGroup => NET_WORTH_GROUPS.find((g) => (g.types as readonly string[]).includes(type))?.key ?? 'other'
+
 export type NetWorth = {
   currency: string
   total: number
   assets: number
   liabilities: number
   byOwner: Record<string, number> // 'joint' | userId
+  /** Totals per breakdown group, overall ('all') and per owner ('joint' | userId). */
+  byGroup: Record<string, Partial<Record<NetWorthGroup, number>>>
 }
 
 /** Net worth per currency (no FX conversion is attempted). */
@@ -104,12 +122,17 @@ export function netWorth(
   for (const a of accounts) {
     if (a.archived_at || !a.include_in_net_worth) continue
     const b = balances.get(a.id) ?? 0
-    const nw = out.get(a.currency) ?? { currency: a.currency, total: 0, assets: 0, liabilities: 0, byOwner: {} }
+    const nw = out.get(a.currency) ?? { currency: a.currency, total: 0, assets: 0, liabilities: 0, byOwner: {}, byGroup: {} }
     nw.total += b
     if (b >= 0) nw.assets += b
     else nw.liabilities += b
     const owner = a.ownership === 'joint' ? 'joint' : (a.owner_id ?? 'joint')
     nw.byOwner[owner] = (nw.byOwner[owner] ?? 0) + b
+    const group = groupOf(a.account_type)
+    for (const key of ['all', owner]) {
+      const g = (nw.byGroup[key] ??= {})
+      g[group] = (g[group] ?? 0) + b
+    }
     out.set(a.currency, nw)
   }
   return [...out.values()].sort((x, y) => (x.currency === 'GBP' ? -1 : y.currency === 'GBP' ? 1 : x.currency.localeCompare(y.currency)))
