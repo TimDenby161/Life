@@ -35,9 +35,14 @@ export function AccountsTab() {
   if (accounts.error) return <ErrorState error={accounts.error} onRetry={() => accounts.refetch()} />
 
   const list = accounts.data.filter((a) => showArchived || !a.archived_at)
+  // Physical assets (house, car) sit apart from bank and investment accounts.
+  const isAsset = (a: Account) => VALUED_TYPES.has(a.account_type)
+  const money = list.filter((a) => !isAsset(a))
+  const ownerLabel = (a: Account) => (a.ownership === 'joint' ? 'Joint' : members.find((m) => m.id === a.owner_id)?.display_name)
   const groups = [
-    { key: 'joint', label: 'Joint', items: list.filter((a) => a.ownership === 'joint') },
-    ...members.map((m) => ({ key: m.id, label: m.display_name, items: list.filter((a) => a.owner_id === m.id) })),
+    { key: 'assets', label: 'Assets', items: list.filter(isAsset) },
+    { key: 'joint', label: 'Joint', items: money.filter((a) => a.ownership === 'joint') },
+    ...members.map((m) => ({ key: m.id, label: m.display_name, items: money.filter((a) => a.owner_id === m.id) })),
   ]
   // Snapshots are ordered by date, so the last one per account wins.
   const lastRecorded = new Map<string, { as_of: string; source: string }>()
@@ -74,7 +79,7 @@ export function AccountsTab() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{a.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `${lastRecorded.get(a.id)!.source === 'estimate' ? 'estimated' : 'recorded'} ${formatDay(lastRecorded.get(a.id)!.as_of)}` : 'calculated', fromSheet(a.id)].filter(Boolean).join(' · ')}
+                          {[typeLabel(a.account_type), isAsset(a) && ownerLabel(a), a.institution, lastRecorded.get(a.id) ? `${lastRecorded.get(a.id)!.source === 'estimate' ? 'estimated' : 'recorded'} ${formatDay(lastRecorded.get(a.id)!.as_of)}` : 'calculated', fromSheet(a.id)].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="text-right">

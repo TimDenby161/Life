@@ -12,6 +12,7 @@ import { Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/
 import { monthStart, todayISO, toISODate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { VALUED_TYPES } from '../api'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useBudgets, useFinanceCategories, useGoals, useSnapshots, useTransactions } from '../hooks'
 import { activeBudgets, balanceOn, goalProgress, monthlyFlows, netWorth, spendingByCategory } from '../lib/calc'
@@ -90,10 +91,12 @@ function Overview() {
       }
       return { date, label: i === 11 ? 'Now' : format(parseISO(date), 'MMM'), value: any ? total : null }
     })
-    // Accounts whose latest value is an estimate (house, car): shown separately so it's never mistaken for a statement.
+    // House and car: shown separately, and flagged when valued by estimate so it's never mistaken for a statement.
     const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
-    const estimated = included.reduce((t, a) => t + (latestSource.get(a.id) === 'estimate' ? (balances.data!.get(a.id) ?? 0) : 0), 0)
-    return { nw, flows, spend, history, month, estimated }
+    const assetAccounts = included.filter((a) => VALUED_TYPES.has(a.account_type))
+    const assets = assetAccounts.reduce((t, a) => t + (balances.data!.get(a.id) ?? 0), 0)
+    const assetsEstimated = assetAccounts.some((a) => latestSource.get(a.id) === 'estimate')
+    return { nw, flows, spend, history, month, assets, assetsEstimated }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -134,7 +137,11 @@ function Overview() {
           <p className="mt-1 text-xs text-muted-foreground tabular">
             {money(primary.assets)} assets · {money(-primary.liabilities)} owed
           </p>
-          {derived.estimated ? <p className="mt-1 text-xs text-muted-foreground tabular">Includes {money(derived.estimated)} of estimated values (property, vehicles)</p> : null}
+          {derived.assets ? (
+            <p className="mt-1 text-xs text-muted-foreground tabular">
+              Includes {money(derived.assets)} in property and vehicles{derived.assetsEstimated ? ' (estimated values)' : ''}
+            </p>
+          ) : null}
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
         </Card>
         {members.map((m) => (
