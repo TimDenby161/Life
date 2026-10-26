@@ -1807,6 +1807,268 @@ export type Database = {
           },
         ]
       }
+      wedding_budget_items: {
+        Row: {
+          budget_minor: number
+          category: string
+          created_at: string
+          created_by: string
+          due_date: string | null
+          household_id: string
+          id: string
+          name: string
+          notes: string | null
+          paid_minor: number
+          sort_order: number
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget_minor?: number
+          category: string
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          household_id: string
+          id?: string
+          name: string
+          notes?: string | null
+          paid_minor?: number
+          sort_order?: number
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget_minor?: number
+          category?: string
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          household_id?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          paid_minor?: number
+          sort_order?: number
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_budget_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wedding_budget_items_supplier_id_household_id_fkey"
+            columns: ["supplier_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "wedding_suppliers"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      wedding_guests: {
+        Row: {
+          created_at: string
+          created_by: string
+          dietary: string | null
+          household_id: string
+          id: string
+          invite: string
+          name: string
+          notes: string | null
+          party: string | null
+          plus_one: boolean
+          rsvp: string
+          table_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          dietary?: string | null
+          household_id: string
+          id?: string
+          invite?: string
+          name: string
+          notes?: string | null
+          party?: string | null
+          plus_one?: boolean
+          rsvp?: string
+          table_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          dietary?: string | null
+          household_id?: string
+          id?: string
+          invite?: string
+          name?: string
+          notes?: string | null
+          party?: string | null
+          plus_one?: boolean
+          rsvp?: string
+          table_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_guests_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wedding_settings: {
+        Row: {
+          household_id: string
+          pot_goal_id: string | null
+          updated_at: string
+          wedding_date: string | null
+        }
+        Insert: {
+          household_id: string
+          pot_goal_id?: string | null
+          updated_at?: string
+          wedding_date?: string | null
+        }
+        Update: {
+          household_id?: string
+          pot_goal_id?: string | null
+          updated_at?: string
+          wedding_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_settings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wedding_settings_pot_goal_id_fkey"
+            columns: ["pot_goal_id"]
+            isOneToOne: false
+            referencedRelation: "savings_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wedding_suppliers: {
+        Row: {
+          contact_name: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          household_id: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          role: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          contact_name?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          household_id: string
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          contact_name?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          household_id?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_suppliers_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wedding_tasks: {
+        Row: {
+          assignee_id: string | null
+          created_at: string
+          created_by: string
+          done_at: string | null
+          due_date: string | null
+          household_id: string
+          id: string
+          notes: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string
+          done_at?: string | null
+          due_date?: string | null
+          household_id: string
+          id?: string
+          notes?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string
+          done_at?: string | null
+          due_date?: string | null
+          household_id?: string
+          id?: string
+          notes?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_tasks_household_id_assignee_id_fkey"
+            columns: ["household_id", "assignee_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "wedding_tasks_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       financial_account_balances: {
@@ -2019,6 +2281,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sync_wedding_pot_target: {
+        Args: { p_household_id: string }
+        Returns: undefined
       }
       task_generate_next_occurrence: {
         Args: { p_after: string; p_generated_from: string; p_task_id: string }
