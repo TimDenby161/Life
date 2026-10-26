@@ -242,11 +242,17 @@ function RowChoice({
   row: SyncRow
   value: Choice
   onChange: (v: Choice) => void
-  accounts: { id: string; name: string }[]
+  accounts: { id: string; name: string; owner_id: string | null }[]
   hint: ReturnType<typeof suggestAccount>
   ownerName: (id: string | null) => string
 }) {
   const label = [row.institution, row.name].filter(Boolean).join(' · ')
+  const linked = accounts.find((a) => a.id === value)
+  // Same-named accounts (e.g. "Santander Current Account") differ only by owner:
+  // group by owner, the row's own person (or joint) first.
+  const groups = [...new Set([hint.owner_id, ...accounts.map((a) => a.owner_id)])]
+    .map((owner) => ({ label: ownerName(owner), accounts: accounts.filter((a) => a.owner_id === owner) }))
+    .filter((g) => g.accounts.length)
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm">
       <div className="min-w-0 flex-1">
@@ -254,16 +260,17 @@ function RowChoice({
         <p className="text-xs text-muted-foreground tabular">
           {row.latest ? `${formatMoney(row.latest.balanceMinor)} on ${formatDay(row.latest.date)}` : 'No figures'}
           {value === 'create' ? ` · new ${hint.account_type.replace('_', ' ')}, ${ownerName(hint.owner_id)}` : ''}
+          {linked ? ` · linked to ${ownerName(linked.owner_id) === 'Joint' ? 'joint' : `${ownerName(linked.owner_id)}’s`} ${linked.name}` : ''}
         </p>
       </div>
       <NativeSelect aria-label={`What to do with ${label}`} value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-full text-[13px] sm:w-56">
         <option value="skip">Don’t import</option>
         <option value="create">New account</option>
-        {accounts.length ? (
-          <optgroup label="Link to existing account">
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        {groups.map((g) => (
+          <optgroup key={g.label} label={`Link to ${g.label === 'Joint' ? 'a joint' : `${g.label}’s`} account`}>
+            {g.accounts.map((a) => <option key={a.id} value={a.id}>{g.label} · {a.name}</option>)}
           </optgroup>
-        ) : null}
+        ))}
       </NativeSelect>
     </li>
   )
