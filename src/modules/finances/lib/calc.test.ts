@@ -156,9 +156,9 @@ describe('budgets and goals', () => {
 describe('net worth history', () => {
   const snap = (as_of: string, source: string) => ({ account_id: 'cur', as_of, balance_minor: 1, created_at: `${as_of}T12:00:00Z`, source })
 
-  it('starts at the first sheet snapshot and adds today', () => {
+  it('runs from the first sheet snapshot to the latest', () => {
     const snaps = [snap('2025-08-01', 'manual'), snap('2026-07-14', 'sheet'), snap('2026-08-16', 'sheet'), snap('2026-08-16', 'sheet'), snap('2026-10-18', 'sheet')]
-    expect(netWorthDates(snaps, '2026-10-26')).toEqual(['2026-07-14', '2026-08-16', '2026-10-18', '2026-10-26'])
+    expect(netWorthDates(snaps, '2026-10-26')).toEqual(['2026-07-14', '2026-08-16', '2026-10-18'])
     expect(netWorthDates(snaps, '2026-10-18')).toEqual(['2026-07-14', '2026-08-16', '2026-10-18'])
   })
 

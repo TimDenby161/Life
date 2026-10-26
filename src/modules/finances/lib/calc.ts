@@ -244,13 +244,14 @@ export function goalProgress(goal: GoalLike, balances: ReadonlyMap<string, numbe
 export type NetWorthPoint = { date: ISODate; value: number | null }
 
 /**
- * Dates for the net worth chart. With sheet snapshots: every snapshot date
- * from the first one, plus today, so the chart starts when recording began.
+ * Dates for the net worth chart. With sheet snapshots: every snapshot date,
+ * so the chart starts when recording began and ends at the latest entry.
  * Without: the last 12 month ends, plus today.
  */
 export function netWorthDates(snapshots: readonly { as_of: string; source: string }[], today: ISODate): ISODate[] {
   const sheet = [...new Set(snapshots.filter((s) => s.source === 'sheet' && s.as_of <= today).map((s) => s.as_of))].sort()
-  const dates = sheet.length ? sheet : Array.from({ length: 11 }, (_, i) => toISODate(endOfMonth(subMonths(parseISO(today), 11 - i))))
+  if (sheet.length) return sheet
+  const dates = Array.from({ length: 11 }, (_, i) => toISODate(endOfMonth(subMonths(parseISO(today), 11 - i))))
   return dates.at(-1) === today ? dates : [...dates, today]
 }
 

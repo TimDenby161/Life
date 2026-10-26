@@ -57,7 +57,7 @@ function Overview() {
   const derived = useMemo(() => {
     if (!accounts.data || !balances.data || !transactions.data || !snapshots.data) return null
     const nw = netWorth(accounts.data, balances.data)
-    // From the first sheet snapshot (when recording began), one point per snapshot date plus today.
+    // From the first sheet snapshot (when recording began) to the latest, one point per snapshot date.
     const included = accounts.data.filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency)
     const fromSheet = snapshots.data.some((s) => s.source === 'sheet')
     const dates = netWorthDates(snapshots.data, today)
@@ -154,7 +154,7 @@ function Overview() {
           title={`${selectionTitle} over time`}
           description={
             derived.fromSheet
-              ? 'From your first sheet snapshot: the value on each snapshot date, plus today. Click anything above to chart it.'
+              ? 'From your first sheet snapshot to the latest: the value on each snapshot date. Click anything above to chart it.'
               : 'Calculated at each month end from opening balances, transactions and recorded balances. Not a record of actual statements.'
           }
           action={isCombined ? undefined : <Button variant="ghost" size="sm" onClick={() => setSelected(COMBINED)}>Show combined</Button>}
