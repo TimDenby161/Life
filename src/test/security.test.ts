@@ -41,8 +41,13 @@ describe('database migrations', () => {
 
   it('keeps the realtime publication and the client refresh map in sync', () => {
     const block = /foreach v_table in array array\[([\s\S]*?)\]/.exec(sql)![1]
-    const published = [...block.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort()
-    expect(Object.keys(REALTIME_TABLES).sort()).toEqual(published)
+    const published = new Set([...block.matchAll(/'(\w+)'/g)].map((m) => m[1]))
+    // Later migrations add or drop tables one at a time.
+    for (const [, op, table] of sql.matchAll(/alter publication supabase_realtime (add|drop) table public\.(\w+)/g)) {
+      if (op === 'add') published.add(table)
+      else published.delete(table)
+    }
+    expect(Object.keys(REALTIME_TABLES).sort()).toEqual([...published].sort())
   })
 })
 

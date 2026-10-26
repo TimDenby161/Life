@@ -334,7 +334,7 @@ function HealthCard() {
       const d = defById.get(m.metric_id)
       return d ? [{ id: m.id, key: `${m.user_id}:${m.metric_id}`, at: m.measured_at, userId: m.user_id, text: `${d.name} ${formatValue(Number(m.value), d.decimals)} ${d.unit}` }] : []
     }),
-    ...(exercise.data ?? []).slice(0, 10).map((s) => ({ id: s.id, key: `${s.user_id}:exercise`, at: s.started_at, userId: s.user_id, text: `${s.activity_type} · ${s.duration_minutes} min` })),
+    ...(exercise.data ?? []).slice(0, 10).map((s) => ({ id: s.id, key: `${s.user_id}:exercise`, at: s.started_at, userId: s.user_id, text: `Exercise · ${s.duration_minutes} min` })),
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
     // One line per person+metric keeps it a glance, not a log.

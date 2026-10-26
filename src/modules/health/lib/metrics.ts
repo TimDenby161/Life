@@ -1,17 +1,11 @@
 // Health helpers. Purely descriptive: no thresholds, scores or advice.
 import { parseISO } from 'date-fns'
-import { type ISODate, toISODate } from '@/lib/dates'
+import { addDaysISO, daysBetween, type ISODate, toISODate } from '@/lib/dates'
 
 export const HEALTH_CATEGORIES = [
-  { key: 'body', label: 'Body' },
-  { key: 'heart', label: 'Heart' },
-  { key: 'fitness', label: 'Fitness' },
-  { key: 'activity', label: 'Activity' },
-  { key: 'sleep', label: 'Sleep' },
-  { key: 'measurements', label: 'Measurements' },
-  { key: 'custom', label: 'Custom metrics' },
-  { key: 'exercise', label: 'Exercise sessions' },
-  { key: 'notes', label: 'Health notes' },
+  { key: 'body', label: 'Weight' },
+  { key: 'exercise', label: 'Exercise' },
+  { key: 'cycle', label: 'Periods' },
 ] as const
 export type HealthCategory = (typeof HEALTH_CATEGORIES)[number]['key']
 
@@ -52,4 +46,27 @@ export function latestWithChange(series: readonly { date: ISODate; value: number
 
 export function formatValue(value: number, decimals: number) {
   return new Intl.NumberFormat('en-GB', { maximumFractionDigits: decimals, minimumFractionDigits: 0 }).format(value)
+}
+
+export type PeriodLike = { started_on: ISODate; ended_on: ISODate | null }
+
+/**
+ * Plain arithmetic over logged periods: days between consecutive starts, their
+ * mean, and that mean added to the last start. The next date is an estimate
+ * and must be labelled as one.
+ */
+export function cycleSummary(periods: readonly PeriodLike[]) {
+  const sorted = periods.toSorted((a, b) => a.started_on.localeCompare(b.started_on))
+  const starts = sorted.map((p) => p.started_on)
+  const cycles = starts.slice(1).map((s, i) => daysBetween(starts[i], s))
+  const lengths = sorted.flatMap((p) => (p.ended_on ? [daysBetween(p.started_on, p.ended_on) + 1] : []))
+  const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null)
+  const averageCycle = mean(cycles.slice(-6))
+  const last = starts.at(-1) ?? null
+  return {
+    cycles,
+    averageCycle,
+    averageLength: mean(lengths.slice(-6)),
+    estimatedNext: last && averageCycle ? addDaysISO(last, averageCycle) : null,
+  }
 }

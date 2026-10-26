@@ -814,16 +814,12 @@ export type Database = {
       }
       health_exercise_sessions: {
         Row: {
-          activity_type: string
-          avg_heart_rate: number | null
           created_at: string
-          distance_m: number | null
+          description: string
           duration_minutes: number
-          energy_kcal: number | null
           external_id: string | null
           household_id: string
           id: string
-          notes: string | null
           source: string
           started_at: string
           updated_at: string
@@ -831,16 +827,12 @@ export type Database = {
           visibility: string
         }
         Insert: {
-          activity_type: string
-          avg_heart_rate?: number | null
           created_at?: string
-          distance_m?: number | null
+          description: string
           duration_minutes: number
-          energy_kcal?: number | null
           external_id?: string | null
           household_id: string
           id?: string
-          notes?: string | null
           source?: string
           started_at: string
           updated_at?: string
@@ -848,16 +840,12 @@ export type Database = {
           visibility?: string
         }
         Update: {
-          activity_type?: string
-          avg_heart_rate?: number | null
           created_at?: string
-          distance_m?: number | null
+          description?: string
           duration_minutes?: number
-          energy_kcal?: number | null
           external_id?: string | null
           household_id?: string
           id?: string
-          notes?: string | null
           source?: string
           started_at?: string
           updated_at?: string
@@ -1011,50 +999,50 @@ export type Database = {
           },
         ]
       }
-      health_notes: {
+      health_periods: {
         Row: {
-          body: string | null
           created_at: string
+          ended_on: string | null
           household_id: string
           id: string
-          noted_on: string
-          title: string
+          notes: string | null
+          started_on: string
           updated_at: string
           user_id: string
           visibility: string
         }
         Insert: {
-          body?: string | null
           created_at?: string
+          ended_on?: string | null
           household_id: string
           id?: string
-          noted_on?: string
-          title: string
+          notes?: string | null
+          started_on: string
           updated_at?: string
           user_id?: string
           visibility?: string
         }
         Update: {
-          body?: string | null
           created_at?: string
+          ended_on?: string | null
           household_id?: string
           id?: string
-          noted_on?: string
-          title?: string
+          notes?: string | null
+          started_on?: string
           updated_at?: string
           user_id?: string
           visibility?: string
         }
         Relationships: [
           {
-            foreignKeyName: "health_notes_household_id_fkey"
+            foreignKeyName: "health_periods_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "health_notes_household_id_user_id_fkey"
+            foreignKeyName: "health_periods_household_id_user_id_fkey"
             columns: ["household_id", "user_id"]
             isOneToOne: false
             referencedRelation: "household_members"

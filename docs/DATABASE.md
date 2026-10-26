@@ -36,10 +36,11 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | Feed | `feed_posts`, `feed_comments`, `feed_reads` | Messages, replies, read receipts. Only authors edit text; anyone can pin. |
 | | `feed_sources` | External provider config (no secrets). |
 | Calendar | `calendar_integrations` | Google calendar ID or embed URL per household (no credentials). |
-| Health | `health_metric_definitions` | Built-in (owner null) + custom per-user metrics. |
+| Health | `health_metric_definitions` | Built-in metrics; only `weight` remains. Not client-writable. |
 | | `health_category_visibility` | Per-user, per-category sharing switch. |
 | | `health_measurements` | Value + unit + time; `visibility` inherit/private/shared; import fields. |
-| | `health_exercise_sessions`, `health_notes` | Category `exercise` / `notes`. |
+| | `health_exercise_sessions` | Free-text `description`, `started_at`, `duration_minutes`. Category `exercise`. |
+| | `health_periods` | `started_on`, optional `ended_on`. Category `cycle`. Tracker shown when `user_preferences.settings.track_periods`. |
 
 ## Functions (RPC)
 

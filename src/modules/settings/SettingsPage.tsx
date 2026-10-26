@@ -20,7 +20,7 @@ import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/h
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
 import { useCategoryVisibility } from '@/modules/health/api'
-import { SharingPanel } from '@/modules/health/HealthPage'
+import { HealthSettingsPanel } from '@/modules/health/HealthPage'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
 import { useCreateCategory, useTaskCategories } from '@/modules/tasks/hooks'
 
@@ -324,8 +324,7 @@ function HealthSharingSection() {
   const { me, partner } = useHousehold()
   const visibility = useCategoryVisibility()
   const shared = new Map((visibility.data ?? []).filter((v) => v.user_id === me.id).map((v) => [v.category, v.shared]))
-  if (!partner) return null
-  return <div className="mt-4"><SharingPanel shared={shared} partnerName={partner.display_name} /></div>
+  return <div className="mt-4"><HealthSettingsPanel shared={shared} partnerName={partner?.display_name} /></div>
 }
 
 function CategoriesSection() {

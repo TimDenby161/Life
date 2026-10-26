@@ -74,7 +74,7 @@ Read-only. The `calendar-events` Edge Function signs a JWT for a Google service 
 
 ## Health
 
-Per-user records (`health_measurements`, `health_exercise_sessions`, `health_notes`) with built-in and custom metric definitions. RLS function `health_is_visible(owner, household, category, visibility)`: the owner always sees their own records; the partner sees a record if it is marked `shared`, or if it is `inherit` and the owner shares that category. Default is private. Only the owner can write. The app shows numbers and trends only, never interpretations. `source`/`external_id` columns are ready for Apple Health / Health Connect imports.
+Per-user records: weight (`health_measurements`), exercise (`health_exercise_sessions`: a description and a duration) and periods (`health_periods`). The next-period date is the last start plus the average cycle, labelled as an estimate. RLS function `health_is_visible(owner, household, category, visibility)`: the owner always sees their own records; the partner sees a record if it is marked `shared`, or if it is `inherit` and the owner shares that category. Default is private. Only the owner can write. The app shows numbers and trends only, never interpretations. `source`/`external_id` columns are ready for Apple Health / Health Connect imports.
 
 ## Charts
 

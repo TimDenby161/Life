@@ -192,35 +192,28 @@ declare
   metric record;
 begin
   select household_id into hh from household_members where user_id = tim;
-  -- Tim shares activity; Sophie shares sleep and activity. Everything else is private.
+  -- Tim shares exercise; Sophie shares exercise and periods. Weight is private.
   insert into health_category_visibility (user_id, household_id, category, shared)
-  values (tim, hh, 'activity', true), (sophie, hh, 'sleep', true), (sophie, hh, 'activity', true);
+  values (tim, hh, 'exercise', true), (sophie, hh, 'exercise', true), (sophie, hh, 'cycle', true);
+  update user_preferences set settings = settings || '{"track_periods": true}' where user_id = sophie;
+  insert into health_periods (household_id, user_id, started_on, ended_on)
+  select hh, sophie, current_date - 100 + n * 29 + (n % 2), current_date - 96 + n * 29 + (n % 2)
+  from generate_series(0, 3) as n;
 
   for d in select generate_series(current_date - 90, current_date - 1, interval '1 day')::date loop
     i := i + 1;
-    for metric in select id, key from health_metric_definitions where owner_id is null and key in ('weight', 'resting_hr', 'steps', 'sleep_duration', 'hrv') loop
+    for metric in select id, key from health_metric_definitions where owner_id is null and key = 'weight' loop
       if metric.key = 'weight' and i % 3 = 0 then
         insert into health_measurements (household_id, user_id, metric_id, measured_at, value)
         values (hh, tim, metric.id, d + time '07:10', round((84.5 - i * 0.03 + (abs(hashtext(d::text)) % 10) / 20.0)::numeric, 1));
-      elsif metric.key = 'resting_hr' and i % 2 = 0 then
-        insert into health_measurements (household_id, user_id, metric_id, measured_at, value)
-        values (hh, tim, metric.id, d + time '07:00', 58 + abs(hashtext(d::text || 'hr')) % 6),
-               (hh, sophie, metric.id, d + time '06:50', 55 + abs(hashtext(d::text || 'shr')) % 5);
-      elsif metric.key = 'steps' then
-        insert into health_measurements (household_id, user_id, metric_id, measured_at, value)
-        values (hh, tim, metric.id, d + time '22:00', 5200 + abs(hashtext(d::text || 'st')) % 7000),
-               (hh, sophie, metric.id, d + time '22:00', 7000 + abs(hashtext(d::text || 'sst')) % 6000);
-      elsif metric.key = 'sleep_duration' then
-        insert into health_measurements (household_id, user_id, metric_id, measured_at, value)
-        values (hh, sophie, metric.id, d + time '07:30', round((6.6 + (abs(hashtext(d::text || 'sl')) % 20) / 10.0)::numeric, 1));
-      elsif metric.key = 'hrv' and i % 4 = 0 then
-        insert into health_measurements (household_id, user_id, metric_id, measured_at, value, visibility)
-        values (hh, sophie, metric.id, d + time '07:00', 52 + abs(hashtext(d::text || 'hrv')) % 15, 'private');
       end if;
     end loop;
     if i % 4 = 1 then
-      insert into health_exercise_sessions (household_id, user_id, activity_type, started_at, duration_minutes, distance_m)
-      values (hh, tim, 'Run', d + time '18:30', 28 + abs(hashtext(d::text)) % 20, 5000 + abs(hashtext(d::text)) % 3000);
+      insert into health_exercise_sessions (household_id, user_id, description, started_at, duration_minutes)
+      values (hh, tim, 'Run around the park', d + time '18:30', 28 + abs(hashtext(d::text)) % 20);
+    elsif i % 5 = 2 then
+      insert into health_exercise_sessions (household_id, user_id, description, started_at, duration_minutes)
+      values (hh, sophie, 'Pilates class', d + time '19:00', 45);
     end if;
   end loop;
 end;
