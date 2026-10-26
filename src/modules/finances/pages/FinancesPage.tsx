@@ -13,48 +13,32 @@ import { todayISO, toISODate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { AccountDialog, TransactionDialog } from '../components/forms'
+import { AccountDialog } from '../components/forms'
 import { useAccounts, useBalances, useSnapshots, useTransactions } from '../hooks'
 import { accountsForSelection, type ChartSelection, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, percentChange, selectionKey, sheetPartHistory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
-import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
-import { TransactionsTab } from './TransactionsTab'
 
-const TABS = ['overview', 'transactions', 'accounts', 'budgets', 'goals'] as const
+const TABS = ['overview', 'accounts', 'goals'] as const
 type Tab = (typeof TABS)[number]
 
 export default function FinancesPage() {
   const [params, setParams] = useSearchParams()
   const tab = (TABS as readonly string[]).includes(params.get('tab') ?? '') ? (params.get('tab') as Tab) : 'overview'
-  const [adding, setAdding] = useState(false)
 
   return (
     <>
-      <PageHeader
-        title="Finances"
-        description="Manually tracked. Both of you see the whole picture."
-        actions={
-          <Button onClick={() => setAdding(true)}>
-            <Plus /> Transaction
-          </Button>
-        }
-      />
+      <PageHeader title="Finances" description="Both of you see the whole picture." />
       <Tabs value={tab} onValueChange={(v) => setParams((p) => { p.set('tab', v); return p }, { replace: true })}>
         <TabsList className="max-w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
-          <TabsTrigger value="budgets">Budgets</TabsTrigger>
           <TabsTrigger value="goals">Goals</TabsTrigger>
         </TabsList>
         <TabsContent value="overview"><Overview /></TabsContent>
-        <TabsContent value="transactions"><TransactionsTab /></TabsContent>
         <TabsContent value="accounts"><AccountsTab /></TabsContent>
-        <TabsContent value="budgets"><BudgetsTab /></TabsContent>
         <TabsContent value="goals"><GoalsTab /></TabsContent>
       </Tabs>
-      <TransactionDialog open={adding} onOpenChange={setAdding} />
     </>
   )
 }
