@@ -3,19 +3,19 @@ import { Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisProps, BarList, ChartCard, ChartTooltip, gridProps } from '@/components/charts'
+import { axisProps, ChartCard, ChartTooltip, gridProps } from '@/components/charts'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { monthStart, todayISO } from '@/lib/dates'
+import { Card } from '@/components/ui/card'
+import { Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
+import { todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { AccountDialog, TransactionDialog } from '../components/forms'
-import { useAccounts, useBalances, useBudgets, useFinanceCategories, useGoals, useSnapshots, useTransactions } from '../hooks'
-import { activeBudgets, goalProgress, monthlyFlows, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, spendingByCategory } from '../lib/calc'
+import { useAccounts, useBalances, useSnapshots, useTransactions } from '../hooks'
+import { groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -65,20 +65,13 @@ function Overview() {
   const balances = useBalances()
   const transactions = useTransactions()
   const snapshots = useSnapshots()
-  const categories = useFinanceCategories()
-  const budgets = useBudgets()
-  const goals = useGoals()
   const [addingAccount, setAddingAccount] = useState(false)
   const currency = household.default_currency
   const today = todayISO()
 
   const derived = useMemo(() => {
     if (!accounts.data || !balances.data || !transactions.data || !snapshots.data) return null
-    const accountCurrency = new Map(accounts.data.map((a) => [a.id, a.currency]))
     const nw = netWorth(accounts.data, balances.data)
-    const flows = monthlyFlows(transactions.data, accountCurrency, currency, 12, today)
-    const month = monthStart(today)
-    const spend = spendingByCategory(transactions.data, accountCurrency, currency, month, today)
     // From the first sheet snapshot (when recording began), one point per snapshot date plus today.
     const included = accounts.data.filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency)
     const fromSheet = snapshots.data.some((s) => s.source === 'sheet')
@@ -89,7 +82,7 @@ function Overview() {
     // Breakdown groups holding an estimated value (house, car): marked so they're never mistaken for a statement.
     const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
     const estimatedGroups = new Set(included.filter((a) => latestSource.get(a.id) === 'estimate').map((a) => groupOf(a.account_type)))
-    return { nw, flows, spend, history, fromSheet, month, estimatedGroups }
+    return { nw, history, fromSheet, estimatedGroups }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -111,15 +104,8 @@ function Overview() {
 
   const primary = derived.nw.find((n) => n.currency === currency) ?? { currency, total: 0, assets: 0, liabilities: 0, byOwner: {}, byGroup: {} }
   const others = derived.nw.filter((n) => n.currency !== currency)
-  const thisMonth = derived.flows.at(-1)!
-  const catName = new Map((categories.data ?? []).map((c) => [c.id, c.name]))
-  const spendRows = [...derived.spend.entries()]
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k, v]) => ({ key: k, label: catName.get(k) ?? 'Uncategorised', values: { spend: v } }))
   const money = (v: number) => formatMoney(v, currency, { hidePence: true })
   const compact = (v: number) => formatMoney(v, currency, { compact: true })
-  const monthBudgets = activeBudgets((budgets.data ?? []).filter((b) => b.currency === currency), derived.month)
 
   return (
     <div className="grid gap-4">
@@ -168,72 +154,6 @@ function Overview() {
             </ResponsiveContainer>
           </div>
         </ChartCard>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader><CardTitle>This month</CardTitle></CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            <Row label="Income" value={money(thisMonth.income)} />
-            <Row label="Spending" value={money(thisMonth.spending)} />
-            <Row label="Net" value={formatMoney(thisMonth.net, currency, { hidePence: true, signed: true })} strong />
-          </CardContent>
-        </Card>
-        <ChartCard title="Spending by category" description="This month" className="lg:col-span-2" table={{ columns: ['Category', 'Spent'], rows: spendRows.map((r) => [r.label, money(r.values.spend)]) }}>
-          {spendRows.length ? (
-            <BarList rows={spendRows.slice(0, 8)} series={[{ key: 'spend', label: 'Spent', color: 'var(--chart-2)' }]} formatValue={money} />
-          ) : (
-            <p className="py-6 text-center text-sm text-muted-foreground">No spending recorded this month.</p>
-          )}
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Budgets this month</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            {monthBudgets.length ? (
-              monthBudgets.map((b) => {
-                const spent = derived.spend.get(b.category_id) ?? 0
-                const over = spent > b.amount_minor
-                return (
-                  <div key={b.id}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span>{catName.get(b.category_id)}</span>
-                      <span className={over ? 'font-medium text-destructive tabular' : 'text-muted-foreground tabular'}>
-                        {money(spent)} / {money(b.amount_minor)}
-                      </span>
-                    </div>
-                    <Progress value={(spent / b.amount_minor) * 100} indicatorClassName={over ? 'bg-destructive' : undefined} />
-                  </div>
-                )
-              })
-            ) : (
-              <p className="text-sm text-muted-foreground">No budgets set yet.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Savings goals</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            {goals.data?.length ? (
-              goals.data.map((g) => {
-                const { saved, pct } = goalProgress(g, balances.data!)
-                return (
-                  <div key={g.id}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span>{g.name}{g.reached_at ? ' 🎉' : ''}</span>
-                      <span className="text-muted-foreground tabular">{formatMoney(saved, g.currency, { hidePence: true })} / {formatMoney(g.target_minor, g.currency, { hidePence: true })}</span>
-                    </div>
-                    <Progress value={pct} indicatorClassName={pct >= 100 ? 'bg-success' : undefined} />
-                  </div>
-                )
-              })
-            ) : (
-              <p className="text-sm text-muted-foreground">No savings goals yet.</p>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
@@ -289,11 +209,3 @@ function CombinedBreakdown({ groups = {}, money, estimated }: { groups?: Partial
   )
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={strong ? 'font-semibold tabular' : 'tabular'}>{value}</span>
-    </div>
-  )
-}
