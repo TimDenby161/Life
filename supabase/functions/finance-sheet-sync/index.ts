@@ -27,15 +27,33 @@ async function readSheet(token: string, spreadsheetId: string, sheetName: string
   const url = new URL(`${SHEETS_API}/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`)
   url.search = new URLSearchParams({ valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' }).toString()
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (res.status === 403 || res.status === 404) throw new Error('sheet_not_shared')
+  if (res.status === 403) {
+    // Google uses 403 both for "API not enabled in the project" and "not shared".
+    const body = (await res.json().catch(() => null)) as { error?: { details?: { reason?: string }[] } } | null
+    const reasons = (body?.error?.details ?? []).map((d) => d.reason)
+    throw new Error(reasons.includes('SERVICE_DISABLED') || reasons.includes('ACCESS_NOT_CONFIGURED') ? 'sheets_api_disabled' : 'sheet_not_shared')
+  }
+  if (res.status === 404) throw new Error('sheet_not_shared')
   if (res.status === 400) throw new Error('sheet_tab_missing')
   if (!res.ok) throw new Error(`Google Sheets error (${res.status})`)
   return ((await res.json()) as { values?: unknown[][] }).values ?? []
 }
 
-const MESSAGES: Record<string, string> = {
-  sheet_not_shared: 'The sheet is not shared with the service account (or the spreadsheet link is wrong).',
-  sheet_tab_missing: 'That tab was not found in the spreadsheet. Check the tab name in Settings.',
+const serviceAccountEmail = () => {
+  try {
+    return (JSON.parse(Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON') ?? '{}') as { client_email?: string }).client_email ?? 'the service account'
+  } catch {
+    return 'the service account'
+  }
+}
+
+const MESSAGES: Record<string, () => string> = {
+  sheet_not_shared: () => `The sheet is not shared with ${serviceAccountEmail()} (or the spreadsheet link is wrong).`,
+  sheets_api_disabled: () => {
+    const project = /@([^.]+)\.iam\.gserviceaccount\.com$/.exec(serviceAccountEmail())?.[1]
+    return `The Google Sheets API is not enabled in the Google Cloud project${project ? ` "${project}"` : ''}. Enable it, wait a few minutes, then sync again.`
+  },
+  sheet_tab_missing: () => 'That tab was not found in the spreadsheet. Check the tab name in the sheet settings.',
 }
 
 Deno.serve(async (req) => {
@@ -68,7 +86,7 @@ Deno.serve(async (req) => {
     const code = (e as Error).message
     // Never log sheet contents; the error codes and parser messages contain none.
     console.error('finance-sheet-sync failed:', code)
-    if (MESSAGES[code]) return fail(MESSAGES[code], 502)
+    if (MESSAGES[code]) return fail(MESSAGES[code](), 502)
     if (/^No (dates|"Date" row)/.test(code)) return fail(`The sheet layout wasn't recognised: ${code}.`, 422)
     return fail('Google Sheets is unavailable right now.', 502)
   }
