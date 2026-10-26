@@ -167,8 +167,11 @@ export async function fetchSheetSource() {
   return unwrap(await supabase.from('finance_sheet_sources').select('*').maybeSingle()) as SheetSource | null
 }
 
-export async function saveSheetSource(householdId: string, input: { spreadsheet_id: string; sheet_name: string }) {
-  unwrap(await supabase.from('finance_sheet_sources').upsert({ household_id: householdId, ...input }, { onConflict: 'household_id' }))
+// Insert then update (not upsert): household_id is deliberately not an updatable column.
+export async function saveSheetSource(householdId: string, input: { id?: string; spreadsheet_id: string; sheet_name: string }) {
+  const { id, ...fields } = input
+  if (id) unwrap(await supabase.from('finance_sheet_sources').update(fields).eq('id', id))
+  else unwrap(await supabase.from('finance_sheet_sources').insert({ household_id: householdId, ...fields }))
 }
 export async function deleteSheetSource(id: string) {
   unwrap(await supabase.from('finance_sheet_sources').delete().eq('id', id))

@@ -115,7 +115,7 @@ function ConnectSheetDialog({ open, onOpenChange, source }: { open: boolean; onO
           onSubmit={(e) => {
             e.preventDefault()
             if (!id) return
-            save.mutate({ spreadsheet_id: id, sheet_name: tab.trim() }, { onSuccess: () => { toast.success('Sheet saved'); onOpenChange(false) }, onError: (err) => toast.error(getErrorMessage(err)) })
+            save.mutate({ id: source?.id, spreadsheet_id: id, sheet_name: tab.trim() }, { onSuccess: () => { toast.success('Sheet saved'); onOpenChange(false) }, onError: (err) => toast.error(getErrorMessage(err)) })
           }}
         >
           <ol className="grid list-decimal gap-1 pl-5 text-sm text-muted-foreground">
