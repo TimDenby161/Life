@@ -37,7 +37,9 @@ export const useUpdateTransaction = () => useFinanceMutation((_h, a: { id: strin
 export const useDeleteTransaction = () => useFinanceMutation((_h, tx: Parameters<typeof api.deleteTransaction>[0]) => api.deleteTransaction(tx))
 export const useCreateTransfer = () => useFinanceMutation((_h, args: Parameters<typeof api.createTransfer>[0]) => api.createTransfer(args))
 export const useRecordBalance = () =>
-  useFinanceMutation((h, a: { accountId: string; asOf: string; balanceMinor: number; note?: string }) => api.recordBalance(h, a.accountId, a.asOf, a.balanceMinor, a.note))
+  useFinanceMutation((h, a: { accountId: string; asOf: string; balanceMinor: number; note?: string; estimate?: boolean }) =>
+    api.recordBalance(h, a.accountId, a.asOf, a.balanceMinor, a.note, a.estimate),
+  )
 export const useDeleteSnapshot = () => useFinanceMutation((_h, id: string) => api.deleteSnapshot(id))
 export const useSaveBudget = () => useFinanceMutation((h, input: Parameters<typeof api.saveBudget>[1]) => api.saveBudget(h, input))
 export const useDeleteBudget = () => useFinanceMutation((_h, id: string) => api.deleteBudget(id))

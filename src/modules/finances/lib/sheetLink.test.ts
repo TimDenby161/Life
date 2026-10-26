@@ -22,7 +22,8 @@ describe('suggestAccount', () => {
     [row(null, 'Aviva', 'Sophie Pension', 'other'), 'pension', 'sophie'],
     [row(null, 'SOPHIE', 'LISA', 'other'), 'investment', 'sophie'],
     [row(null, 'Halifax/Lloyds', 'Mortgage', 'other'), 'mortgage', null],
-    [row(null, '', 'House', 'summary'), 'other', null],
+    [row(null, '', 'House', 'summary'), 'property', null],
+    [row('Joint', 'Ford', 'Car'), 'vehicle', null],
   ])('%o', (r, type, owner) => {
     const s = suggestAccount(r, members)
     expect(s.account_type).toBe(type)

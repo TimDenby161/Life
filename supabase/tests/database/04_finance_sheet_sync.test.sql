@@ -2,7 +2,7 @@
 -- idempotent re-syncs and removal of deleted date columns.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(28);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -117,6 +117,26 @@ delete from finance_sheet_links where account_id = current_setting('t.linked')::
 select apply_sheet_balances(current_setting('t.src')::uuid, '[]'::jsonb);
 select is((select count(*)::int from account_balance_history where account_id = current_setting('t.linked')::uuid and source = 'sheet'),
   2, 'Unlinking an account keeps its imported history');
+
+-- Estimates and physical assets ---------------------------------------------------
+select lives_ok(
+  format($q$insert into financial_accounts (household_id, name, account_type, ownership) values (%L, 'Ford Ka+', 'vehicle', 'joint')$q$, current_setting('t.hh')),
+  'A vehicle can be an account');
+select lives_ok(
+  format($q$insert into account_balance_history (household_id, account_id, as_of, balance_minor, source)
+            select %L, id, current_date, 525000, 'estimate' from financial_accounts where name = 'Ford Ka+'$q$, current_setting('t.hh')),
+  'A value can be recorded as an estimate');
+select throws_ok(
+  format($q$insert into account_balance_history (household_id, account_id, as_of, balance_minor, source)
+            values (%L, %L, current_date, 1, 'sheet')$q$, current_setting('t.hh'), current_setting('t.plain')),
+  '42501', null, 'Only the sync can label a balance as from the sheet');
+select lives_ok(
+  format($q$update account_balance_history set balance_minor = 2600, source = 'manual'
+            where account_id = %L and as_of = '2026-08-16'$q$, current_setting('t.linked')),
+  'A sheet balance can be corrected by hand, becoming a recorded one');
+select throws_ok(
+  format($q$update account_balance_history set source = 'sheet' where account_id = %L and as_of = '2026-08-16'$q$, current_setting('t.linked')),
+  '42501', null, 'A hand-recorded balance cannot be relabelled as from the sheet');
 
 select * from finish();
 rollback;

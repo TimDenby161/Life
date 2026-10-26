@@ -5,7 +5,7 @@ import type { SyncRow } from '../../../../supabase/functions/finance-sheet-sync/
 export type AccountSuggestion = {
   name: string
   institution: string | null
-  account_type: 'current' | 'savings' | 'credit_card' | 'mortgage' | 'investment' | 'pension' | 'other'
+  account_type: 'current' | 'savings' | 'credit_card' | 'mortgage' | 'investment' | 'pension' | 'property' | 'vehicle' | 'other'
   ownership: 'joint' | 'personal'
   owner_id: string | null
 }
@@ -17,7 +17,8 @@ const TYPE_RULES: [RegExp, AccountSuggestion['account_type']][] = [
   [/pension/i, 'pension'],
   [/\b(lisa|isa|stocks|shares|bitcoin|crypto|trading ?212|coinbase|freetrade|vanguard)\b/i, 'investment'],
   [/sav(er|ing)|reserve|holiday|service|pot\b/i, 'savings'],
-  [/house|property|car\b/i, 'other'],
+  [/house|property|flat\b|home\b/i, 'property'],
+  [/\bcar\b|vehicle|\bvan\b/i, 'vehicle'],
   [/current|main|personal|joint|everyday/i, 'current'],
 ]
 

@@ -177,10 +177,13 @@ function LinkRowsDialog({
   }, [result, source.skipped_row_keys])
   const [choices, setChoices] = useState(initial)
   const [names, setNames] = useState<Record<string, string>>({})
+  /** Accounts losing all their rows that should stay active (e.g. a house valued by hand from now on). */
+  const [keep, setKeep] = useState<Set<string>>(new Set())
   useEffect(() => {
     if (!open) return
     setChoices(initial)
     setNames({})
+    setKeep(new Set())
   }, [open, initial])
 
   const ownerName = (id: string | null) => members.find((m) => m.id === id)?.display_name ?? 'Joint'
@@ -192,7 +195,7 @@ function LinkRowsDialog({
   ]
   const liveAccounts = (accounts.data ?? []).filter((a) => !a.archived_at)
   const newAccounts = plan.creates.map((key) => ({ key, name: nameOf(key), owner_id: suggestions.get(key)!.owner_id }))
-  const orphanedNames = plan.orphaned.map((id) => accounts.data?.find((a) => a.id === id)?.name).filter(Boolean)
+  const orphans = plan.orphaned.flatMap((id) => accounts.data?.find((a) => a.id === id) ?? [])
 
   const change = (key: string, value: RowChoiceValue) =>
     setChoices((c) => {
@@ -212,7 +215,13 @@ function LinkRowsDialog({
       }),
     )
     apply.mutate(
-      { sourceId: source.id, rowKeys: result.rows.map((r) => r.key), plan, newAccounts: accountsToCreate, openingDate: result.dates[0] },
+      {
+        sourceId: source.id,
+        rowKeys: result.rows.map((r) => r.key),
+        plan: { ...plan, orphaned: plan.orphaned.filter((id) => !keep.has(id)) },
+        newAccounts: accountsToCreate,
+        openingDate: result.dates[0],
+      },
       {
         onSuccess: ({ archived, result: r }) => {
           toast.success(archived ? `Saved. Archived ${archived} account${archived === 1 ? '' : 's'} no longer fed by the sheet.` : 'Saved. Balances imported from the sheet.')
@@ -269,10 +278,23 @@ function LinkRowsDialog({
             )
           })}
         </div>
-        {orphanedNames.length ? (
-          <p className="mt-4 rounded-lg bg-warning/10 p-3 text-xs text-warning">
-            {orphanedNames.join(', ')} will no longer be fed by the sheet and will be archived, so {orphanedNames.length === 1 ? 'its' : 'their'} last balance doesn’t count twice. You can restore archived accounts from the Accounts list.
-          </p>
+        {orphans.length ? (
+          <div className="mt-4 grid gap-2 rounded-lg bg-warning/10 p-3 text-xs">
+            <p className="text-warning">
+              No longer fed by the sheet. Archive, so the last balance doesn’t count twice, unless you’ll keep the account up to date by hand (e.g. a house you value yourself):
+            </p>
+            {orphans.map((a) => (
+              <label key={a.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!keep.has(a.id)}
+                  onChange={(e) => setKeep((k) => { const n = new Set(k); if (e.target.checked) n.delete(a.id); else n.add(a.id); return n })}
+                  className="accent-[var(--primary)]"
+                />
+                Archive {a.name}
+              </label>
+            ))}
+          </div>
         ) : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>

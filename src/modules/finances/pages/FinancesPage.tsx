@@ -90,7 +90,10 @@ function Overview() {
       }
       return { date, label: i === 11 ? 'Now' : format(parseISO(date), 'MMM'), value: any ? total : null }
     })
-    return { nw, flows, spend, history, month }
+    // Accounts whose latest value is an estimate (house, car): shown separately so it's never mistaken for a statement.
+    const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
+    const estimated = included.reduce((t, a) => t + (latestSource.get(a.id) === 'estimate' ? (balances.data!.get(a.id) ?? 0) : 0), 0)
+    return { nw, flows, spend, history, month, estimated }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -131,6 +134,7 @@ function Overview() {
           <p className="mt-1 text-xs text-muted-foreground tabular">
             {money(primary.assets)} assets · {money(-primary.liabilities)} owed
           </p>
+          {derived.estimated ? <p className="mt-1 text-xs text-muted-foreground tabular">Includes {money(derived.estimated)} of estimated values (property, vehicles)</p> : null}
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
         </Card>
         {members.map((m) => (

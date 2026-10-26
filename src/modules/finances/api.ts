@@ -22,10 +22,14 @@ export const ACCOUNT_TYPES = [
   { value: 'investment', label: 'Investments' },
   { value: 'pension', label: 'Pension' },
   { value: 'cash', label: 'Cash' },
+  { value: 'property', label: 'Property' },
+  { value: 'vehicle', label: 'Vehicle' },
   { value: 'other', label: 'Other' },
 ] as const
 
 export const LIABILITY_TYPES = new Set(['credit_card', 'loan', 'mortgage'])
+/** Valued by estimate rather than a statement: Record balance defaults to "estimate". */
+export const VALUED_TYPES = new Set(['property', 'vehicle'])
 
 export const financeKeys = {
   all: ['finances'] as const,
@@ -118,12 +122,14 @@ export async function createTransfer(args: {
   )
 }
 
-export async function recordBalance(householdId: string, accountId: string, asOf: string, balanceMinor: number, note?: string) {
-  unwrap(
-    await supabase
-      .from('account_balance_history')
-      .upsert({ household_id: householdId, account_id: accountId, as_of: asOf, balance_minor: balanceMinor, note: note || null }, { onConflict: 'account_id,as_of' }),
-  )
+// Update-or-insert by hand (not upsert): an upsert also SETs household_id and
+// account_id on conflict, which are deliberately not updatable columns.
+export async function recordBalance(householdId: string, accountId: string, asOf: string, balanceMinor: number, note?: string, estimate = false) {
+  // Always sent: overwriting a sheet balance by hand makes it a recorded (or estimated) one.
+  const fields = { balance_minor: balanceMinor, note: note || null, source: estimate ? 'estimate' : 'manual' }
+  const existing = unwrap(await supabase.from('account_balance_history').select('id').eq('account_id', accountId).eq('as_of', asOf).maybeSingle())
+  if (existing) unwrap(await supabase.from('account_balance_history').update(fields).eq('id', existing.id))
+  else unwrap(await supabase.from('account_balance_history').insert({ household_id: householdId, account_id: accountId, as_of: asOf, ...fields }))
 }
 export async function deleteSnapshot(id: string) {
   unwrap(await supabase.from('account_balance_history').delete().eq('id', id))

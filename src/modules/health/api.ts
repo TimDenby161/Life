@@ -68,10 +68,16 @@ export const useAddNote = () =>
   )
 export const useDeleteNote = () => useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('health_notes').delete().eq('id', id)))
 
+// Update-or-insert by hand (not upsert): an upsert also SETs household_id and
+// category on conflict, and only `shared` is an updatable column.
 export const useSetCategoryShared = () =>
-  useHealthMutation(async (h, a: { category: string; shared: boolean }) =>
-    unwrap(await supabase.from('health_category_visibility').upsert({ household_id: h, category: a.category, shared: a.shared }, { onConflict: 'user_id,category' })),
-  )
+  useHealthMutation(async (h, a: { category: string; shared: boolean }) => {
+    const userId = (await supabase.auth.getSession()).data.session?.user.id
+    const updated = unwrap(
+      await supabase.from('health_category_visibility').update({ shared: a.shared }).eq('user_id', userId!).eq('category', a.category).select('category'),
+    )
+    if (!updated.length) unwrap(await supabase.from('health_category_visibility').insert({ household_id: h, category: a.category, shared: a.shared }))
+  })
 
 export const useCreateMetric = () =>
   useHealthMutation(async (h, a: { ownerId: string; name: string; unit: string; decimals: number; aggregation: 'latest' | 'sum' | 'average' }) => {

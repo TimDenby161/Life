@@ -13,7 +13,7 @@ import { formatDay, todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type Account, ACCOUNT_TYPES } from '../api'
+import { type Account, ACCOUNT_TYPES, VALUED_TYPES } from '../api'
 import { AccountDialog, RecordBalanceDialog } from '../components/forms'
 import { SheetSyncCard } from '../components/SheetSync'
 import { useAccounts, useBalances, useDeleteAccount, useDeleteSnapshot, useSheetLinks, useSnapshots, useTransactions, useUpdateAccount } from '../hooks'
@@ -39,8 +39,9 @@ export function AccountsTab() {
     { key: 'joint', label: 'Joint', items: list.filter((a) => a.ownership === 'joint') },
     ...members.map((m) => ({ key: m.id, label: m.display_name, items: list.filter((a) => a.owner_id === m.id) })),
   ]
-  const lastRecorded = new Map<string, string>()
-  for (const s of snapshots.data ?? []) lastRecorded.set(s.account_id, s.as_of)
+  // Snapshots are ordered by date, so the last one per account wins.
+  const lastRecorded = new Map<string, { as_of: string; source: string }>()
+  for (const s of snapshots.data ?? []) lastRecorded.set(s.account_id, s)
   const open = accounts.data.find((a) => a.id === openId) ?? null
   const sheetRows = new Map<string, number>()
   for (const l of links.data ?? []) sheetRows.set(l.account_id, (sheetRows.get(l.account_id) ?? 0) + 1)
@@ -73,7 +74,7 @@ export function AccountsTab() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{a.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `recorded ${formatDay(lastRecorded.get(a.id)!)}` : 'calculated', fromSheet(a.id)].filter(Boolean).join(' · ')}
+                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `${lastRecorded.get(a.id)!.source === 'estimate' ? 'estimated' : 'recorded'} ${formatDay(lastRecorded.get(a.id)!.as_of)}` : 'calculated', fromSheet(a.id)].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="text-right">
@@ -107,7 +108,9 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
   const own = useMemo(() => (snapshots.data ?? []).filter((s) => s.account_id === account?.id), [snapshots.data, account])
   // Combined sheet rows: show the parts of the latest recorded balance.
   const latest = own.at(-1)
-  const breakdown = Array.isArray(latest?.breakdown) && latest.breakdown.length > 1 ? (latest.breakdown as { label: string; balance_minor: number }[]) : null
+  const breakdown =
+    latest?.source === 'sheet' && Array.isArray(latest.breakdown) && latest.breakdown.length > 1 ? (latest.breakdown as { label: string; balance_minor: number }[]) : null
+  const estimated = latest?.source === 'estimate'
   const series = useMemo(
     () => (account ? balanceSeries(account, own, transactions.data ?? [], 12, todayISO()) : []),
     [account, own, transactions.data],
@@ -128,11 +131,11 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
             <div className="grid gap-5">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs text-muted-foreground">Current balance</p>
+                  <p className="text-xs text-muted-foreground">{estimated ? `Estimated value · ${formatDay(latest!.as_of)}` : 'Current balance'}</p>
                   <p className={cn('text-3xl font-semibold tabular', balance < 0 && 'text-destructive')}>{formatMoney(balance, account.currency)}</p>
                 </div>
                 <Button onClick={() => setRecording(true)}>
-                  <ClipboardCheck /> Record balance
+                  <ClipboardCheck /> {VALUED_TYPES.has(account.account_type) ? 'Record value' : 'Record balance'}
                 </Button>
               </div>
 
@@ -178,7 +181,7 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
                   <ul className="divide-y text-sm">
                     {own.toReversed().slice(0, 10).map((s) => (
                       <li key={s.id} className="group flex items-center justify-between gap-2 py-1.5">
-                        <span className="text-muted-foreground">{formatDay(s.as_of)}{s.source === 'sheet' ? ' · from sheet' : ''}{s.note ? ` · ${s.note}` : ''}</span>
+                        <span className="text-muted-foreground">{formatDay(s.as_of)}{s.source === 'sheet' ? ' · from sheet' : s.source === 'estimate' ? ' · estimate' : ''}{s.note ? ` · ${s.note}` : ''}</span>
                         <span className="flex items-center gap-2 tabular">
                           {formatMoney(s.balance_minor, account.currency)}
                           <button type="button" aria-label="Delete recorded balance" className="text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => delSnap.mutate(s.id)}>

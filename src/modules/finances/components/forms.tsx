@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, NativeSelect, Textarea } from '@/components/ui/input'
@@ -6,7 +6,7 @@ import { Segmented, Switch } from '@/components/ui/misc'
 import { monthStart, todayISO } from '@/lib/dates'
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type Account, ACCOUNT_TYPES, type Budget, LIABILITY_TYPES, type SavingsGoal, type Transaction } from '../api'
+import { type Account, ACCOUNT_TYPES, type Budget, LIABILITY_TYPES, type SavingsGoal, type Transaction, VALUED_TYPES } from '../api'
 import {
   useAccounts,
   useCreateAccount,
@@ -327,12 +327,19 @@ export function RecordBalanceDialog({ account, onOpenChange, currentBalance }: {
   const [date, setDate] = useState(todayISO())
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const valued = account ? VALUED_TYPES.has(account.account_type) : false
+  const [estimate, setEstimate] = useState(valued)
+  useEffect(() => setEstimate(valued), [valued, account?.id])
 
   return (
     <Dialog open={Boolean(account)} onOpenChange={(o) => { if (!o) { setValue(''); setError(null) } onOpenChange(o) }}>
       <DialogContent
-        title="Record balance"
-        description="Enter the actual balance from a statement or app. It becomes a real data point; later transactions are added on top."
+        title={valued ? 'Record value' : 'Record balance'}
+        description={
+          valued
+            ? 'What it would sell for today. Estimates are always labelled as estimates.'
+            : 'Enter the actual balance from a statement or app. It becomes a real data point; later transactions are added on top.'
+        }
       >
         {account ? (
           <form
@@ -342,13 +349,18 @@ export function RecordBalanceDialog({ account, onOpenChange, currentBalance }: {
               const minor = parseMoney(value, account.currency)
               if (minor === null) return setError('Enter a valid amount')
               record.mutate(
-                { accountId: account.id, asOf: date, balanceMinor: liability ? -Math.abs(minor) : minor, note },
+                { accountId: account.id, asOf: date, balanceMinor: liability ? -Math.abs(minor) : minor, note, estimate },
                 { onSuccess: () => { setValue(''); onOpenChange(false) } },
               )
             }}
           >
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={liability ? 'Amount owed' : 'Balance'} htmlFor="bal-v" error={error} hint={currentBalance !== undefined ? `Calculated now: ${formatMoney(currentBalance, account.currency)}` : undefined}>
+              <Field
+                label={liability ? 'Amount owed' : valued ? 'Value' : 'Balance'}
+                htmlFor="bal-v"
+                error={error}
+                hint={currentBalance !== undefined ? `${valued ? 'Currently' : 'Calculated now'}: ${formatMoney(currentBalance, account.currency)}` : undefined}
+              >
                 <MoneyInput id="bal-v" autoFocus value={value} onChange={setValue} currency={account.currency} allowNegative={!liability} />
               </Field>
               <Field label="On" htmlFor="bal-d">
@@ -356,11 +368,18 @@ export function RecordBalanceDialog({ account, onOpenChange, currentBalance }: {
               </Field>
             </div>
             <Field label="Note" htmlFor="bal-n">
-              <Input id="bal-n" value={note} maxLength={500} placeholder="Optional, e.g. October statement" onChange={(e) => setNote(e.target.value)} />
+              <Input id="bal-n" value={note} maxLength={500} placeholder={valued ? 'Optional, e.g. based on the London flat price index' : 'Optional, e.g. October statement'} onChange={(e) => setNote(e.target.value)} />
             </Field>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={estimate} onChange={(e) => setEstimate(e.target.checked)} className="mt-0.5 accent-[var(--primary)]" />
+              <span>
+                This is an estimate
+                <span className="block text-xs text-muted-foreground">A valuation or best guess rather than a statement. Shown as “estimated” everywhere.</span>
+              </span>
+            </label>
             <DialogFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={record.isPending}>Save balance</Button>
+              <Button type="submit" disabled={record.isPending}>{valued ? 'Save value' : 'Save balance'}</Button>
             </DialogFooter>
           </form>
         ) : null}
