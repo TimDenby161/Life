@@ -1,5 +1,5 @@
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
-import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, type AccountLike, type TxLike } from './calc'
+import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, accountsForSelection, selectionKey, sheetPartHistory, type AccountLike, type TxLike } from './calc'
 
 const acct = (o: Partial<AccountLike> & { id: string }): AccountLike => ({
   name: o.id,
@@ -176,5 +176,45 @@ describe('net worth history', () => {
     const opening = { opening_date: '2026-07-14' }
     const history = netWorthHistory([{ ...current, ...opening }, { ...isa, ...opening }], snaps, [], ['2026-07-01', '2026-07-14', '2026-08-16'])
     expect(history.map((p) => p.value)).toEqual([null, 1_000, 1_500])
+  })
+})
+
+describe('chart selection', () => {
+  const house = acct({ id: 'house', account_type: 'property' })
+  const mortgage = acct({ id: 'mort', account_type: 'mortgage' })
+  const timSaver = acct({ id: 'saver', account_type: 'savings', ownership: 'personal', owner_id: 'tim' })
+  const all = [current, isa, house, mortgage, timSaver]
+  const ids = (s: Parameters<typeof accountsForSelection>[1]) => accountsForSelection(all, s).map((a) => a.id)
+
+  it('picks the accounts behind each kind of selection', () => {
+    expect(ids({ kind: 'owner', owner: 'all' })).toEqual(['cur', 'isa', 'house', 'mort', 'saver'])
+    expect(ids({ kind: 'owner', owner: 'joint' })).toEqual(['cur', 'house', 'mort'])
+    expect(ids({ kind: 'group', owner: 'joint', group: 'cash' })).toEqual(['cur'])
+    expect(ids({ kind: 'group', owner: 'all', group: 'cash' })).toEqual(['cur', 'isa'])
+    expect(ids({ kind: 'equity' })).toEqual(['house', 'mort'])
+    expect(ids({ kind: 'account', accountId: 'saver' })).toEqual(['saver'])
+  })
+
+  it('gives each selection a distinct key', () => {
+    const keys = [
+      { kind: 'owner', owner: 'joint' },
+      { kind: 'group', owner: 'joint', group: 'cash' },
+      { kind: 'equity' },
+      { kind: 'account', accountId: 'cur' },
+      { kind: 'part', accountId: 'cur', label: 'Revolut · Joint' },
+    ].map((s) => selectionKey(s as Parameters<typeof selectionKey>[0]))
+    expect(new Set(keys).size).toBe(5)
+  })
+
+  it('follows one sheet row of a combined account', () => {
+    const parts = (a: number, b: number) => [{ label: 'Trading212 · Personal', balance_minor: a }, { label: 'Coinbase · Bitcoin', balance_minor: b }]
+    const snaps = [
+      { account_id: 'inv', as_of: '2026-07-14', source: 'sheet', breakdown: parts(1_519_569, 92_096) },
+      { account_id: 'inv', as_of: '2026-08-16', source: 'sheet', breakdown: parts(1_593_136, 89_060) },
+      { account_id: 'other', as_of: '2026-08-16', source: 'sheet', breakdown: parts(1, 1) },
+    ]
+    expect(sheetPartHistory(snaps, 'inv', 'Coinbase · Bitcoin', ['2026-07-01', '2026-07-14', '2026-08-01', '2026-10-26']).map((p) => p.value)).toEqual([
+      null, 92_096, 92_096, 89_060,
+    ])
   })
 })

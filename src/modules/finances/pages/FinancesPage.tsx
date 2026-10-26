@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useSnapshots, useTransactions } from '../hooks'
-import { groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory } from '../lib/calc'
+import { accountsForSelection, type ChartSelection, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, selectionKey, sheetPartHistory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -66,6 +66,7 @@ function Overview() {
   const transactions = useTransactions()
   const snapshots = useSnapshots()
   const [addingAccount, setAddingAccount] = useState(false)
+  const [selected, setSelected] = useState<ChartSelection>(COMBINED)
   const currency = household.default_currency
   const today = todayISO()
 
@@ -75,10 +76,7 @@ function Overview() {
     // From the first sheet snapshot (when recording began), one point per snapshot date plus today.
     const included = accounts.data.filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency)
     const fromSheet = snapshots.data.some((s) => s.source === 'sheet')
-    const history = netWorthHistory(included, snapshots.data, transactions.data, netWorthDates(snapshots.data, today)).map((p) => ({
-      ...p,
-      label: p.date === today ? 'Now' : format(parseISO(p.date), fromSheet ? 'd MMM' : 'MMM'),
-    }))
+    const dates = netWorthDates(snapshots.data, today)
     // Breakdown groups holding an estimated value (house, car): marked so they're never mistaken for a statement.
     const latest = new Map(snapshots.data.map((s) => [s.account_id, s])) // ordered by date: last wins
     const estimatedGroups = new Set(included.filter((a) => latest.get(a.id)?.source === 'estimate').map((a) => groupOf(a.account_type)))
@@ -89,7 +87,7 @@ function Overview() {
         sheetParts.set(accountId, (s.breakdown as SheetPart[]).toSorted((a, b) => b.balance_minor - a.balance_minor))
       }
     }
-    return { nw, history, fromSheet, estimatedGroups, sheetParts }
+    return { nw, included, dates, fromSheet, estimatedGroups, sheetParts }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -115,56 +113,67 @@ function Overview() {
   const compact = (v: number) => formatMoney(v, currency, { compact: true })
   // The accounts behind a breakdown line, for the same currency and accounts the totals use.
   const accountsIn: GroupAccounts = (owner, group) =>
-    accounts.data!
-      .filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency && groupOf(a.account_type) === group)
-      .filter((a) => owner === 'all' || (a.ownership === 'joint' ? 'joint' : a.owner_id) === owner)
+    accountsForSelection(derived.included, { kind: 'group', owner, group })
       .map((a) => ({ id: a.id, name: a.name, balance: balances.data!.get(a.id) ?? 0, parts: derived.sheetParts.get(a.id) ?? [] }))
       .filter((a) => a.balance !== 0)
       .sort((x, y) => y.balance - x.balance)
+
+  // The chart follows whatever was last clicked in the boxes above.
+  const ownerName = (owner: string) => (owner === 'all' ? 'Combined' : owner === 'joint' ? 'Joint' : members.find((m) => m.id === owner)?.display_name ?? '')
+  const accountName = (id: string) => accounts.data!.find((a) => a.id === id)?.name ?? ''
+  const selectionTitle =
+    selected.kind === 'owner' ? (selected.owner === 'all' ? 'Net worth' : `${ownerName(selected.owner)} net worth`)
+    : selected.kind === 'group' ? `${ownerName(selected.owner)} · ${NET_WORTH_GROUPS.find((g) => g.key === selected.group)!.label}`
+    : selected.kind === 'equity' ? 'Home equity'
+    : selected.kind === 'account' ? accountName(selected.accountId)
+    : `${selected.label} (in ${accountName(selected.accountId)})`
+  const series = (
+    selected.kind === 'part'
+      ? sheetPartHistory(snapshots.data!, selected.accountId, selected.label, derived.dates)
+      : netWorthHistory(accountsForSelection(derived.included, selected), snapshots.data!, transactions.data!, derived.dates)
+  ).map((p) => ({ ...p, label: p.date === today ? 'Now' : format(parseISO(p.date), derived.fromSheet ? 'd MMM' : 'MMM') }))
+  const pick: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> = { selectedKey: selectionKey(selected), onSelect: setSelected }
+  const isCombined = selected.kind === 'owner' && selected.owner === 'all'
 
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="col-span-2 p-4 lg:col-span-1">
-          <p className="text-xs font-medium text-muted-foreground">Combined</p>
-          <p className="mt-1 text-3xl font-semibold tracking-tight tabular">{money(primary.total)}</p>
+          <BoxHeading owner="all" title="Combined" total={money(primary.total)} large {...pick} />
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
-          <CombinedBreakdown groups={primary.byGroup.all} owner="all" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
+          <CombinedBreakdown groups={primary.byGroup.all} owner="all" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
         </Card>
         {members.map((m) => (
           <Card key={m.id} className="p-4">
-            <p className="text-xs font-medium text-muted-foreground">{m.display_name}'s accounts</p>
-            <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner[m.id] ?? 0)}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">personal net worth</p>
-            <Breakdown groups={primary.byGroup[m.id]} owner={m.id} accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
+            <BoxHeading owner={m.id} title={`${m.display_name}'s accounts`} total={money(primary.byOwner[m.id] ?? 0)} sub="personal net worth" {...pick} />
+            <Breakdown groups={primary.byGroup[m.id]} owner={m.id} accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
           </Card>
         ))}
         <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Joint</p>
-          <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner.joint ?? 0)}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">shared accounts</p>
-          <Breakdown groups={primary.byGroup.joint} owner="joint" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
+          <BoxHeading owner="joint" title="Joint" total={money(primary.byOwner.joint ?? 0)} sub="shared accounts" {...pick} />
+          <Breakdown groups={primary.byGroup.joint} owner="joint" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
         </Card>
       </div>
 
       <div className="grid gap-4">
         <ChartCard
-          title="Net worth over time"
+          title={`${selectionTitle} over time`}
           description={
             derived.fromSheet
-              ? 'From your first sheet snapshot: the total on each snapshot date, plus today. Includes estimated values for the house and car.'
+              ? 'From your first sheet snapshot: the value on each snapshot date, plus today. Click anything above to chart it.'
               : 'Calculated at each month end from opening balances, transactions and recorded balances. Not a record of actual statements.'
           }
-          table={{ columns: ['Date', 'Net worth'], rows: derived.history.map((h) => [h.date, h.value === null ? '—' : money(h.value)]) }}
+          action={isCombined ? undefined : <Button variant="ghost" size="sm" onClick={() => setSelected(COMBINED)}>Show combined</Button>}
+          table={{ columns: ['Date', selectionTitle], rows: series.map((h) => [h.date, h.value === null ? '—' : money(h.value)]) }}
         >
           <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={derived.history} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <LineChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid {...gridProps} />
                 <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
                 <YAxis {...axisProps} width={52} tickFormatter={compact} domain={['auto', 'auto']} />
                 <Tooltip content={<ChartTooltip formatValue={money} />} />
-                <Line dataKey="value" name="Net worth" stroke="var(--chart-1)" strokeWidth={2} strokeDasharray={derived.fromSheet ? undefined : '5 4'} dot={derived.fromSheet ? { r: 3.5, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 } : false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} connectNulls />
+                <Line dataKey="value" name={selectionTitle} stroke="var(--chart-1)" strokeWidth={2} strokeDasharray={derived.fromSheet ? undefined : '5 4'} dot={derived.fromSheet ? { r: 3.5, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 } : false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -173,6 +182,8 @@ function Overview() {
     </div>
   )
 }
+
+const COMBINED: ChartSelection = { kind: 'owner', owner: 'all' }
 
 type SheetPart = { label: string; balance_minor: number }
 type GroupAccounts = (owner: string, group: NetWorthGroup) => { id: string; name: string; balance: number; parts: SheetPart[] }[]
@@ -183,42 +194,67 @@ type BreakdownProps = {
   accountsIn: GroupAccounts
   money: (v: number) => string
   estimated: ReadonlySet<NetWorthGroup>
+  /** The chart's current selection, and how to change it. */
+  selectedKey: string
+  onSelect: (s: ChartSelection) => void
 }
 
-/** One breakdown line; clicking it lists the accounts behind it, largest first. */
-function GroupLine({ group, value, owner, accountsIn, money, estimated }: Omit<BreakdownProps, 'groups'> & { group: NetWorthGroup; value: number }) {
+/** A clickable row that charts `selection`; highlighted while it is the chart's selection. */
+function Pickable({ selection, selectedKey, onSelect, className, children }: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> & { selection: ChartSelection; className?: string; children: React.ReactNode }) {
+  const active = selectionKey(selection) === selectedKey
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onSelect(selection)}
+      className={cn('-mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded px-1 text-left hover:bg-muted/60', active && 'bg-accent text-accent-foreground hover:bg-accent', className)}
+    >
+      {children}
+    </button>
+  )
+}
+
+function BoxHeading({ owner, title, total, sub, large, ...pick }: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> & { owner: string; title: string; total: string; sub?: string; large?: boolean }) {
+  return (
+    <Pickable selection={{ kind: 'owner', owner }} {...pick} className="-mx-2 -my-1 w-[calc(100%+1rem)] flex-col items-start gap-0 px-2 py-1">
+      <span className="text-xs font-medium text-muted-foreground">{title}</span>
+      <span className={cn('mt-1 font-semibold tracking-tight tabular', large ? 'text-3xl' : 'text-2xl')}>{total}</span>
+      {sub ? <span className="mt-0.5 text-xs text-muted-foreground">{sub}</span> : null}
+    </Pickable>
+  )
+}
+
+/** One breakdown line: clicking charts it and lists the accounts behind it (each also clickable), largest first. */
+function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick }: Omit<BreakdownProps, 'groups'> & { group: NetWorthGroup; value: number }) {
   const [open, setOpen] = useState(false)
   const label = `${NET_WORTH_GROUPS.find((g) => g.key === group)!.label}${estimated.has(group) ? ' (est.)' : ''}`
   const accounts = open ? accountsIn(owner, group) : []
   return (
     <li>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="-mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded px-1 text-left hover:bg-muted/60"
-      >
+      <Pickable selection={{ kind: 'group', owner, group }} selectedKey={pick.selectedKey} onSelect={(s) => { pick.onSelect(s); setOpen((o) => !o) }}>
         <span className="flex items-center gap-1 text-muted-foreground">
-          <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+          <ChevronRight aria-hidden className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
           {label}
         </span>
         <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
-      </button>
+      </Pickable>
       {open ? (
         <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
           {accounts.map((a) => (
             <li key={a.id}>
-              <div className="flex justify-between gap-2">
+              <Pickable selection={{ kind: 'account', accountId: a.id }} {...pick}>
                 <span className="truncate text-muted-foreground">{a.name}</span>
                 <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
-              </div>
+              </Pickable>
               {/* An account combining several sheet rows: show the rows behind it. */}
               {a.parts.length ? (
                 <ul className="ml-3 grid gap-0.5 border-l pl-2">
                   {a.parts.map((p) => (
-                    <li key={p.label} className="flex justify-between gap-2 text-muted-foreground/80">
-                      <span className="truncate">{p.label}</span>
-                      <span className="tabular">{money(p.balance_minor)}</span>
+                    <li key={p.label}>
+                      <Pickable selection={{ kind: 'part', accountId: a.id, label: p.label }} {...pick} className="text-muted-foreground/80">
+                        <span className="truncate">{p.label}</span>
+                        <span className="tabular">{money(p.balance_minor)}</span>
+                      </Pickable>
                     </li>
                   ))}
                 </ul>
@@ -258,9 +294,11 @@ function CombinedBreakdown({ groups = {}, ...props }: BreakdownProps) {
         <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
           {groups.property ? <GroupLine group="property" value={groups.property} {...props} /> : null}
           {groups.mortgage ? <GroupLine group="mortgage" value={groups.mortgage} {...props} /> : null}
-          <li className="flex justify-between gap-2 font-medium">
-            <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}</span>
-            <span className={cn('tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
+          <li>
+            <Pickable selection={{ kind: 'equity' }} selectedKey={props.selectedKey} onSelect={props.onSelect} className="font-medium">
+              <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}</span>
+              <span className={cn('tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
+            </Pickable>
           </li>
         </ul>
       ) : null}

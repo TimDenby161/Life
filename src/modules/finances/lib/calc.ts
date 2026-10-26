@@ -241,3 +241,48 @@ export function netWorthHistory(
     return { date, value: any ? total : null }
   })
 }
+
+/** What the net worth chart is showing: a box, a breakdown line, equity, one account, or one sheet row of an account. */
+export type ChartSelection =
+  | { kind: 'owner'; owner: string } // 'all' | 'joint' | member id
+  | { kind: 'group'; owner: string; group: NetWorthGroup }
+  | { kind: 'equity' }
+  | { kind: 'account'; accountId: string }
+  | { kind: 'part'; accountId: string; label: string }
+
+export const selectionKey = (s: ChartSelection): string =>
+  s.kind === 'owner' ? `owner:${s.owner}`
+  : s.kind === 'group' ? `group:${s.owner}:${s.group}`
+  : s.kind === 'equity' ? 'equity'
+  : s.kind === 'account' ? `account:${s.accountId}`
+  : `part:${s.accountId}:${s.label}`
+
+const ownerKey = (a: Pick<AccountLike, 'ownership' | 'owner_id'>) => (a.ownership === 'joint' ? 'joint' : (a.owner_id ?? 'joint'))
+
+/** The accounts whose balances make up a selection (all of them for a sheet row's account). */
+export function accountsForSelection<A extends AccountLike>(accounts: readonly A[], s: ChartSelection): A[] {
+  return accounts.filter((a) => {
+    if (s.kind === 'owner') return s.owner === 'all' || ownerKey(a) === s.owner
+    if (s.kind === 'group') return (s.owner === 'all' || ownerKey(a) === s.owner) && groupOf(a.account_type) === s.group
+    if (s.kind === 'equity') return groupOf(a.account_type) === 'property' || groupOf(a.account_type) === 'mortgage'
+    return a.id === s.accountId
+  })
+}
+
+/**
+ * One sheet row of a combined account over time: its figure in the latest
+ * sheet balance on or before each date (null before the row first appears).
+ */
+export function sheetPartHistory(
+  snapshots: readonly { account_id: string; as_of: string; source: string; breakdown: unknown }[],
+  accountId: string,
+  label: string,
+  dates: readonly ISODate[],
+): NetWorthPoint[] {
+  const own = snapshots.filter((s) => s.account_id === accountId && s.source === 'sheet').sort((a, b) => a.as_of.localeCompare(b.as_of))
+  return dates.map((date) => {
+    const snap = own.findLast((s) => s.as_of <= date)
+    const part = Array.isArray(snap?.breakdown) ? (snap.breakdown as { label: string; balance_minor: number }[]).find((p) => p.label === label) : undefined
+    return { date, value: part ? part.balance_minor : null }
+  })
+}
