@@ -1,4 +1,4 @@
-import { endOfMonth, format, parseISO, subMonths } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
@@ -9,13 +9,13 @@ import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { monthStart, todayISO, toISODate } from '@/lib/dates'
+import { monthStart, todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useBudgets, useFinanceCategories, useGoals, useSnapshots, useTransactions } from '../hooks'
-import { activeBudgets, balanceOn, goalProgress, monthlyFlows, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, spendingByCategory } from '../lib/calc'
+import { activeBudgets, goalProgress, monthlyFlows, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, spendingByCategory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -79,22 +79,17 @@ function Overview() {
     const flows = monthlyFlows(transactions.data, accountCurrency, currency, 12, today)
     const month = monthStart(today)
     const spend = spendingByCategory(transactions.data, accountCurrency, currency, month, today)
-    // Net worth history is calculated (month-end balances), never "recorded".
+    // From the first sheet snapshot (when recording began), one point per snapshot date plus today.
     const included = accounts.data.filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency)
-    const history = Array.from({ length: 12 }, (_, i) => {
-      const date = i === 11 ? today : toISODate(endOfMonth(subMonths(parseISO(today), 11 - i)))
-      let total = 0
-      let any = false
-      for (const a of included) {
-        const b = balanceOn(a, snapshots.data!, transactions.data!, date)
-        if (b !== null) { total += b; any = true }
-      }
-      return { date, label: i === 11 ? 'Now' : format(parseISO(date), 'MMM'), value: any ? total : null }
-    })
+    const fromSheet = snapshots.data.some((s) => s.source === 'sheet')
+    const history = netWorthHistory(included, snapshots.data, transactions.data, netWorthDates(snapshots.data, today)).map((p) => ({
+      ...p,
+      label: p.date === today ? 'Now' : format(parseISO(p.date), fromSheet ? 'd MMM' : 'MMM'),
+    }))
     // Breakdown groups holding an estimated value (house, car): marked so they're never mistaken for a statement.
     const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
     const estimatedGroups = new Set(included.filter((a) => latestSource.get(a.id) === 'estimate').map((a) => groupOf(a.account_type)))
-    return { nw, flows, spend, history, month, estimatedGroups }
+    return { nw, flows, spend, history, fromSheet, month, estimatedGroups }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -154,8 +149,12 @@ function Overview() {
       <div className="grid gap-4">
         <ChartCard
           title="Net worth over time"
-          description="Calculated at each month end from opening balances, transactions and recorded balances. Not a record of actual statements."
-          table={{ columns: ['Month end', 'Net worth (calculated)'], rows: derived.history.map((h) => [h.date, h.value === null ? '—' : money(h.value)]) }}
+          description={
+            derived.fromSheet
+              ? 'From your first sheet snapshot: the total on each snapshot date, plus today. Includes estimated values for the house and car.'
+              : 'Calculated at each month end from opening balances, transactions and recorded balances. Not a record of actual statements.'
+          }
+          table={{ columns: ['Date', 'Net worth'], rows: derived.history.map((h) => [h.date, h.value === null ? '—' : money(h.value)]) }}
         >
           <div className="h-60">
             <ResponsiveContainer width="100%" height="100%">
@@ -164,7 +163,7 @@ function Overview() {
                 <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
                 <YAxis {...axisProps} width={52} tickFormatter={compact} domain={['auto', 'auto']} />
                 <Tooltip content={<ChartTooltip formatValue={money} />} />
-                <Line dataKey="value" name="Net worth (calculated)" stroke="var(--chart-1)" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} connectNulls />
+                <Line dataKey="value" name="Net worth" stroke="var(--chart-1)" strokeWidth={2} strokeDasharray={derived.fromSheet ? undefined : '5 4'} dot={derived.fromSheet ? { r: 3.5, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 } : false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>

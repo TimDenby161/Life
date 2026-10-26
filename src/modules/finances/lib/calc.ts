@@ -207,3 +207,37 @@ export function goalProgress(goal: GoalLike, balances: ReadonlyMap<string, numbe
   const saved = goal.account_id ? Math.max(0, balances.get(goal.account_id) ?? 0) : goal.manual_saved_minor
   return { saved, pct: Math.min(100, Math.round((saved / goal.target_minor) * 100)) }
 }
+
+export type NetWorthPoint = { date: ISODate; value: number | null }
+
+/**
+ * Dates for the net worth chart. With sheet snapshots: every snapshot date
+ * from the first one, plus today, so the chart starts when recording began.
+ * Without: the last 12 month ends, plus today.
+ */
+export function netWorthDates(snapshots: readonly { as_of: string; source: string }[], today: ISODate): ISODate[] {
+  const sheet = [...new Set(snapshots.filter((s) => s.source === 'sheet' && s.as_of <= today).map((s) => s.as_of))].sort()
+  const dates = sheet.length ? sheet : Array.from({ length: 11 }, (_, i) => toISODate(endOfMonth(subMonths(parseISO(today), 11 - i))))
+  return dates.at(-1) === today ? dates : [...dates, today]
+}
+
+/** Net worth on each date: the sum of every included account's balance then (null before any account has one). */
+export function netWorthHistory(
+  accounts: readonly AccountLike[],
+  snapshots: readonly SnapshotLike[],
+  transactions: readonly TxLike[],
+  dates: readonly ISODate[],
+): NetWorthPoint[] {
+  return dates.map((date) => {
+    let total = 0
+    let any = false
+    for (const a of accounts) {
+      const b = balanceOn(a, snapshots, transactions, date)
+      if (b !== null) {
+        total += b
+        any = true
+      }
+    }
+    return { date, value: any ? total : null }
+  })
+}

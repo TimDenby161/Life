@@ -1,5 +1,5 @@
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
-import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, spendingByCategory, type AccountLike, type TxLike } from './calc'
+import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, type AccountLike, type TxLike } from './calc'
 
 const acct = (o: Partial<AccountLike> & { id: string }): AccountLike => ({
   name: o.id,
@@ -150,5 +150,31 @@ describe('budgets and goals', () => {
   it('measures goal progress from the linked account or manual amount', () => {
     expect(goalProgress({ target_minor: 100_000, account_id: 'isa', manual_saved_minor: 0 }, new Map([['isa', 25_000]]))).toEqual({ saved: 25_000, pct: 25 })
     expect(goalProgress({ target_minor: 1_000, account_id: null, manual_saved_minor: 5_000 }, new Map())).toEqual({ saved: 5_000, pct: 100 })
+  })
+})
+
+describe('net worth history', () => {
+  const snap = (as_of: string, source: string) => ({ account_id: 'cur', as_of, balance_minor: 1, created_at: `${as_of}T12:00:00Z`, source })
+
+  it('starts at the first sheet snapshot and adds today', () => {
+    const snaps = [snap('2025-08-01', 'manual'), snap('2026-07-14', 'sheet'), snap('2026-08-16', 'sheet'), snap('2026-08-16', 'sheet'), snap('2026-10-18', 'sheet')]
+    expect(netWorthDates(snaps, '2026-10-26')).toEqual(['2026-07-14', '2026-08-16', '2026-10-18', '2026-10-26'])
+    expect(netWorthDates(snaps, '2026-10-18')).toEqual(['2026-07-14', '2026-08-16', '2026-10-18'])
+  })
+
+  it('falls back to month ends without a sheet', () => {
+    const dates = netWorthDates([], '2026-10-26')
+    expect(dates).toHaveLength(12)
+    expect(dates.slice(-2)).toEqual(['2026-09-30', '2026-10-26'])
+  })
+
+  it('sums balances per date', () => {
+    const snaps = [
+      { account_id: 'cur', as_of: '2026-07-14', balance_minor: 1_000, created_at: '2026-07-14T12:00:00Z' },
+      { account_id: 'isa', as_of: '2026-08-16', balance_minor: 500, created_at: '2026-08-16T12:00:00Z' },
+    ]
+    const opening = { opening_date: '2026-07-14' }
+    const history = netWorthHistory([{ ...current, ...opening }, { ...isa, ...opening }], snaps, [], ['2026-07-01', '2026-07-14', '2026-08-16'])
+    expect(history.map((p) => p.value)).toEqual([null, 1_000, 1_500])
   })
 })
