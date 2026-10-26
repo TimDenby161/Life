@@ -2,7 +2,7 @@ import { endOfMonth, format, parseISO, subMonths } from 'date-fns'
 import { Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { axisProps, BarList, ChartCard, ChartTooltip, gridProps } from '@/components/charts'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
@@ -151,27 +151,7 @@ function Overview() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title="Income and spending"
-          description={`Last 12 months · transfers excluded · ${currency}`}
-          legend={[{ key: 'income', label: 'Income', color: 'var(--chart-1)' }, { key: 'spending', label: 'Spending', color: 'var(--chart-2)' }]}
-          table={{ columns: ['Month', 'Income', 'Spending', 'Net'], rows: derived.flows.map((f) => [f.month, money(f.income), money(f.spending), money(f.net)]) }}
-        >
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={derived.flows} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
-                <YAxis {...axisProps} width={52} tickFormatter={compact} />
-                <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.6 }} content={<ChartTooltip formatValue={money} />} />
-                <Bar dataKey="income" name="Income" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={14} />
-                <Bar dataKey="spending" name="Spending" fill="var(--chart-2)" radius={[4, 4, 0, 0]} maxBarSize={14} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
+      <div className="grid gap-4">
         <ChartCard
           title="Net worth over time"
           description="Calculated at each month end from opening balances, transactions and recorded balances. Not a record of actual statements."
