@@ -97,7 +97,8 @@ export const NET_WORTH_GROUPS = [
   { key: 'vehicles', label: 'Vehicles', types: ['vehicle'] },
   { key: 'other', label: 'Other', types: ['other'] },
   { key: 'cards', label: 'Credit cards', types: ['credit_card'] },
-  { key: 'loans', label: 'Mortgage & loans', types: ['mortgage', 'loan'] },
+  { key: 'mortgage', label: 'Mortgage', types: ['mortgage'] },
+  { key: 'loans', label: 'Loans', types: ['loan'] },
 ] as const
 
 export type NetWorthGroup = (typeof NET_WORTH_GROUPS)[number]['key']

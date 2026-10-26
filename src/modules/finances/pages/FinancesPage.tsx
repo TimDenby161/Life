@@ -130,13 +130,10 @@ function Overview() {
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="col-span-2 p-4 lg:col-span-1">
-          <p className="text-xs font-medium text-muted-foreground">Combined net worth</p>
+          <p className="text-xs font-medium text-muted-foreground">Combined</p>
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular">{money(primary.total)}</p>
-          <p className="mt-1 text-xs text-muted-foreground tabular">
-            {money(primary.assets)} assets · {money(-primary.liabilities)} owed
-          </p>
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
-          <Breakdown groups={primary.byGroup.all} money={money} estimated={derived.estimatedGroups} />
+          <CombinedBreakdown groups={primary.byGroup.all} money={money} estimated={derived.estimatedGroups} />
         </Card>
         {members.map((m) => (
           <Card key={m.id} className="p-4">
@@ -279,6 +276,37 @@ function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWo
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * The Combined box: the home first (property, mortgage, and the equity between
+ * them), then every other group from largest to smallest.
+ */
+function CombinedBreakdown({ groups = {}, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: ReadonlySet<NetWorthGroup> }) {
+  const label = (key: NetWorthGroup) => `${NET_WORTH_GROUPS.find((g) => g.key === key)!.label}${estimated.has(key) ? ' (est.)' : ''}`
+  const home = groups.property || groups.mortgage
+  const equity = (groups.property ?? 0) + (groups.mortgage ?? 0)
+  const rest = NET_WORTH_GROUPS.filter((g) => g.key !== 'property' && g.key !== 'mortgage' && groups[g.key])
+    .map((g) => ({ key: g.key, value: groups[g.key]! }))
+    .sort((a, b) => b.value - a.value)
+  const line = (text: string, value: number, strong = false) => (
+    <li key={text} className={cn('flex justify-between gap-2', strong && 'font-medium')}>
+      <span className={strong ? undefined : 'text-muted-foreground'}>{text}</span>
+      <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
+    </li>
+  )
+  return (
+    <>
+      {home ? (
+        <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
+          {groups.property ? line(label('property'), groups.property) : null}
+          {groups.mortgage ? line(label('mortgage'), groups.mortgage) : null}
+          {line(`Equity${estimated.has('property') ? ' (est.)' : ''}`, equity, true)}
+        </ul>
+      ) : null}
+      {rest.length ? <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">{rest.map((r) => line(label(r.key), r.value))}</ul> : null}
+    </>
   )
 }
 
