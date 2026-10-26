@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, subMonths } from 'date-fns'
 import { ChevronRight, Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
@@ -9,13 +9,13 @@ import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { todayISO } from '@/lib/dates'
+import { todayISO, toISODate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useSnapshots, useTransactions } from '../hooks'
-import { accountsForSelection, type ChartSelection, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, selectionKey, sheetPartHistory } from '../lib/calc'
+import { accountsForSelection, type ChartSelection, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, percentChange, selectionKey, sheetPartHistory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -135,24 +135,31 @@ function Overview() {
       : netWorthHistory(accountsForSelection(derived.included, selected), snapshots.data!, transactions.data!, derived.dates)
   ).map((p) => ({ ...p, label: p.date === today ? 'Now' : format(parseISO(p.date), derived.fromSheet ? 'd MMM' : 'MMM') }))
   const pick: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> = { selectedKey: selectionKey(selected), onSelect: setSelected }
+  // Each box's change since the same day last month, from the same figures as the chart.
+  const monthAgo = toISODate(subMonths(parseISO(today), 1))
+  const changeFor = (owner: string): MonthChange | null => {
+    const [then, now] = netWorthHistory(accountsForSelection(derived.included, { kind: 'owner', owner }), snapshots.data!, transactions.data!, [monthAgo, today])
+    const pct = percentChange(then.value, now.value)
+    return pct === null ? null : { pct, amount: now.value! - then.value! }
+  }
   const isCombined = selected.kind === 'owner' && selected.owner === 'all'
 
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="col-span-2 p-4 lg:col-span-1">
-          <BoxHeading owner="all" title="Combined" total={money(primary.total)} large {...pick} />
+          <BoxHeading owner="all" title="Combined" total={money(primary.total)} change={changeFor('all')} money={money} large {...pick} />
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
           <CombinedBreakdown groups={primary.byGroup.all} owner="all" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
         </Card>
         {members.map((m) => (
           <Card key={m.id} className="p-4">
-            <BoxHeading owner={m.id} title={`${m.display_name}'s accounts`} total={money(primary.byOwner[m.id] ?? 0)} sub="personal net worth" {...pick} />
+            <BoxHeading owner={m.id} title={`${m.display_name}'s accounts`} total={money(primary.byOwner[m.id] ?? 0)} change={changeFor(m.id)} money={money} sub="personal net worth" {...pick} />
             <Breakdown groups={primary.byGroup[m.id]} owner={m.id} accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
           </Card>
         ))}
         <Card className="p-4">
-          <BoxHeading owner="joint" title="Joint" total={money(primary.byOwner.joint ?? 0)} sub="shared accounts" {...pick} />
+          <BoxHeading owner="joint" title="Joint" total={money(primary.byOwner.joint ?? 0)} change={changeFor('joint')} money={money} sub="shared accounts" {...pick} />
           <Breakdown groups={primary.byGroup.joint} owner="joint" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
         </Card>
       </div>
@@ -217,15 +224,34 @@ function Pickable({ selection, selectedKey, onSelect, className, children }: Pic
   )
 }
 
-function BoxHeading({ owner, title, total, sub, large, ...pick }: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> & { owner: string; title: string; total: string; sub?: string; large?: boolean }) {
+type MonthChange = { pct: number; amount: number }
+
+function BoxHeading({
+  owner,
+  title,
+  total,
+  change,
+  money,
+  sub,
+  large,
+  ...pick
+}: Pick<BreakdownProps, 'selectedKey' | 'onSelect' | 'money'> & { owner: string; title: string; total: string; change: MonthChange | null; sub?: string; large?: boolean }) {
+  const up = change && change.amount >= 0
   return (
     <Pickable selection={{ kind: 'owner', owner }} {...pick} className="-mx-2 -my-1 w-[calc(100%+1rem)] flex-col items-start gap-0 px-2 py-1">
       <span className="text-xs font-medium text-muted-foreground">{title}</span>
       <span className={cn('mt-1 font-semibold tracking-tight tabular', large ? 'text-3xl' : 'text-2xl')}>{total}</span>
+      {change ? (
+        <span className={cn('mt-0.5 text-xs font-medium tabular', up ? 'text-success' : 'text-destructive')}>
+          {up ? '▲' : '▼'} {Math.abs(change.pct).toFixed(1)}% ({formatSigned(change.amount, money)}) vs a month ago
+        </span>
+      ) : null}
       {sub ? <span className="mt-0.5 text-xs text-muted-foreground">{sub}</span> : null}
     </Pickable>
   )
 }
+
+const formatSigned = (v: number, money: (v: number) => string) => `${v >= 0 ? '+' : '−'}${money(Math.abs(v))}`
 
 /** One breakdown line: clicking charts it and lists the accounts behind it (each also clickable), largest first. */
 function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick }: Omit<BreakdownProps, 'groups'> & { group: NetWorthGroup; value: number }) {

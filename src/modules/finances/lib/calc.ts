@@ -319,3 +319,9 @@ export function sheetPartHistory(
     return { date, value: part ? part.balance_minor : null }
   })
 }
+
+/** Change between two totals as a percentage of the first (null when there's nothing to compare with). */
+export function percentChange(then: number | null, now: number | null): number | null {
+  if (then === null || now === null || then === 0) return null
+  return ((now - then) / Math.abs(then)) * 100
+}

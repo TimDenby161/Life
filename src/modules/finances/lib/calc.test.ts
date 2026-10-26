@@ -1,5 +1,5 @@
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
-import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, accountsForSelection, selectionKey, sheetPartHistory, valueOn, type AccountLike, type TxLike } from './calc'
+import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, accountsForSelection, selectionKey, sheetPartHistory, valueOn, percentChange, type AccountLike, type TxLike } from './calc'
 
 const acct = (o: Partial<AccountLike> & { id: string }): AccountLike => ({
   name: o.id,
@@ -243,5 +243,19 @@ describe('valued assets between recorded values', () => {
   it('charts the house declining gradually', () => {
     const history = netWorthHistory([house], snaps, [], ['2026-07-14', '2026-08-16', '2026-10-26'])
     expect(history.map((p) => p.value)).toEqual([39_907_539, 39_841_685, 39_700_000])
+  })
+})
+
+describe('percentChange', () => {
+  it('measures change against the earlier total', () => {
+    expect(percentChange(32_775_559, 32_400_559)).toBeCloseTo(-1.144, 3)
+    expect(percentChange(100, 110)).toBe(10)
+  })
+  it('stays positive when a negative total improves', () => {
+    expect(percentChange(-200, -100)).toBe(50)
+  })
+  it('has nothing to compare with before data or from zero', () => {
+    expect(percentChange(null, 100)).toBeNull()
+    expect(percentChange(0, 100)).toBeNull()
   })
 })
