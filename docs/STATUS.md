@@ -16,6 +16,7 @@ Validation actually run against the local Supabase stack (Docker):
 ## Not yet verified (needs your accounts)
 
 - Real Google Calendar data through the service account (no Google credentials were used).
+- Google Sheet balance sync against the real Sheets API. It was tested end to end on the local stack against a fake Google server serving a copy of the MonthReport layout.
 - `external-feed` against live RSS hosts and API-Football (no API key used). The code paths for missing configuration were exercised; live responses were not.
 - Hosted Supabase project, invite emails and the GitHub Pages deployment (nothing was deployed or pushed).
 - Installing the PWA on a physical iPhone or Android phone.

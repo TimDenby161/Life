@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { type Account, ACCOUNT_TYPES } from '../api'
 import { AccountDialog, RecordBalanceDialog } from '../components/forms'
+import { SheetSyncCard } from '../components/SheetSync'
 import { useAccounts, useBalances, useDeleteAccount, useDeleteSnapshot, useSnapshots, useTransactions, useUpdateAccount } from '../hooks'
 import { balanceSeries } from '../lib/calc'
 
@@ -43,6 +44,7 @@ export function AccountsTab() {
 
   return (
     <div>
+      <SheetSyncCard />
       <div className="mb-2 flex items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-[var(--primary)]" />
@@ -67,7 +69,7 @@ export function AccountsTab() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{a.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `recorded ${formatDay(lastRecorded.get(a.id)!)}` : 'calculated'].filter(Boolean).join(' · ')}
+                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `recorded ${formatDay(lastRecorded.get(a.id)!)}` : 'calculated', a.external_provider === 'google_sheet' && 'from sheet'].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="text-right">
@@ -155,7 +157,7 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
                   <ul className="divide-y text-sm">
                     {own.toReversed().slice(0, 10).map((s) => (
                       <li key={s.id} className="group flex items-center justify-between gap-2 py-1.5">
-                        <span className="text-muted-foreground">{formatDay(s.as_of)}{s.note ? ` · ${s.note}` : ''}</span>
+                        <span className="text-muted-foreground">{formatDay(s.as_of)}{s.source === 'sheet' ? ' · from sheet' : ''}{s.note ? ` · ${s.note}` : ''}</span>
                         <span className="flex items-center gap-2 tabular">
                           {formatMoney(s.balance_minor, account.currency)}
                           <button type="button" aria-label="Delete recorded balance" className="text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => delSnap.mutate(s.id)}>

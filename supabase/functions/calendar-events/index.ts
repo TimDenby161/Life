@@ -9,7 +9,7 @@
 //   GOOGLE_SERVICE_ACCOUNT_JSON  service-account key JSON (read-only use)
 //   ALLOWED_ORIGINS              optional, e.g. https://tim.github.io,http://localhost:5173
 import { json, TtlCache, userClient, corsHeaders } from '../_shared/http.ts'
-import { type GoogleEvent, googleAccessToken, listEvents } from './google.ts'
+import { CALENDAR_SCOPE, type GoogleEvent, googleAccessToken, listEvents } from './google.ts'
 
 type CalendarEvent = {
   id: string
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
   const timeMin = new Date(min).toISOString()
   const timeMax = new Date(max).toISOString()
   try {
-    const token = await googleAccessToken(serviceAccount)
+    const token = await googleAccessToken(serviceAccount, CALENDAR_SCOPE)
     const results = await Promise.all(
       integrations.map(async (integration) => {
         const key = `${integration.id}|${integration.updated_at}|${timeMin}|${timeMax}`

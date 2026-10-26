@@ -411,3 +411,6 @@ verify_jwt = true
 
 [functions.external-feed]
 verify_jwt = true
+
+[functions.finance-sheet-sync]
+verify_jwt = true

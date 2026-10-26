@@ -44,6 +44,7 @@ export type Database = {
           household_id: string
           id: string
           note: string | null
+          source: string
         }
         Insert: {
           account_id: string
@@ -54,6 +55,7 @@ export type Database = {
           household_id: string
           id?: string
           note?: string | null
+          source?: string
         }
         Update: {
           account_id?: string
@@ -64,6 +66,7 @@ export type Database = {
           household_id?: string
           id?: string
           note?: string | null
+          source?: string
         }
         Relationships: [
           {
@@ -483,6 +486,59 @@ export type Database = {
             foreignKeyName: "finance_categories_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_sheet_sources: {
+        Row: {
+          created_at: string
+          created_by: string
+          enabled: boolean
+          household_id: string
+          id: string
+          last_sync_error: string | null
+          last_synced_at: string | null
+          name: string
+          sheet_name: string
+          skipped_row_keys: string[]
+          spreadsheet_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          enabled?: boolean
+          household_id: string
+          id?: string
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          name?: string
+          sheet_name?: string
+          skipped_row_keys?: string[]
+          spreadsheet_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          enabled?: boolean
+          household_id?: string
+          id?: string
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          name?: string
+          sheet_name?: string
+          skipped_row_keys?: string[]
+          spreadsheet_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_sheet_sources_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
             referencedRelation: "households"
             referencedColumns: ["id"]
           },
@@ -1705,6 +1761,10 @@ export type Database = {
       account_balance_on: {
         Args: { p_account_id: string; p_date: string }
         Returns: number
+      }
+      apply_sheet_balances: {
+        Args: { p_balances: Json; p_error?: string; p_source_id: string }
+        Returns: Json
       }
       bootstrap_household: {
         Args: { p_members: Json; p_name: string }

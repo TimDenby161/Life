@@ -55,14 +55,14 @@ To try the Edge Functions locally: `supabase functions serve` (put local-only se
 4. Push to `main`. `.github/workflows/deploy.yml` typechecks, tests, builds and deploys. `database.yml` runs the pgTAP suite on a throwaway Supabase stack in CI.
 5. On iPhone: open the site in Safari → Share → *Add to Home Screen*. On Android: Chrome → *Install app*.
 
-## 4. Edge Functions (calendar + external feed)
+## 4. Edge Functions (calendar, external feed, finance sheet)
 
 ```bash
-supabase functions deploy calendar-events external-feed
+supabase functions deploy calendar-events external-feed finance-sheet-sync
 supabase secrets set ALLOWED_ORIGINS="https://<github-user>.github.io,http://localhost:5173"
 ```
 
-Both functions require a signed-in user's JWT and use RLS to scope what they read.
+All functions require a signed-in user's JWT and use RLS to scope what they read.
 
 ## 5. Google Calendar (read-only, recommended method)
 
@@ -78,6 +78,17 @@ Both functions require a signed-in user's JWT and use RLS to scope what they rea
 6. In Life → **Settings → Google Calendar** → *Secure (recommended)* → paste the Calendar ID.
 
 Trade-offs and alternatives are in [DECISIONS.md](DECISIONS.md#adr-6-google-calendar-via-a-service-account-proxy).
+
+### Google Sheet balances (MonthReport)
+
+Uses the same service account and secret as the calendar.
+
+1. In the same Google Cloud project, enable the **Google Sheets API** (*APIs & Services → Library*).
+2. In the sheet, **Share** → add the service account's email as a **Viewer**.
+3. In Life → **Finances → Accounts → Connect sheet**, paste the sheet's link and tab name.
+4. **Link rows** to choose which rows become accounts. Summary rows, and rows the sheet's own subtotals leave out, are skipped by default.
+
+The sheet is read-only to the app. Opening the Accounts tab re-syncs if the last sync is over an hour old, so a new month's column appears on its own. Layout rules are in `supabase/functions/_shared/month-report.ts`.
 
 ## 6. External feed sources (optional)
 

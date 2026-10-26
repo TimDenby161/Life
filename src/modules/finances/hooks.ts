@@ -11,6 +11,7 @@ export const useTransactions = () => useQuery({ queryKey: financeKeys.transactio
 export const useSnapshots = () => useQuery({ queryKey: financeKeys.snapshots, queryFn: api.fetchSnapshots })
 export const useBudgets = () => useQuery({ queryKey: financeKeys.budgets, queryFn: api.fetchBudgets })
 export const useGoals = () => useQuery({ queryKey: financeKeys.goals, queryFn: api.fetchGoals })
+export const useSheetSource = () => useQuery({ queryKey: financeKeys.sheetSource, queryFn: api.fetchSheetSource })
 
 export function useAccountCurrency() {
   const accounts = useAccounts().data
@@ -41,3 +42,12 @@ export const useSaveBudget = () => useFinanceMutation((h, input: Parameters<type
 export const useDeleteBudget = () => useFinanceMutation((_h, id: string) => api.deleteBudget(id))
 export const useSaveGoal = () => useFinanceMutation((h, input: Parameters<typeof api.saveGoal>[1]) => api.saveGoal(h, input))
 export const useArchiveGoal = () => useFinanceMutation((_h, id: string) => api.archiveGoal(id))
+export const useSaveSheetSource = () => useFinanceMutation((h, input: Parameters<typeof api.saveSheetSource>[1]) => api.saveSheetSource(h, input))
+export const useDeleteSheetSource = () => useFinanceMutation((_h, id: string) => api.deleteSheetSource(id))
+/** Runs a sync; the result (rows to link) lives on the mutation, never in a refetching query. */
+export const useSyncSheet = () => useFinanceMutation(() => api.syncSheet())
+export const useApplySheetLinks = () =>
+  useFinanceMutation(async (h, a: { sourceId: string; choices: api.SheetRowChoice[]; openingDate: string }) => {
+    await api.applySheetLinks(h, a.sourceId, a.choices, a.openingDate)
+    return api.syncSheet()
+  })

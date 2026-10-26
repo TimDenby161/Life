@@ -1,5 +1,9 @@
 import { supabase, type Tables, type TablesInsert, type TablesUpdate } from '@/lib/supabase'
 import { fetchAllPages, unwrap } from '@/lib/utils'
+import type { SheetSyncResult, SyncRow } from '../../../supabase/functions/finance-sheet-sync/types.ts'
+import type { AccountSuggestion } from './lib/sheetLink'
+
+export type { SheetSyncResult, SyncRow }
 
 export type Account = Tables<'financial_accounts'>
 export type FinanceCategory = Tables<'finance_categories'>
@@ -7,6 +11,7 @@ export type Transaction = Tables<'financial_transactions'>
 export type BalanceSnapshot = Tables<'account_balance_history'>
 export type Budget = Tables<'budgets'>
 export type SavingsGoal = Tables<'savings_goals'>
+export type SheetSource = Tables<'finance_sheet_sources'>
 
 export const ACCOUNT_TYPES = [
   { value: 'current', label: 'Current account' },
@@ -31,6 +36,7 @@ export const financeKeys = {
   snapshots: ['finances', 'snapshots'] as const,
   budgets: ['finances', 'budgets'] as const,
   goals: ['finances', 'goals'] as const,
+  sheetSource: ['finances', 'sheet-source'] as const,
 }
 
 export async function fetchAccounts() {
@@ -144,4 +150,57 @@ export async function archiveGoal(id: string) {
 
 export async function createFinanceCategory(householdId: string, name: string, kind: 'income' | 'expense') {
   return unwrap(await supabase.from('finance_categories').insert({ household_id: householdId, name, kind }).select('*').single())
+}
+
+// -----------------------------------------------------------------------------
+// Google Sheet sync (finance-sheet-sync Edge Function; credentials stay server-side).
+// -----------------------------------------------------------------------------
+export const SHEET_PROVIDER = 'google_sheet'
+
+/** Accepts a full Google Sheets link or a bare spreadsheet ID. */
+export function spreadsheetIdFrom(input: string): string | null {
+  const id = /\/spreadsheets\/d\/([A-Za-z0-9_-]+)/.exec(input)?.[1] ?? input.trim()
+  return /^[A-Za-z0-9_-]{20,100}$/.test(id) ? id : null
+}
+
+export async function fetchSheetSource() {
+  return unwrap(await supabase.from('finance_sheet_sources').select('*').maybeSingle()) as SheetSource | null
+}
+
+export async function saveSheetSource(householdId: string, input: { spreadsheet_id: string; sheet_name: string }) {
+  unwrap(await supabase.from('finance_sheet_sources').upsert({ household_id: householdId, ...input }, { onConflict: 'household_id' }))
+}
+export async function deleteSheetSource(id: string) {
+  unwrap(await supabase.from('finance_sheet_sources').delete().eq('id', id))
+}
+
+export async function syncSheet(): Promise<SheetSyncResult> {
+  const { data, error } = await supabase.functions.invoke<SheetSyncResult>('finance-sheet-sync', { body: {} })
+  if (error) {
+    // Non-2xx responses still carry our JSON body.
+    const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
+    if (body?.status) return body as SheetSyncResult
+    return { status: 'error', message: 'The sheet sync service could not be reached.' }
+  }
+  return data ?? { status: 'error', message: 'Empty response' }
+}
+
+/** What to do with one sheet row: ignore it, make a new account, or link an existing one. */
+export type SheetRowChoice = { row: SyncRow } & ({ kind: 'skip' } | { kind: 'create'; account: AccountSuggestion } | { kind: 'link'; accountId: string })
+
+export async function applySheetLinks(householdId: string, sourceId: string, choices: readonly SheetRowChoice[], openingDate: string) {
+  const link = (key: string | null) => ({ external_provider: key ? SHEET_PROVIDER : null, external_account_id: key })
+  // Unlink first: a row key can only be on one account at a time.
+  for (const c of choices) {
+    const target = c.kind === 'link' ? c.accountId : null
+    if (c.row.accountId && c.row.accountId !== target) await updateAccount(c.row.accountId, link(null))
+  }
+  for (const c of choices) {
+    if (c.kind === 'link' && c.accountId !== c.row.accountId) await updateAccount(c.accountId, link(c.row.key))
+    if (c.kind === 'create') {
+      await createAccount(householdId, { ...c.account, opening_date: openingDate, opening_balance_minor: 0, ...link(c.row.key) })
+    }
+  }
+  const skipped = choices.filter((c) => c.kind === 'skip').map((c) => c.row.key)
+  unwrap(await supabase.from('finance_sheet_sources').update({ skipped_row_keys: skipped }).eq('id', sourceId))
 }
