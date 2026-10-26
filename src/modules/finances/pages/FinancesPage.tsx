@@ -80,9 +80,16 @@ function Overview() {
       label: p.date === today ? 'Now' : format(parseISO(p.date), fromSheet ? 'd MMM' : 'MMM'),
     }))
     // Breakdown groups holding an estimated value (house, car): marked so they're never mistaken for a statement.
-    const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
-    const estimatedGroups = new Set(included.filter((a) => latestSource.get(a.id) === 'estimate').map((a) => groupOf(a.account_type)))
-    return { nw, history, fromSheet, estimatedGroups }
+    const latest = new Map(snapshots.data.map((s) => [s.account_id, s])) // ordered by date: last wins
+    const estimatedGroups = new Set(included.filter((a) => latest.get(a.id)?.source === 'estimate').map((a) => groupOf(a.account_type)))
+    // Accounts made of several sheet rows: the rows of their latest sheet balance, largest first.
+    const sheetParts = new Map<string, SheetPart[]>()
+    for (const [accountId, s] of latest) {
+      if (s.source === 'sheet' && Array.isArray(s.breakdown) && s.breakdown.length > 1) {
+        sheetParts.set(accountId, (s.breakdown as SheetPart[]).toSorted((a, b) => b.balance_minor - a.balance_minor))
+      }
+    }
+    return { nw, history, fromSheet, estimatedGroups, sheetParts }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -111,7 +118,7 @@ function Overview() {
     accounts.data!
       .filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency && groupOf(a.account_type) === group)
       .filter((a) => owner === 'all' || (a.ownership === 'joint' ? 'joint' : a.owner_id) === owner)
-      .map((a) => ({ id: a.id, name: a.name, balance: balances.data!.get(a.id) ?? 0 }))
+      .map((a) => ({ id: a.id, name: a.name, balance: balances.data!.get(a.id) ?? 0, parts: derived.sheetParts.get(a.id) ?? [] }))
       .filter((a) => a.balance !== 0)
       .sort((x, y) => y.balance - x.balance)
 
@@ -167,7 +174,8 @@ function Overview() {
   )
 }
 
-type GroupAccounts = (owner: string, group: NetWorthGroup) => { id: string; name: string; balance: number }[]
+type SheetPart = { label: string; balance_minor: number }
+type GroupAccounts = (owner: string, group: NetWorthGroup) => { id: string; name: string; balance: number; parts: SheetPart[] }[]
 type BreakdownProps = {
   groups?: Partial<Record<NetWorthGroup, number>>
   /** 'all' for Combined, else 'joint' or a member id. */
@@ -199,9 +207,22 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated }: Omit<B
       {open ? (
         <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
           {accounts.map((a) => (
-            <li key={a.id} className="flex justify-between gap-2">
-              <span className="truncate text-muted-foreground">{a.name}</span>
-              <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+            <li key={a.id}>
+              <div className="flex justify-between gap-2">
+                <span className="truncate text-muted-foreground">{a.name}</span>
+                <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+              </div>
+              {/* An account combining several sheet rows: show the rows behind it. */}
+              {a.parts.length ? (
+                <ul className="ml-3 grid gap-0.5 border-l pl-2">
+                  {a.parts.map((p) => (
+                    <li key={p.label} className="flex justify-between gap-2 text-muted-foreground/80">
+                      <span className="truncate">{p.label}</span>
+                      <span className="tabular">{money(p.balance_minor)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>
