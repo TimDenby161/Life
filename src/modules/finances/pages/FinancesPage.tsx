@@ -111,15 +111,18 @@ function Overview() {
   const others = derived.nw.filter((n) => n.currency !== currency)
   const money = (v: number) => formatMoney(v, currency, { hidePence: true })
   const compact = (v: number) => formatMoney(v, currency, { compact: true })
+  const ownerName = (owner: string) => (owner === 'all' ? 'Combined' : owner === 'joint' ? 'Joint' : members.find((m) => m.id === owner)?.display_name ?? '')
   // The accounts behind a breakdown line, for the same currency and accounts the totals use.
   const accountsIn: GroupAccounts = (owner, group) =>
     accountsForSelection(derived.included, { kind: 'group', owner, group })
-      .map((a) => ({ id: a.id, name: a.name, balance: balances.data!.get(a.id) ?? 0, parts: derived.sheetParts.get(a.id) ?? [] }))
+      .map((a) => {
+        const owner = a.ownership === 'joint' ? 'joint' : (a.owner_id ?? 'joint')
+        return { id: a.id, name: a.name, owner, ownerName: ownerName(owner), balance: balances.data!.get(a.id) ?? 0, parts: derived.sheetParts.get(a.id) ?? [] }
+      })
       .filter((a) => a.balance !== 0)
       .sort((x, y) => y.balance - x.balance)
 
   // The chart follows whatever was last clicked in the boxes above.
-  const ownerName = (owner: string) => (owner === 'all' ? 'Combined' : owner === 'joint' ? 'Joint' : members.find((m) => m.id === owner)?.display_name ?? '')
   const accountName = (id: string) => accounts.data!.find((a) => a.id === id)?.name ?? ''
   const selectionTitle =
     selected.kind === 'owner' ? (selected.owner === 'all' ? 'Net worth' : `${ownerName(selected.owner)} net worth`)
@@ -186,7 +189,8 @@ function Overview() {
 const COMBINED: ChartSelection = { kind: 'owner', owner: 'all' }
 
 type SheetPart = { label: string; balance_minor: number }
-type GroupAccounts = (owner: string, group: NetWorthGroup) => { id: string; name: string; balance: number; parts: SheetPart[] }[]
+type GroupAccount = { id: string; name: string; owner: string; ownerName: string; balance: number; parts: SheetPart[] }
+type GroupAccounts = (owner: string, group: NetWorthGroup) => GroupAccount[]
 type BreakdownProps = {
   groups?: Partial<Record<NetWorthGroup, number>>
   /** 'all' for Combined, else 'joint' or a member id. */
@@ -229,6 +233,7 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
   const [open, setOpen] = useState(false)
   const label = `${NET_WORTH_GROUPS.find((g) => g.key === group)!.label}${estimated.has(group) ? ' (est.)' : ''}`
   const accounts = open ? accountsIn(owner, group) : []
+  const owners = owner === 'all' ? [...new Set(accounts.map((a) => a.owner))] : []
   return (
     <li>
       <Pickable selection={{ kind: 'group', owner, group }} selectedKey={pick.selectedKey} onSelect={(s) => { pick.onSelect(s); setOpen((o) => !o) }}>
@@ -240,31 +245,51 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
       </Pickable>
       {open ? (
         <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
-          {accounts.map((a) => (
-            <li key={a.id}>
-              <Pickable selection={{ kind: 'account', accountId: a.id }} {...pick}>
-                <span className="truncate text-muted-foreground">{a.name}</span>
-                <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+          {owners.length > 1
+            ? // Combined, with accounts from more than one person: a row per person, their accounts under it if several (or split into sheet rows).
+              owners.map((o) => {
+                const theirs = accounts.filter((a) => a.owner === o)
+                const total = theirs.reduce((t, a) => t + a.balance, 0)
+                return (
+                  <li key={o}>
+                    <Pickable selection={{ kind: 'group', owner: o, group }} {...pick}>
+                      <span className="truncate text-muted-foreground">{theirs[0].ownerName}</span>
+                      <span className={cn('tabular', total < 0 && 'text-destructive')}>{money(total)}</span>
+                    </Pickable>
+                    {theirs.length > 1 || theirs[0].parts.length ? <AccountRows accounts={theirs} money={money} {...pick} className="ml-3 border-l pl-2" /> : null}
+                  </li>
+                )
+              })
+            : <AccountRows accounts={accounts} money={money} {...pick} />}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
+/** Accounts in a breakdown line (each clickable), and the sheet rows behind combined ones. */
+function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect'> & { accounts: GroupAccount[]; className?: string }) {
+  const rows = accounts.map((a) => (
+    <li key={a.id}>
+      <Pickable selection={{ kind: 'account', accountId: a.id }} {...pick}>
+        <span className="truncate text-muted-foreground">{a.name}</span>
+        <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+      </Pickable>
+      {a.parts.length ? (
+        <ul className="ml-3 grid gap-0.5 border-l pl-2">
+          {a.parts.map((p) => (
+            <li key={p.label}>
+              <Pickable selection={{ kind: 'part', accountId: a.id, label: p.label }} {...pick} className="text-muted-foreground/80">
+                <span className="truncate">{p.label}</span>
+                <span className="tabular">{money(p.balance_minor)}</span>
               </Pickable>
-              {/* An account combining several sheet rows: show the rows behind it. */}
-              {a.parts.length ? (
-                <ul className="ml-3 grid gap-0.5 border-l pl-2">
-                  {a.parts.map((p) => (
-                    <li key={p.label}>
-                      <Pickable selection={{ kind: 'part', accountId: a.id, label: p.label }} {...pick} className="text-muted-foreground/80">
-                        <span className="truncate">{p.label}</span>
-                        <span className="tabular">{money(p.balance_minor)}</span>
-                      </Pickable>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </li>
           ))}
         </ul>
       ) : null}
     </li>
-  )
+  ))
+  return className ? <ul className={cn('grid gap-0.5', className)}>{rows}</ul> : <>{rows}</>
 }
 
 /** What a net worth figure is made of, largest first; empty groups are left out. */
