@@ -1,7 +1,7 @@
 import { supabase, type Tables, type TablesInsert, type TablesUpdate } from '@/lib/supabase'
 import { fetchAllPages, unwrap } from '@/lib/utils'
 import type { SheetSyncResult, SyncRow } from '../../../supabase/functions/finance-sheet-sync/types.ts'
-import type { AccountSuggestion } from './lib/sheetLink'
+import type { AccountSuggestion, LinkPlan } from './lib/sheetLink'
 
 export type { SheetSyncResult, SyncRow }
 
@@ -37,6 +37,7 @@ export const financeKeys = {
   budgets: ['finances', 'budgets'] as const,
   goals: ['finances', 'goals'] as const,
   sheetSource: ['finances', 'sheet-source'] as const,
+  sheetLinks: ['finances', 'sheet-links'] as const,
 }
 
 export async function fetchAccounts() {
@@ -155,8 +156,6 @@ export async function createFinanceCategory(householdId: string, name: string, k
 // -----------------------------------------------------------------------------
 // Google Sheet sync (finance-sheet-sync Edge Function; credentials stay server-side).
 // -----------------------------------------------------------------------------
-export const SHEET_PROVIDER = 'google_sheet'
-
 /** Accepts a full Google Sheets link or a bare spreadsheet ID. */
 export function spreadsheetIdFrom(input: string): string | null {
   const id = /\/spreadsheets\/d\/([A-Za-z0-9_-]+)/.exec(input)?.[1] ?? input.trim()
@@ -188,22 +187,34 @@ export async function syncSheet(): Promise<SheetSyncResult> {
   return data ?? { status: 'error', message: 'Empty response' }
 }
 
-/** What to do with one sheet row: ignore it, make a new account, or link an existing one. */
-export type SheetRowChoice = { row: SyncRow } & ({ kind: 'skip' } | { kind: 'create'; account: AccountSuggestion } | { kind: 'link'; accountId: string })
+export async function fetchSheetLinks() {
+  return unwrap(await supabase.from('finance_sheet_links').select('row_key, account_id'))
+}
 
-export async function applySheetLinks(householdId: string, sourceId: string, choices: readonly SheetRowChoice[], openingDate: string) {
-  const link = (key: string | null) => ({ external_provider: key ? SHEET_PROVIDER : null, external_account_id: key })
-  // Unlink first: a row key can only be on one account at a time.
-  for (const c of choices) {
-    const target = c.kind === 'link' ? c.accountId : null
-    if (c.row.accountId && c.row.accountId !== target) await updateAccount(c.row.accountId, link(null))
+/**
+ * Saves the link dialog: creates the new accounts, replaces every listed row's
+ * link in one call, archives accounts left without rows (their last balance
+ * would otherwise keep counting), and remembers which rows were skipped.
+ * Returns the number of accounts archived.
+ */
+export async function applySheetLinks(
+  householdId: string,
+  args: { sourceId: string; rowKeys: string[]; plan: LinkPlan; newAccounts: Record<string, AccountSuggestion>; openingDate: string },
+) {
+  const created = new Map<string, string>()
+  for (const key of args.plan.creates) {
+    const account = await createAccount(householdId, { ...args.newAccounts[key], opening_date: args.openingDate, opening_balance_minor: 0 })
+    created.set(key, account.id)
   }
-  for (const c of choices) {
-    if (c.kind === 'link' && c.accountId !== c.row.accountId) await updateAccount(c.accountId, link(c.row.key))
-    if (c.kind === 'create') {
-      await createAccount(householdId, { ...c.account, opening_date: openingDate, opening_balance_minor: 0, ...link(c.row.key) })
-    }
+  const links = args.rowKeys.map((row_key) => {
+    const t = args.plan.targets.get(row_key)
+    return { row_key, account_id: !t ? null : 'accountId' in t ? t.accountId : created.get(t.newFrom)! }
+  })
+  unwrap(await supabase.rpc('replace_sheet_links', { p_household_id: householdId, p_links: links }))
+  if (args.plan.orphaned.length) {
+    unwrap(await supabase.from('financial_accounts').update({ archived_at: new Date().toISOString() }).in('id', args.plan.orphaned))
   }
-  const skipped = choices.filter((c) => c.kind === 'skip').map((c) => c.row.key)
-  unwrap(await supabase.from('finance_sheet_sources').update({ skipped_row_keys: skipped }).eq('id', sourceId))
+  const skipped = links.filter((l) => !l.account_id).map((l) => l.row_key)
+  unwrap(await supabase.from('finance_sheet_sources').update({ skipped_row_keys: skipped }).eq('id', args.sourceId))
+  return args.plan.orphaned.length
 }

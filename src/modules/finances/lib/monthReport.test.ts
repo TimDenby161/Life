@@ -1,4 +1,4 @@
-import { cellToMinor, parseMonthReport, reconcile, serialToISODate } from '../../../../supabase/functions/_shared/month-report.ts'
+import { accountBalances, cellToMinor, parseMonthReport, reconcile, serialToISODate } from '../../../../supabase/functions/_shared/month-report.ts'
 
 // Same shape as the household's MonthReport sheet (made-up amounts), as the
 // Sheets API returns it with UNFORMATTED_VALUE + SERIAL_NUMBER dates.
@@ -98,5 +98,49 @@ describe('reconcile', () => {
 
   it('confirms every section then adds up to the sheet subtotal', () => {
     expect(Object.fromEntries(matches)).toEqual({ 'Tim Positive': true, 'Tim Negative': true, 'Sophie Positive': true, 'Long Term': true })
+  })
+})
+
+describe('accountBalances', () => {
+  const report = parseMonthReport(SHEET)
+
+  it('sums several rows into one account per date, keeping the parts', () => {
+    const links = new Map([
+      ['tim positive|santander|current account', 'acc-1'],
+      ['tim positive|revolut|saving', 'acc-1'],
+      ['tim negative|amex|ba', 'acc-2'],
+    ])
+    expect(accountBalances(report, links)).toEqual([
+      {
+        account_id: 'acc-1',
+        as_of: '2026-07-14',
+        balance_minor: 30050,
+        breakdown: [
+          { label: 'Santander · Current Account', balance_minor: 10025 },
+          { label: 'Revolut · Saving', balance_minor: 20025 },
+        ],
+      },
+      {
+        account_id: 'acc-1',
+        as_of: '2026-08-16',
+        balance_minor: 35000,
+        breakdown: [
+          { label: 'Santander · Current Account', balance_minor: 15000 },
+          { label: 'Revolut · Saving', balance_minor: 20000 },
+        ],
+      },
+      { account_id: 'acc-2', as_of: '2026-07-14', balance_minor: -7611, breakdown: [{ label: 'Amex · BA', balance_minor: -7611 }] },
+      { account_id: 'acc-2', as_of: '2026-08-16', balance_minor: 0, breakdown: [{ label: 'Amex · BA', balance_minor: 0 }] },
+    ])
+  })
+
+  it('skips empty cells, and dates where every row is empty', () => {
+    const links = new Map([['tim positive|santander|edge saver', 'acc-3']])
+    expect(accountBalances(report, links).map((b) => [b.as_of, b.balance_minor])).toEqual([['2026-08-16', 0]])
+    const both = new Map([...links, ['tim positive|revolut|saving', 'acc-3']])
+    expect(accountBalances(report, both).map((b) => [b.as_of, b.balance_minor, b.breakdown.length])).toEqual([
+      ['2026-07-14', 20025, 1],
+      ['2026-08-16', 20000, 2],
+    ])
   })
 })

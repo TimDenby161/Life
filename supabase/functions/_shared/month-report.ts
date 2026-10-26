@@ -188,3 +188,32 @@ export function reconcile(report: MonthReport): { skip: Set<string>; matches: Ma
   }
   return { skip, matches }
 }
+
+export type AccountBalance = {
+  account_id: string
+  as_of: ISODate
+  balance_minor: number
+  /** The sheet rows behind the balance, in sheet order (one entry when not combined). */
+  breakdown: { label: string; balance_minor: number }[]
+}
+
+export const rowLabel = (r: Pick<SheetRow, 'institution' | 'name'>) => [r.institution, r.name].filter(Boolean).join(' · ')
+
+/**
+ * One balance per linked account and date: the sum of the account's rows.
+ * A date where none of its rows has a figure is left out (so a cleared
+ * column removes the balance); a row with an empty cell just doesn't count.
+ */
+export function accountBalances(report: MonthReport, links: ReadonlyMap<string, string>): AccountBalance[] {
+  const out: AccountBalance[] = []
+  const accounts = [...new Set(report.rows.flatMap((r) => links.get(r.key) ?? []))]
+  for (const accountId of accounts) {
+    const rows = report.rows.filter((r) => links.get(r.key) === accountId)
+    report.dates.forEach((date, d) => {
+      const parts = rows.flatMap((r) => (r.values[d] === null ? [] : [{ label: rowLabel(r), balance_minor: r.values[d]! }]))
+      if (!parts.length) return
+      out.push({ account_id: accountId, as_of: date, balance_minor: parts.reduce((t, p) => t + p.balance_minor, 0), breakdown: parts })
+    })
+  }
+  return out
+}

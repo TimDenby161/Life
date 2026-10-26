@@ -12,6 +12,7 @@ export const useSnapshots = () => useQuery({ queryKey: financeKeys.snapshots, qu
 export const useBudgets = () => useQuery({ queryKey: financeKeys.budgets, queryFn: api.fetchBudgets })
 export const useGoals = () => useQuery({ queryKey: financeKeys.goals, queryFn: api.fetchGoals })
 export const useSheetSource = () => useQuery({ queryKey: financeKeys.sheetSource, queryFn: api.fetchSheetSource })
+export const useSheetLinks = () => useQuery({ queryKey: financeKeys.sheetLinks, queryFn: api.fetchSheetLinks })
 
 export function useAccountCurrency() {
   const accounts = useAccounts().data
@@ -47,7 +48,7 @@ export const useDeleteSheetSource = () => useFinanceMutation((_h, id: string) =>
 /** Runs a sync; the result (rows to link) lives on the mutation, never in a refetching query. */
 export const useSyncSheet = () => useFinanceMutation(() => api.syncSheet())
 export const useApplySheetLinks = () =>
-  useFinanceMutation(async (h, a: { sourceId: string; choices: api.SheetRowChoice[]; openingDate: string }) => {
-    await api.applySheetLinks(h, a.sourceId, a.choices, a.openingDate)
-    return api.syncSheet()
+  useFinanceMutation(async (h, args: Parameters<typeof api.applySheetLinks>[1]) => {
+    const archived = await api.applySheetLinks(h, args)
+    return { archived, result: await api.syncSheet() }
   })

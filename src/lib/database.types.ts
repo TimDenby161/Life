@@ -39,6 +39,7 @@ export type Database = {
           account_id: string
           as_of: string
           balance_minor: number
+          breakdown: Json | null
           created_at: string
           created_by: string
           household_id: string
@@ -50,6 +51,7 @@ export type Database = {
           account_id: string
           as_of: string
           balance_minor: number
+          breakdown?: Json | null
           created_at?: string
           created_by?: string
           household_id: string
@@ -61,6 +63,7 @@ export type Database = {
           account_id?: string
           as_of?: string
           balance_minor?: number
+          breakdown?: Json | null
           created_at?: string
           created_by?: string
           household_id?: string
@@ -484,6 +487,52 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "finance_categories_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_sheet_links: {
+        Row: {
+          account_id: string
+          created_at: string
+          household_id: string
+          id: string
+          row_key: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          household_id: string
+          id?: string
+          row_key: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          row_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_sheet_links_account_id_household_id_fkey"
+            columns: ["account_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "financial_account_balances"
+            referencedColumns: ["account_id", "household_id"]
+          },
+          {
+            foreignKeyName: "finance_sheet_links_account_id_household_id_fkey"
+            columns: ["account_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "finance_sheet_links_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
@@ -1870,6 +1919,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      replace_sheet_links: {
+        Args: { p_household_id: string; p_links: Json }
+        Returns: undefined
       }
       shares_household_with: { Args: { p_user_id: string }; Returns: boolean }
       skip_task_occurrence: {

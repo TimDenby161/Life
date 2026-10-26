@@ -16,7 +16,7 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { type Account, ACCOUNT_TYPES } from '../api'
 import { AccountDialog, RecordBalanceDialog } from '../components/forms'
 import { SheetSyncCard } from '../components/SheetSync'
-import { useAccounts, useBalances, useDeleteAccount, useDeleteSnapshot, useSnapshots, useTransactions, useUpdateAccount } from '../hooks'
+import { useAccounts, useBalances, useDeleteAccount, useDeleteSnapshot, useSheetLinks, useSnapshots, useTransactions, useUpdateAccount } from '../hooks'
 import { balanceSeries } from '../lib/calc'
 
 const typeLabel = (t: string) => ACCOUNT_TYPES.find((x) => x.value === t)?.label ?? t
@@ -26,6 +26,7 @@ export function AccountsTab() {
   const accounts = useAccounts()
   const balances = useBalances()
   const snapshots = useSnapshots()
+  const links = useSheetLinks()
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
@@ -41,6 +42,9 @@ export function AccountsTab() {
   const lastRecorded = new Map<string, string>()
   for (const s of snapshots.data ?? []) lastRecorded.set(s.account_id, s.as_of)
   const open = accounts.data.find((a) => a.id === openId) ?? null
+  const sheetRows = new Map<string, number>()
+  for (const l of links.data ?? []) sheetRows.set(l.account_id, (sheetRows.get(l.account_id) ?? 0) + 1)
+  const fromSheet = (id: string) => (sheetRows.get(id) ?? 0) > 1 ? `from ${sheetRows.get(id)} sheet rows` : sheetRows.has(id) && 'from sheet'
 
   return (
     <div>
@@ -69,7 +73,7 @@ export function AccountsTab() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{a.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `recorded ${formatDay(lastRecorded.get(a.id)!)}` : 'calculated', a.external_provider === 'google_sheet' && 'from sheet'].filter(Boolean).join(' · ')}
+                          {[typeLabel(a.account_type), a.institution, lastRecorded.get(a.id) ? `recorded ${formatDay(lastRecorded.get(a.id)!)}` : 'calculated', fromSheet(a.id)].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="text-right">
@@ -101,6 +105,9 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
   const [confirm, setConfirm] = useState(false)
 
   const own = useMemo(() => (snapshots.data ?? []).filter((s) => s.account_id === account?.id), [snapshots.data, account])
+  // Combined sheet rows: show the parts of the latest recorded balance.
+  const latest = own.at(-1)
+  const breakdown = Array.isArray(latest?.breakdown) && latest.breakdown.length > 1 ? (latest.breakdown as { label: string; balance_minor: number }[]) : null
   const series = useMemo(
     () => (account ? balanceSeries(account, own, transactions.data ?? [], 12, todayISO()) : []),
     [account, own, transactions.data],
@@ -128,6 +135,20 @@ function AccountDetailDialog({ account, onClose, balance }: { account: Account |
                   <ClipboardCheck /> Record balance
                 </Button>
               </div>
+
+              {breakdown ? (
+                <section>
+                  <h3 className="mb-1 text-sm font-semibold">Made up of <span className="font-normal text-muted-foreground">· sheet, {formatDay(latest!.as_of)}</span></h3>
+                  <ul className="divide-y text-sm">
+                    {breakdown.map((p) => (
+                      <li key={p.label} className="flex justify-between gap-2 py-1.5">
+                        <span className="text-muted-foreground">{p.label}</span>
+                        <span className="tabular">{formatMoney(p.balance_minor, account.currency)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
               <div>
                 <Legend

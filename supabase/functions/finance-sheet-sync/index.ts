@@ -7,8 +7,8 @@
 //
 // Every call reads the whole sheet, so it is idempotent: new date columns are
 // added, edited cells update, deleted columns are removed. Only rows linked to
-// an account (financial_accounts.external_provider = 'google_sheet') are
-// written; the rest come back so the app can offer to link them.
+// an account (finance_sheet_links) are written, an account's rows summed per
+// date; the rest come back so the app can offer to link them.
 //
 // Secrets (set with `supabase secrets set`, never committed):
 //   GOOGLE_SERVICE_ACCOUNT_JSON  the same read-only service account as calendar-events
@@ -16,7 +16,7 @@
 //   ALLOWED_ORIGINS              optional
 import { googleAccessToken } from '../_shared/google-auth.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { parseMonthReport, reconcile } from '../_shared/month-report.ts'
+import { accountBalances, parseMonthReport, reconcile } from '../_shared/month-report.ts'
 import type { SyncRow } from './types.ts'
 
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
@@ -91,18 +91,11 @@ Deno.serve(async (req) => {
     return fail('Google Sheets is unavailable right now.', 502)
   }
 
-  const { data: accounts, error: accountsError } = await supabase
-    .from('financial_accounts')
-    .select('id, external_account_id')
-    .eq('external_provider', 'google_sheet')
-  if (accountsError) return json(req, { status: 'error', message: 'Could not load accounts' }, 500)
-  const linked = new Map(accounts.map((a) => [a.external_account_id as string, a.id as string]))
+  const { data: links, error: linksError } = await supabase.from('finance_sheet_links').select('row_key, account_id')
+  if (linksError) return json(req, { status: 'error', message: 'Could not load linked accounts' }, 500)
+  const linked = new Map(links.map((l) => [l.row_key as string, l.account_id as string]))
 
-  const balances = report.rows.flatMap((r) => {
-    const accountId = linked.get(r.key)
-    if (!accountId) return []
-    return report.dates.flatMap((date, i) => (r.values[i] === null ? [] : [{ account_id: accountId, as_of: date, balance_minor: r.values[i] }]))
-  })
+  const balances = accountBalances(report, linked)
   const { data: applied, error: applyError } = await supabase.rpc('apply_sheet_balances', { p_source_id: source.id, p_balances: balances })
   if (applyError) {
     console.error('finance-sheet-sync apply failed:', applyError.code)

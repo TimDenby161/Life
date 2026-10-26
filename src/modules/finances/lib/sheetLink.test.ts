@@ -1,4 +1,4 @@
-import { skipByDefault, suggestAccount } from './sheetLink'
+import { planLinks, skipByDefault, suggestAccount } from './sheetLink'
 
 const members = [
   { id: 'tim', display_name: 'Tim' },
@@ -45,5 +45,35 @@ describe('skipByDefault', () => {
   it('follows the sheet arithmetic for account rows', () => {
     expect(skipByDefault({ key: 'a', name: 'Total Saver', sectionKind: 'positive' }, ['a'])).toBe(true)
     expect(skipByDefault({ key: 'b', name: 'Sophos', sectionKind: 'positive' }, ['a'])).toBe(false)
+  })
+})
+
+describe('planLinks', () => {
+  const rows = [
+    { key: 'revolut joint', accountId: 'acc-rj' },
+    { key: 'edge explorer', accountId: 'acc-ee' },
+    { key: 'holiday', accountId: null },
+    { key: 'service', accountId: null },
+  ]
+
+  it('combines rows into one new account', () => {
+    const plan = planLinks(rows, { 'revolut joint': 'create', 'edge explorer': 'new:revolut joint', holiday: 'skip', service: 'skip' })
+    expect(plan.creates).toEqual(['revolut joint'])
+    expect(plan.targets.get('edge explorer')).toEqual({ newFrom: 'revolut joint' })
+    expect(plan.orphaned.sort()).toEqual(['acc-ee', 'acc-rj'])
+  })
+
+  it('combines rows into an existing account and archives the one left empty', () => {
+    const plan = planLinks(rows, { 'revolut joint': 'acc-rj', 'edge explorer': 'acc-rj', holiday: 'acc-rj', service: 'skip' })
+    expect(plan.creates).toEqual([])
+    expect(plan.targets.get('holiday')).toEqual({ accountId: 'acc-rj' })
+    expect(plan.targets.get('service')).toBeNull()
+    expect(plan.orphaned).toEqual(['acc-ee'])
+  })
+
+  it('makes its own account when the row it pointed at no longer creates one', () => {
+    const plan = planLinks(rows, { 'revolut joint': 'skip', 'edge explorer': 'new:revolut joint', holiday: 'skip', service: 'skip' })
+    expect(plan.creates).toEqual(['edge explorer'])
+    expect(plan.targets.get('edge explorer')).toEqual({ newFrom: 'edge explorer' })
   })
 })

@@ -45,3 +45,41 @@ export function skipByDefault(row: Pick<SyncRow, 'key' | 'name' | 'sectionKind'>
   if (row.sectionKind === 'summary') return !/house|property/i.test(row.name)
   return suggestedSkip.includes(row.key)
 }
+
+/**
+ * A row's choice in the link dialog: skip it, make a new account from it, add
+ * it to a new account another row is making (`new:<that row's key>`), or link
+ * it to an existing account (its id).
+ */
+export type RowChoice = 'skip' | 'create' | `new:${string}` | (string & {})
+
+export type LinkPlan = {
+  /** Rows that each make a new account (the account's first row). */
+  creates: string[]
+  /** Every row's target: an existing account id, the key of the row making its new account, or null. */
+  targets: Map<string, { accountId: string } | { newFrom: string } | null>
+  /** Accounts that were linked and no longer have any rows: archive, or their last balance double counts. */
+  orphaned: string[]
+}
+
+export function planLinks(rows: readonly Pick<SyncRow, 'key' | 'accountId'>[], choices: Readonly<Record<string, RowChoice>>): LinkPlan {
+  const creates = rows.filter((r) => choices[r.key] === 'create').map((r) => r.key)
+  const targets: LinkPlan['targets'] = new Map()
+  for (const r of rows) {
+    const c = choices[r.key] ?? 'skip'
+    if (c === 'skip') targets.set(r.key, null)
+    else if (c === 'create') targets.set(r.key, { newFrom: r.key })
+    else if (c.startsWith('new:')) {
+      const from = c.slice(4)
+      // The other row stopped making an account: this row makes its own.
+      if (creates.includes(from)) targets.set(r.key, { newFrom: from })
+      else {
+        creates.push(r.key)
+        targets.set(r.key, { newFrom: r.key })
+      }
+    } else targets.set(r.key, { accountId: c })
+  }
+  const stillLinked = new Set([...targets.values()].flatMap((t) => (t && 'accountId' in t ? [t.accountId] : [])))
+  const orphaned = [...new Set(rows.flatMap((r) => (r.accountId && !stillLinked.has(r.accountId) ? [r.accountId] : [])))]
+  return { creates, targets, orphaned }
+}

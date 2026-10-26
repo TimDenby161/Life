@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
 import { CircleAlert, CircleCheck, FileSpreadsheet, Link2, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { rowLabel } from '../../../../supabase/functions/_shared/month-report.ts'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -11,9 +12,9 @@ import { formatDay } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { formatMoney } from '@/lib/money'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type SheetRowChoice, type SheetSource, type SheetSyncResult, spreadsheetIdFrom, type SyncRow } from '../api'
+import { type SheetSource, type SheetSyncResult, spreadsheetIdFrom, type SyncRow } from '../api'
 import { useAccounts, useApplySheetLinks, useDeleteSheetSource, useSaveSheetSource, useSheetSource, useSyncSheet } from '../hooks'
-import { skipByDefault, suggestAccount } from '../lib/sheetLink'
+import { planLinks, type RowChoice as RowChoiceValue, skipByDefault, suggestAccount } from '../lib/sheetLink'
 
 type OkResult = Extract<SheetSyncResult, { status: 'ok' }>
 
@@ -29,7 +30,10 @@ export function SheetSyncCard() {
   const autoSynced = useRef(false)
   const s = source.data
 
-  const result = sync.data?.status === 'ok' ? sync.data : null
+  // The newest result, from a sync or from saving links (which re-syncs).
+  const [last, setLast] = useState<SheetSyncResult | undefined>()
+  useEffect(() => { if (sync.data) setLast(sync.data) }, [sync.data])
+  const result = last?.status === 'ok' ? last : null
   const newRows = result?.rows.filter((r) => !r.accountId && !s?.skipped_row_keys.includes(r.key)) ?? []
 
   useEffect(() => {
@@ -58,7 +62,7 @@ export function SheetSyncCard() {
     )
   }
 
-  const error = sync.data && sync.data.status !== 'ok' ? sync.data.message : s.last_sync_error
+  const error = last && last.status !== 'ok' ? last.message : s.last_sync_error
   return (
     <>
       <Card className="mb-4 grid gap-3 p-4">
@@ -94,7 +98,7 @@ export function SheetSyncCard() {
         ) : null}
       </Card>
       <ConnectSheetDialog open={connecting} onOpenChange={setConnecting} source={s} />
-      {result ? <LinkRowsDialog open={linking} onOpenChange={setLinking} source={s} result={result} /> : null}
+      {result ? <LinkRowsDialog open={linking} onOpenChange={setLinking} source={s} result={result} onSaved={setLast} /> : null}
     </>
   )
 }
@@ -146,14 +150,25 @@ function ConnectSheetDialog({ open, onOpenChange, source }: { open: boolean; onO
   )
 }
 
-type Choice = 'skip' | 'create' | string // otherwise an account id
-
-function LinkRowsDialog({ open, onOpenChange, source, result }: { open: boolean; onOpenChange: (o: boolean) => void; source: SheetSource; result: OkResult }) {
+function LinkRowsDialog({
+  open,
+  onOpenChange,
+  source,
+  result,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  source: SheetSource
+  result: OkResult
+  onSaved: (r: SheetSyncResult) => void
+}) {
   const { members } = useHousehold()
   const accounts = useAccounts()
   const apply = useApplySheetLinks()
+  const suggestions = useMemo(() => new Map(result.rows.map((r) => [r.key, suggestAccount(r, members)])), [result, members])
   const initial = useMemo(() => {
-    const out: Record<string, Choice> = {}
+    const out: Record<string, RowChoiceValue> = {}
     for (const r of result.rows) {
       const decidedSkip = source.skipped_row_keys.includes(r.key)
       out[r.key] = r.accountId ?? (decidedSkip || skipByDefault(r, result.suggestedSkip) ? 'skip' : 'create')
@@ -161,32 +176,61 @@ function LinkRowsDialog({ open, onOpenChange, source, result }: { open: boolean;
     return out
   }, [result, source.skipped_row_keys])
   const [choices, setChoices] = useState(initial)
-  useEffect(() => { if (open) setChoices(initial) }, [open, initial])
+  const [names, setNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!open) return
+    setChoices(initial)
+    setNames({})
+  }, [open, initial])
 
+  const ownerName = (id: string | null) => members.find((m) => m.id === id)?.display_name ?? 'Joint'
+  const nameOf = (key: string) => names[key] ?? suggestions.get(key)!.name
+  const plan = planLinks(result.rows, choices)
   const sections = [
     { label: 'Summary', matches: null as boolean | null },
     ...result.sections.map((s) => ({ label: s.label, matches: s.matchesSheetTotal })),
   ]
-  const taken = new Set(Object.values(choices))
-  const unlinkedAccounts = (accounts.data ?? []).filter((a) => !a.archived_at)
-  const creating = Object.values(choices).filter((c) => c === 'create').length
+  const liveAccounts = (accounts.data ?? []).filter((a) => !a.archived_at)
+  const newAccounts = plan.creates.map((key) => ({ key, name: nameOf(key), owner_id: suggestions.get(key)!.owner_id }))
+  const orphanedNames = plan.orphaned.map((id) => accounts.data?.find((a) => a.id === id)?.name).filter(Boolean)
+
+  const change = (key: string, value: RowChoiceValue) =>
+    setChoices((c) => {
+      const next = { ...c, [key]: value }
+      // Rows that were joining this row's new account now make their own.
+      if (c[key] === 'create' && value !== 'create') for (const k in next) if (next[k] === `new:${key}`) next[k] = 'create'
+      return next
+    })
 
   const save = () => {
-    const list: SheetRowChoice[] = result.rows.map((row) => {
-      const c = choices[row.key]
-      if (c === 'skip') return { row, kind: 'skip' }
-      if (c === 'create') return { row, kind: 'create', account: suggestAccount(row, members) }
-      return { row, kind: 'link', accountId: c }
-    })
+    const accountsToCreate = Object.fromEntries(
+      plan.creates.map((key) => {
+        const s = suggestions.get(key)!
+        const fed = [...plan.targets].flatMap(([rowKey, t]) => (t && 'newFrom' in t && t.newFrom === key ? [suggestions.get(rowKey)!.institution] : []))
+        // A combined account spanning banks has no single institution.
+        return [key, { ...s, name: nameOf(key).trim() || s.name, institution: new Set(fed).size > 1 ? null : s.institution }]
+      }),
+    )
     apply.mutate(
-      { sourceId: source.id, choices: list, openingDate: result.dates[0] },
-      { onSuccess: () => { toast.success('Linked. Balances imported from the sheet.'); onOpenChange(false) }, onError: (e) => toast.error(getErrorMessage(e)) },
+      { sourceId: source.id, rowKeys: result.rows.map((r) => r.key), plan, newAccounts: accountsToCreate, openingDate: result.dates[0] },
+      {
+        onSuccess: ({ archived, result: r }) => {
+          toast.success(archived ? `Saved. Archived ${archived} account${archived === 1 ? '' : 's'} no longer fed by the sheet.` : 'Saved. Balances imported from the sheet.')
+          onSaved(r)
+          onOpenChange(false)
+        },
+        onError: (e) => toast.error(getErrorMessage(e)),
+      },
     )
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Link sheet rows to accounts" description="Each linked row's balances are recorded on that account for every date column." className="sm:max-w-2xl">
+      <DialogContent
+        title="Link sheet rows to accounts"
+        description="Link several rows to one account to combine them: its balance is their total on each date, with the breakdown kept."
+        className="sm:max-w-2xl"
+      >
         <div className="grid gap-5">
           {sections.map((section) => {
             const rows = result.rows.filter((r) => r.section === section.label)
@@ -209,10 +253,15 @@ function LinkRowsDialog({ open, onOpenChange, source, result }: { open: boolean;
                       key={r.key}
                       row={r}
                       value={choices[r.key]}
-                      onChange={(v) => setChoices((c) => ({ ...c, [r.key]: v }))}
-                      accounts={unlinkedAccounts.filter((a) => a.id === choices[r.key] || !taken.has(a.id))}
-                      hint={suggestAccount(r, members)}
-                      ownerName={(id) => members.find((m) => m.id === id)?.display_name ?? 'Joint'}
+                      onChange={(v) => change(r.key, v)}
+                      accounts={liveAccounts}
+                      newAccounts={newAccounts.filter((n) => n.key !== r.key)}
+                      ownName={nameOf(r.key)}
+                      onRename={(name) => setNames((n) => ({ ...n, [r.key]: name }))}
+                      joiners={result.rows.filter((x) => choices[x.key] === `new:${r.key}`).length}
+                      hint={suggestions.get(r.key)!}
+                      ownerName={ownerName}
+                      rowsFeeding={(accountId) => result.rows.filter((x) => choices[x.key] === accountId).length}
                     />
                   ))}
                 </ul>
@@ -220,10 +269,15 @@ function LinkRowsDialog({ open, onOpenChange, source, result }: { open: boolean;
             )
           })}
         </div>
+        {orphanedNames.length ? (
+          <p className="mt-4 rounded-lg bg-warning/10 p-3 text-xs text-warning">
+            {orphanedNames.join(', ')} will no longer be fed by the sheet and will be archived, so {orphanedNames.length === 1 ? 'its' : 'their'} last balance doesn’t count twice. You can restore archived accounts from the Accounts list.
+          </p>
+        ) : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={apply.isPending}>
-            {apply.isPending ? 'Saving…' : creating ? `Create ${creating} account${creating === 1 ? '' : 's'} and sync` : 'Save and sync'}
+            {apply.isPending ? 'Saving…' : plan.creates.length ? `Create ${plan.creates.length} account${plan.creates.length === 1 ? '' : 's'} and sync` : 'Save and sync'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -231,47 +285,79 @@ function LinkRowsDialog({ open, onOpenChange, source, result }: { open: boolean;
   )
 }
 
+type AccountOption = { id: string; name: string; owner_id: string | null }
+
 function RowChoice({
   row,
   value,
   onChange,
   accounts,
+  newAccounts,
+  ownName,
+  onRename,
+  joiners,
   hint,
   ownerName,
+  rowsFeeding,
 }: {
   row: SyncRow
-  value: Choice
-  onChange: (v: Choice) => void
-  accounts: { id: string; name: string; owner_id: string | null }[]
+  value: RowChoiceValue
+  onChange: (v: RowChoiceValue) => void
+  accounts: AccountOption[]
+  /** New accounts other rows in the dialog are making, which this row can join. */
+  newAccounts: { key: string; name: string; owner_id: string | null }[]
+  ownName: string
+  onRename: (name: string) => void
+  joiners: number
   hint: ReturnType<typeof suggestAccount>
   ownerName: (id: string | null) => string
+  rowsFeeding: (accountId: string) => number
 }) {
-  const label = [row.institution, row.name].filter(Boolean).join(' · ')
+  const label = rowLabel(row)
+  const whose = (owner: string | null) => (ownerName(owner) === 'Joint' ? 'joint' : `${ownerName(owner)}’s`)
   const linked = accounts.find((a) => a.id === value)
+  const joining = value.startsWith('new:') ? newAccounts.find((n) => `new:${n.key}` === value) : undefined
   // Same-named accounts (e.g. "Santander Current Account") differ only by owner:
   // group by owner, the row's own person (or joint) first.
-  const groups = [...new Set([hint.owner_id, ...accounts.map((a) => a.owner_id)])]
-    .map((owner) => ({ label: ownerName(owner), accounts: accounts.filter((a) => a.owner_id === owner) }))
-    .filter((g) => g.accounts.length)
+  const owners = [...new Set([hint.owner_id, ...newAccounts.map((n) => n.owner_id), ...accounts.map((a) => a.owner_id)])]
+  const byOwner = <T extends { owner_id: string | null }>(items: T[]) =>
+    owners.map((owner) => ({ label: ownerName(owner), items: items.filter((a) => a.owner_id === owner) })).filter((g) => g.items.length)
+  const [renaming, setRenaming] = useState(false)
+  const combined = (n: number) => (n > 1 ? `, combined with ${n - 1} other row${n === 2 ? '' : 's'}` : '')
+
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm">
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground tabular">
-          {row.latest ? `${formatMoney(row.latest.balanceMinor)} on ${formatDay(row.latest.date)}` : 'No figures'}
-          {value === 'create' ? ` · new ${hint.account_type.replace('_', ' ')}, ${ownerName(hint.owner_id)}` : ''}
-          {linked ? ` · linked to ${ownerName(linked.owner_id) === 'Joint' ? 'joint' : `${ownerName(linked.owner_id)}’s`} ${linked.name}` : ''}
-        </p>
+    <li className="grid gap-2 px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{label}</p>
+          <p className="text-xs text-muted-foreground tabular">
+            {row.latest ? `${formatMoney(row.latest.balanceMinor)} on ${formatDay(row.latest.date)}` : 'No figures'}
+            {value === 'create' ? ` · new ${hint.account_type.replace('_', ' ')}, ${ownerName(hint.owner_id)}${combined(joiners + 1)}` : ''}
+            {value === 'create' && !joiners && !renaming ? (
+              <> · <button type="button" className="text-primary hover:underline" onClick={() => setRenaming(true)}>Rename</button></>
+            ) : null}
+            {linked ? ` · into ${whose(linked.owner_id)} ${linked.name}${combined(rowsFeeding(linked.id))}` : ''}
+            {joining ? ` · into new ${whose(joining.owner_id)} ${joining.name}` : ''}
+          </p>
+        </div>
+        <NativeSelect aria-label={`What to do with ${label}`} value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-full text-[13px] sm:w-60">
+          <option value="skip">Don’t import</option>
+          <option value="create">New account</option>
+          {byOwner(accounts).map((g) => (
+            <optgroup key={g.label} label={`Add to ${g.label === 'Joint' ? 'a joint' : `${g.label}’s`} account`}>
+              {g.items.map((a) => <option key={a.id} value={a.id}>{g.label} · {a.name}</option>)}
+            </optgroup>
+          ))}
+          {byOwner(newAccounts).map((g) => (
+            <optgroup key={`new-${g.label}`} label={`Add to a new ${g.label === 'Joint' ? 'joint' : `${g.label}’s`} account (made in this list)`}>
+              {g.items.map((n) => <option key={n.key} value={`new:${n.key}`}>{g.label} · {n.name} (new)</option>)}
+            </optgroup>
+          ))}
+        </NativeSelect>
       </div>
-      <NativeSelect aria-label={`What to do with ${label}`} value={value} onChange={(e) => onChange(e.target.value)} className="h-8 w-full text-[13px] sm:w-56">
-        <option value="skip">Don’t import</option>
-        <option value="create">New account</option>
-        {groups.map((g) => (
-          <optgroup key={g.label} label={`Link to ${g.label === 'Joint' ? 'a joint' : `${g.label}’s`} account`}>
-            {g.accounts.map((a) => <option key={a.id} value={a.id}>{g.label} · {a.name}</option>)}
-          </optgroup>
-        ))}
-      </NativeSelect>
+      {value === 'create' && (joiners || renaming) ? (
+        <Input aria-label={`Name for the new account from ${label}`} value={ownName} maxLength={80} onChange={(e) => onRename(e.target.value)} className="h-8 text-[13px]" />
+      ) : null}
     </li>
   )
 }
