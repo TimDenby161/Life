@@ -164,7 +164,8 @@ function CalendarSection() {
     onSuccess: () => { invalidate(); setCalendarId(''); setEmbedUrl(''); toast.success('Calendar added') },
   })
   const update = useMutation({
-    mutationFn: async (a: { id: string; enabled: boolean }) => unwrap(await supabase.from('calendar_integrations').update({ enabled: a.enabled }).eq('id', a.id)),
+    mutationFn: async (a: { id: string; patch: { enabled?: boolean; hidden_event_titles?: string[] } }) =>
+      unwrap(await supabase.from('calendar_integrations').update(a.patch).eq('id', a.id)),
     onSuccess: invalidate,
   })
   const remove = useMutation({
@@ -179,14 +180,19 @@ function CalendarSection() {
         {integrations.data?.length ? (
           <ul className="grid gap-2">
             {integrations.data.map((i) => (
-              <li key={i.id} className="flex items-center gap-3 text-sm">
-                <span className={cn('size-2.5 rounded-full', colorOf(i.color).dot)} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{i.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{i.mode === 'embed' ? 'Google embed (browser sign-in)' : i.google_calendar_id}</span>
-                </span>
-                <Switch checked={i.enabled} onCheckedChange={(v) => update.mutate({ id: i.id, enabled: v })} aria-label={`Show ${i.name}`} />
-                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${i.name}`} onClick={() => remove.mutate(i.id)}><Trash2 /></Button>
+              <li key={i.id} className="grid gap-2 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className={cn('size-2.5 rounded-full', colorOf(i.color).dot)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{i.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{i.mode === 'embed' ? 'Google embed (browser sign-in)' : i.google_calendar_id}</span>
+                  </span>
+                  <Switch checked={i.enabled} onCheckedChange={(v) => update.mutate({ id: i.id, patch: { enabled: v } })} aria-label={`Show ${i.name}`} />
+                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${i.name}`} onClick={() => remove.mutate(i.id)}><Trash2 /></Button>
+                </div>
+                {i.mode === 'service_account' ? (
+                  <HiddenTitles titles={i.hidden_event_titles ?? []} onChange={(titles) => update.mutate({ id: i.id, patch: { hidden_event_titles: titles } })} />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -221,6 +227,37 @@ function CalendarSection() {
         </form>
       </Card>
     </section>
+  )
+}
+
+/** Exact event titles (ignoring case/spacing) that the calendar won't show. */
+function HiddenTitles({ titles, onChange }: { titles: string[]; onChange: (titles: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const t = draft.trim().replace(/\s+/g, ' ')
+    if (!t) return
+    if (!titles.some((x) => x.toLowerCase() === t.toLowerCase())) onChange([...titles, t])
+    setDraft('')
+  }
+  return (
+    <div className="ml-5 grid gap-1.5 rounded-lg bg-muted/50 p-2.5">
+      <p className="text-xs text-muted-foreground">Hide events titled exactly:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {titles.map((t) => (
+          <span key={t} className="inline-flex items-center gap-1 rounded-full border bg-card py-0.5 pl-2.5 pr-1 text-xs">
+            {t}
+            <button type="button" aria-label={`Stop hiding ${t}`} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive" onClick={() => onChange(titles.filter((x) => x !== t))}>
+              <Trash2 className="size-3" />
+            </button>
+          </span>
+        ))}
+        {!titles.length ? <span className="text-xs text-muted-foreground">Nothing hidden</span> : null}
+      </div>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); add() }}>
+        <Input aria-label="Event title to hide" placeholder="e.g. Work AM" value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} className="h-8" />
+        <Button type="submit" variant="secondary" size="sm" disabled={!draft.trim()}>Hide</Button>
+      </form>
+    </div>
   )
 }
 

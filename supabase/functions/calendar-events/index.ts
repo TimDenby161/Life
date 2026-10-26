@@ -26,6 +26,9 @@ type CalendarEvent = {
 }
 
 const cache = new TtlCache<CalendarEvent[]>(2 * 60_000)
+
+/** "  work  am " and "Work AM" are the same title for hiding purposes. */
+const titleKey = (title: string) => title.trim().replace(/\s+/g, ' ').toLowerCase()
 const MAX_RANGE_DAYS = 400
 
 function normalise(e: GoogleEvent, integration: { id: string; name: string; color: string }): CalendarEvent | null {
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
   // RLS: only returns integrations for the caller's household.
   const { data: integrations, error } = await supabase
     .from('calendar_integrations')
-    .select('id, name, color, google_calendar_id')
+    .select('*')
     .eq('enabled', true)
     .eq('mode', 'service_account')
   if (error) return json(req, { status: 'error', message: 'Could not load calendar settings' }, 500)
@@ -87,11 +90,12 @@ Deno.serve(async (req) => {
     const token = await googleAccessToken(serviceAccount)
     const results = await Promise.all(
       integrations.map(async (integration) => {
-        const key = `${integration.id}|${integration.google_calendar_id}|${timeMin}|${timeMax}`
+        const key = `${integration.id}|${integration.updated_at}|${timeMin}|${timeMax}`
         const hit = cache.get(key)
         if (hit) return hit
         const raw = await listEvents(token, integration.google_calendar_id!, timeMin, timeMax)
-        const events = raw.flatMap((e) => normalise(e, integration) ?? [])
+        const hidden = new Set(((integration.hidden_event_titles as string[] | null) ?? []).map(titleKey))
+        const events = raw.flatMap((e) => (hidden.has(titleKey(e.summary ?? '')) ? [] : (normalise(e, integration) ?? [])))
         cache.set(key, events)
         return events
       }),

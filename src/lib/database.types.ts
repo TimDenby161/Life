@@ -151,6 +151,7 @@ export type Database = {
           embed_url: string | null
           enabled: boolean
           google_calendar_id: string | null
+          hidden_event_titles: string[]
           household_id: string
           id: string
           mode: string
@@ -165,6 +166,7 @@ export type Database = {
           embed_url?: string | null
           enabled?: boolean
           google_calendar_id?: string | null
+          hidden_event_titles?: string[]
           household_id: string
           id?: string
           mode?: string
@@ -179,6 +181,7 @@ export type Database = {
           embed_url?: string | null
           enabled?: boolean
           google_calendar_id?: string | null
+          hidden_event_titles?: string[]
           household_id?: string
           id?: string
           mode?: string
