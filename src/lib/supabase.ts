@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, processLock } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 import { env } from './env'
 
@@ -9,7 +9,16 @@ export const supabase = createClient<Database>(
   env.supabaseUrl ?? 'http://localhost:54321',
   env.supabaseAnonKey ?? 'missing-anon-key',
   {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      // The default cross-tab Web Locks lock can deadlock (notably in Safari
+      // with several tabs open), leaving the app stuck on its splash screen.
+      // A per-tab lock avoids that; the server tolerates the rare concurrent
+      // refresh from two tabs (refresh-token reuse interval).
+      lock: processLock,
+    },
   },
 )
 

@@ -21,12 +21,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [recovering, setRecovering] = useState(() => /type=(invite|recovery)/.test(window.location.hash))
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
+    // INITIAL_SESSION fires once the stored session has been read (and
+    // refreshed if needed), so there is no separate getSession() to wait on.
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next)
+      setLoading(false)
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
       // Never leave one person's cached data around for the next sign-in.
       if (event === 'SIGNED_OUT') queryClient.clear()

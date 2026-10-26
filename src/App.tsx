@@ -74,9 +74,35 @@ function HouseholdGate() {
 }
 
 function Splash() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 8000)
+    return () => clearTimeout(t)
+  }, [])
   return (
-    <div className="grid min-h-dvh place-items-center" aria-busy="true" aria-label="Loading">
-      <img src={`${import.meta.env.BASE_URL}pwa-192x192.png`} alt="" className="size-14 animate-pulse rounded-2xl" />
+    <div className="grid min-h-dvh place-items-center px-6" aria-busy="true" aria-label="Loading">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <img src={`${import.meta.env.BASE_URL}pwa-192x192.png`} alt="" className="size-14 animate-pulse rounded-2xl" />
+        {slow ? (
+          <div className="grid gap-3 animate-fade-in">
+            <p className="text-sm text-muted-foreground">This is taking longer than usual.</p>
+            <div className="flex justify-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Reload</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  // Local sign-out clears this browser's stored session even if the network is stuck.
+                  await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
+                  window.location.reload()
+                }}
+              >
+                Sign out
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

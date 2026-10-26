@@ -25,7 +25,9 @@ async function fetchHousehold() {
     await supabase
       .from('household_members')
       .select('role, household:households(*), profile:profiles(*)')
-      .order('joined_at'),
+      .order('joined_at')
+      // Fail visibly (with Retry) rather than leaving the splash up forever.
+      .abortSignal(AbortSignal.timeout(15_000)),
   )
   if (rows.length === 0) return null
   const household = rows[0].household
