@@ -119,7 +119,6 @@ function Overview() {
         const owner = a.ownership === 'joint' ? 'joint' : (a.owner_id ?? 'joint')
         return { id: a.id, name: a.name, owner, ownerName: ownerName(owner), balance: balances.data!.get(a.id) ?? 0, parts: derived.sheetParts.get(a.id) ?? [] }
       })
-      .filter((a) => a.balance !== 0)
       .sort((x, y) => y.balance - x.balance)
 
   // The chart follows whatever was last clicked in the boxes above.
@@ -246,7 +245,7 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
       {open ? (
         <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
           {owners.length > 1
-            ? // Combined, with accounts from more than one person: a row per person, their accounts under it if several (or split into sheet rows).
+            ? // Combined, with accounts from more than one person: a row per person.
               owners.map((o) => {
                 const theirs = accounts.filter((a) => a.owner === o)
                 const total = theirs.reduce((t, a) => t + a.balance, 0)
@@ -256,7 +255,12 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
                       <span className="truncate text-muted-foreground">{theirs[0].ownerName}</span>
                       <span className={cn('tabular', total < 0 && 'text-destructive')}>{money(total)}</span>
                     </Pickable>
-                    {theirs.length > 1 || theirs[0].parts.length ? <AccountRows accounts={theirs} money={money} {...pick} className="ml-3 border-l pl-2" /> : null}
+                    {/* Several accounts: list them. One account made of sheet rows: its rows straight under the name. */}
+                    {theirs.length > 1 ? (
+                      <AccountRows accounts={theirs} money={money} {...pick} className="ml-3 border-l pl-2" />
+                    ) : theirs[0].parts.length ? (
+                      <PartRows account={theirs[0]} money={money} {...pick} />
+                    ) : null}
                   </li>
                 )
               })
@@ -275,21 +279,26 @@ function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProp
         <span className="truncate text-muted-foreground">{a.name}</span>
         <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
       </Pickable>
-      {a.parts.length ? (
-        <ul className="ml-3 grid gap-0.5 border-l pl-2">
-          {a.parts.map((p) => (
-            <li key={p.label}>
-              <Pickable selection={{ kind: 'part', accountId: a.id, label: p.label }} {...pick} className="text-muted-foreground/80">
-                <span className="truncate">{p.label}</span>
-                <span className="tabular">{money(p.balance_minor)}</span>
-              </Pickable>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {a.parts.length ? <PartRows account={a} money={money} {...pick} /> : null}
     </li>
   ))
   return className ? <ul className={cn('grid gap-0.5', className)}>{rows}</ul> : <>{rows}</>
+}
+
+/** The sheet rows behind a combined account, each clickable. */
+function PartRows({ account, money, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect'> & { account: GroupAccount }) {
+  return (
+    <ul className="ml-3 grid gap-0.5 border-l pl-2">
+      {account.parts.map((p) => (
+        <li key={p.label}>
+          <Pickable selection={{ kind: 'part', accountId: account.id, label: p.label }} {...pick} className="text-muted-foreground/80">
+            <span className="truncate">{p.label}</span>
+            <span className={cn('tabular', p.balance_minor < 0 && 'text-destructive')}>{money(p.balance_minor)}</span>
+          </Pickable>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 /** What a net worth figure is made of, largest first; empty groups are left out. */

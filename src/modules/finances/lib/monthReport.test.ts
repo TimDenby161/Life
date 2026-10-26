@@ -134,6 +134,12 @@ describe('accountBalances', () => {
     ])
   })
 
+  it('uses a row\'s display label in the breakdown', () => {
+    const links = new Map([['tim positive|santander|current account', 'acc-1'], ['tim positive|revolut|saving', 'acc-1']])
+    const [first] = accountBalances(report, links, new Map([['tim positive|revolut|saving', 'Revolut']]))
+    expect(first.breakdown.map((p) => p.label)).toEqual(['Santander · Current Account', 'Revolut'])
+  })
+
   it('skips empty cells, and dates where every row is empty', () => {
     const links = new Map([['tim positive|santander|edge saver', 'acc-3']])
     expect(accountBalances(report, links).map((b) => [b.as_of, b.balance_minor])).toEqual([['2026-08-16', 0]])

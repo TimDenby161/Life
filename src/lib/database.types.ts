@@ -500,6 +500,7 @@ export type Database = {
           created_at: string
           household_id: string
           id: string
+          label: string | null
           row_key: string
         }
         Insert: {
@@ -507,6 +508,7 @@ export type Database = {
           created_at?: string
           household_id: string
           id?: string
+          label?: string | null
           row_key: string
         }
         Update: {
@@ -514,6 +516,7 @@ export type Database = {
           created_at?: string
           household_id?: string
           id?: string
+          label?: string | null
           row_key?: string
         }
         Relationships: [

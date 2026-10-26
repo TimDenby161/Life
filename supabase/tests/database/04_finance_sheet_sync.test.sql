@@ -2,7 +2,7 @@
 -- idempotent re-syncs and removal of deleted date columns.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(30);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -137,6 +137,19 @@ select lives_ok(
 select throws_ok(
   format($q$update account_balance_history set source = 'sheet' where account_id = %L and as_of = '2026-08-16'$q$, current_setting('t.linked')),
   '42501', null, 'A hand-recorded balance cannot be relabelled as from the sheet');
+
+-- Display labels survive saving the link dialog --------------------------------------
+select replace_sheet_links(current_setting('t.hh')::uuid, jsonb_build_array(
+  jsonb_build_object('row_key', 'joint positive|santander|edge explorer', 'account_id', current_setting('t.linked'))));
+update finance_sheet_links set label = 'Santander' where row_key = 'joint positive|santander|edge explorer';
+select replace_sheet_links(current_setting('t.hh')::uuid, jsonb_build_array(
+  jsonb_build_object('row_key', 'joint positive|santander|edge explorer', 'account_id', current_setting('t.linked'))));
+select is((select label from finance_sheet_links where row_key = 'joint positive|santander|edge explorer'),
+  'Santander', 'Re-saving a link keeps its display label');
+select replace_sheet_links(current_setting('t.hh')::uuid, jsonb_build_array(
+  jsonb_build_object('row_key', 'joint positive|santander|edge explorer', 'account_id', current_setting('t.plain'))));
+select is((select account_id from finance_sheet_links where row_key = 'joint positive|santander|edge explorer'),
+  current_setting('t.plain')::uuid, 'A row can be moved to another account in place');
 
 select * from finish();
 rollback;

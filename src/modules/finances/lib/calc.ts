@@ -122,7 +122,7 @@ export function balanceSeries(
 
 /** Net worth breakdown rows, in display order: what you have, then what you owe. */
 export const NET_WORTH_GROUPS = [
-  { key: 'cash', label: 'Current accounts & cash', types: ['current', 'cash'] },
+  { key: 'cash', label: 'Current accounts', types: ['current', 'cash'] },
   { key: 'savings', label: 'Savings', types: ['savings'] },
   { key: 'investments', label: 'Investments', types: ['investment'] },
   { key: 'pensions', label: 'Pensions', types: ['pension'] },

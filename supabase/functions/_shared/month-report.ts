@@ -203,14 +203,15 @@ export const rowLabel = (r: Pick<SheetRow, 'institution' | 'name'>) => [r.instit
  * One balance per linked account and date: the sum of the account's rows.
  * A date where none of its rows has a figure is left out (so a cleared
  * column removes the balance); a row with an empty cell just doesn't count.
+ * Breakdown entries use the row's display label when it has one.
  */
-export function accountBalances(report: MonthReport, links: ReadonlyMap<string, string>): AccountBalance[] {
+export function accountBalances(report: MonthReport, links: ReadonlyMap<string, string>, labels: ReadonlyMap<string, string> = new Map()): AccountBalance[] {
   const out: AccountBalance[] = []
   const accounts = [...new Set(report.rows.flatMap((r) => links.get(r.key) ?? []))]
   for (const accountId of accounts) {
     const rows = report.rows.filter((r) => links.get(r.key) === accountId)
     report.dates.forEach((date, d) => {
-      const parts = rows.flatMap((r) => (r.values[d] === null ? [] : [{ label: rowLabel(r), balance_minor: r.values[d]! }]))
+      const parts = rows.flatMap((r) => (r.values[d] === null ? [] : [{ label: labels.get(r.key) ?? rowLabel(r), balance_minor: r.values[d]! }]))
       if (!parts.length) return
       out.push({ account_id: accountId, as_of: date, balance_minor: parts.reduce((t, p) => t + p.balance_minor, 0), breakdown: parts })
     })

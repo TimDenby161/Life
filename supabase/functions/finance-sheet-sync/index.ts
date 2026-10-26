@@ -91,11 +91,12 @@ Deno.serve(async (req) => {
     return fail('Google Sheets is unavailable right now.', 502)
   }
 
-  const { data: links, error: linksError } = await supabase.from('finance_sheet_links').select('row_key, account_id')
+  const { data: links, error: linksError } = await supabase.from('finance_sheet_links').select('row_key, account_id, label')
   if (linksError) return json(req, { status: 'error', message: 'Could not load linked accounts' }, 500)
   const linked = new Map(links.map((l) => [l.row_key as string, l.account_id as string]))
 
-  const balances = accountBalances(report, linked)
+  const labels = new Map(links.flatMap((l) => (l.label ? [[l.row_key as string, l.label as string]] : [])))
+  const balances = accountBalances(report, linked, labels)
   const { data: applied, error: applyError } = await supabase.rpc('apply_sheet_balances', { p_source_id: source.id, p_balances: balances })
   if (applyError) {
     console.error('finance-sheet-sync apply failed:', applyError.code)
