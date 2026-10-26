@@ -28,8 +28,7 @@ export const ACCOUNT_TYPES = [
 ] as const
 
 export const LIABILITY_TYPES = new Set(['credit_card', 'loan', 'mortgage'])
-/** Valued by estimate rather than a statement: Record balance defaults to "estimate". */
-export const VALUED_TYPES = new Set(['property', 'vehicle'])
+export { VALUED_TYPES } from './lib/calc'
 
 export const financeKeys = {
   all: ['finances'] as const,

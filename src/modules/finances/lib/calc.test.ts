@@ -1,5 +1,5 @@
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
-import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, accountsForSelection, selectionKey, sheetPartHistory, type AccountLike, type TxLike } from './calc'
+import { activeBudgets, balanceOn, balanceSeries, goalProgress, monthlyFlows, netWorth, netWorthDates, netWorthHistory, spendingByCategory, accountsForSelection, selectionKey, sheetPartHistory, valueOn, type AccountLike, type TxLike } from './calc'
 
 const acct = (o: Partial<AccountLike> & { id: string }): AccountLike => ({
   name: o.id,
@@ -216,5 +216,32 @@ describe('chart selection', () => {
     expect(sheetPartHistory(snaps, 'inv', 'Coinbase · Bitcoin', ['2026-07-01', '2026-07-14', '2026-08-01', '2026-10-26']).map((p) => p.value)).toEqual([
       null, 92_096, 92_096, 89_060,
     ])
+  })
+})
+
+describe('valued assets between recorded values', () => {
+  const house = acct({ id: 'house', account_type: 'property', opening_date: '2025-08-01' })
+  const snaps = [
+    { account_id: 'house', as_of: '2025-08-01', balance_minor: 40_600_000, created_at: '2025-08-01T12:00:00Z' },
+    { account_id: 'house', as_of: '2026-10-26', balance_minor: 39_700_000, created_at: '2026-10-26T12:00:00Z' },
+  ]
+
+  it('moves in a straight line from one value to the next', () => {
+    expect(valueOn(house, snaps, [], '2025-08-01')).toBe(40_600_000)
+    // 347 of 451 days in: 406,000 - 9,000 * 347/451
+    expect(valueOn(house, snaps, [], '2026-07-14')).toBe(39_907_539)
+    expect(valueOn(house, snaps, [], '2026-10-18')).toBe(39_715_965)
+    expect(valueOn(house, snaps, [], '2026-10-26')).toBe(39_700_000)
+    expect(valueOn(house, snaps, [], '2026-12-01')).toBe(39_700_000)
+  })
+
+  it('keeps statement accounts on their recorded balances', () => {
+    const saver = acct({ id: 'house', account_type: 'savings', opening_date: '2025-08-01' })
+    expect(valueOn(saver, snaps, [], '2026-07-14')).toBe(40_600_000)
+  })
+
+  it('charts the house declining gradually', () => {
+    const history = netWorthHistory([house], snaps, [], ['2026-07-14', '2026-08-16', '2026-10-26'])
+    expect(history.map((p) => p.value)).toEqual([39_907_539, 39_841_685, 39_700_000])
   })
 })

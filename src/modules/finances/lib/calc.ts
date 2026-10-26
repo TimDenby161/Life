@@ -8,7 +8,7 @@
 // * Spending is the negated sum of expense transactions, so refunds (positive
 //   expense amounts) reduce it.
 import { endOfMonth, format, parseISO, subMonths } from 'date-fns'
-import { type ISODate, toISODate } from '@/lib/dates'
+import { daysBetween, type ISODate, toISODate } from '@/lib/dates'
 
 export type AccountLike = {
   id: string
@@ -37,6 +37,39 @@ export type TxLike = {
 export type SnapshotLike = { account_id: string; as_of: string; balance_minor: number; created_at: string }
 
 export type BalancePoint = { date: ISODate; balance: number; recorded: boolean }
+
+/** Valued rather than given a statement balance (house, car): Record balance defaults to "estimate". */
+export const VALUED_TYPES: ReadonlySet<string> = new Set(['property', 'vehicle'])
+
+/**
+ * A house or car between two recorded values changes gradually, so its value
+ * on a date in between is the straight line between them (rounded to pence).
+ * Outside that range, and for every other account, this is balanceOn. Only
+ * past dates differ from public.account_balance_on: today is never between
+ * two values, as the latest one is the current value.
+ */
+export function valueOn(
+  account: AccountLike,
+  snapshots: readonly SnapshotLike[],
+  transactions: readonly TxLike[],
+  date: ISODate,
+): number | null {
+  if (VALUED_TYPES.has(account.account_type)) {
+    let before: SnapshotLike | undefined
+    let after: SnapshotLike | undefined
+    for (const s of snapshots) {
+      if (s.account_id !== account.id) continue
+      if (s.as_of <= date && (!before || s.as_of > before.as_of)) before = s
+      if (s.as_of > date && (!after || s.as_of < after.as_of)) after = s
+    }
+    if (before && after && before.as_of !== date) {
+      const span = daysBetween(before.as_of, after.as_of)
+      const done = daysBetween(before.as_of, date)
+      return Math.round(before.balance_minor + ((after.balance_minor - before.balance_minor) * done) / span)
+    }
+  }
+  return balanceOn(account, snapshots, transactions, date)
+}
 
 export function balanceOn(
   account: AccountLike,
@@ -232,7 +265,7 @@ export function netWorthHistory(
     let total = 0
     let any = false
     for (const a of accounts) {
-      const b = balanceOn(a, snapshots, transactions, date)
+      const b = valueOn(a, snapshots, transactions, date)
       if (b !== null) {
         total += b
         any = true
