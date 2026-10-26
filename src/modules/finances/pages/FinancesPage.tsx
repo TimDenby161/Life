@@ -13,10 +13,9 @@ import { monthStart, todayISO, toISODate } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { VALUED_TYPES } from '../api'
 import { AccountDialog, TransactionDialog } from '../components/forms'
 import { useAccounts, useBalances, useBudgets, useFinanceCategories, useGoals, useSnapshots, useTransactions } from '../hooks'
-import { activeBudgets, balanceOn, goalProgress, monthlyFlows, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, spendingByCategory } from '../lib/calc'
+import { activeBudgets, balanceOn, goalProgress, monthlyFlows, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, spendingByCategory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
 import { BudgetsTab } from './BudgetsTab'
 import { GoalsTab } from './GoalsTab'
@@ -92,10 +91,10 @@ function Overview() {
       }
       return { date, label: i === 11 ? 'Now' : format(parseISO(date), 'MMM'), value: any ? total : null }
     })
-    // House and car valued by estimate: the breakdown marks them so they're never mistaken for a statement.
+    // Breakdown groups holding an estimated value (house, car): marked so they're never mistaken for a statement.
     const latestSource = new Map(snapshots.data.map((s) => [s.account_id, s.source]))
-    const assetsEstimated = included.some((a) => VALUED_TYPES.has(a.account_type) && latestSource.get(a.id) === 'estimate')
-    return { nw, flows, spend, history, month, assetsEstimated }
+    const estimatedGroups = new Set(included.filter((a) => latestSource.get(a.id) === 'estimate').map((a) => groupOf(a.account_type)))
+    return { nw, flows, spend, history, month, estimatedGroups }
   }, [accounts.data, balances.data, transactions.data, snapshots.data, currency, today])
 
   const error = accounts.error ?? balances.error ?? transactions.error ?? snapshots.error
@@ -137,21 +136,21 @@ function Overview() {
             {money(primary.assets)} assets · {money(-primary.liabilities)} owed
           </p>
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
-          <Breakdown groups={primary.byGroup.all} money={money} estimated={derived.assetsEstimated} />
+          <Breakdown groups={primary.byGroup.all} money={money} estimated={derived.estimatedGroups} />
         </Card>
         {members.map((m) => (
           <Card key={m.id} className="p-4">
             <p className="text-xs font-medium text-muted-foreground">{m.display_name}'s accounts</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner[m.id] ?? 0)}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">personal net worth</p>
-            <Breakdown groups={primary.byGroup[m.id]} money={money} estimated={derived.assetsEstimated} />
+            <Breakdown groups={primary.byGroup[m.id]} money={money} estimated={derived.estimatedGroups} />
           </Card>
         ))}
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Joint</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner.joint ?? 0)}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">shared accounts</p>
-          <Breakdown groups={primary.byGroup.joint} money={money} estimated={derived.assetsEstimated} />
+          <Breakdown groups={primary.byGroup.joint} money={money} estimated={derived.estimatedGroups} />
         </Card>
       </div>
 
@@ -265,7 +264,7 @@ function Overview() {
 }
 
 /** What a net worth figure is made of, in NET_WORTH_GROUPS order; empty groups are left out. */
-function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: boolean }) {
+function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: ReadonlySet<NetWorthGroup> }) {
   const rows = NET_WORTH_GROUPS.filter((g) => groups?.[g.key])
   if (!rows.length) return null
   return (
@@ -274,7 +273,7 @@ function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWo
         <li key={g.key} className="flex justify-between gap-2">
           <span className="text-muted-foreground">
             {g.label}
-            {g.key === 'property' && estimated ? ' (est.)' : ''}
+            {estimated.has(g.key) ? ' (est.)' : ''}
           </span>
           <span className={cn('tabular', groups![g.key]! < 0 && 'text-destructive')}>{money(groups![g.key]!)}</span>
         </li>

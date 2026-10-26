@@ -93,7 +93,8 @@ export const NET_WORTH_GROUPS = [
   { key: 'savings', label: 'Savings', types: ['savings'] },
   { key: 'investments', label: 'Investments', types: ['investment'] },
   { key: 'pensions', label: 'Pensions', types: ['pension'] },
-  { key: 'property', label: 'Property & vehicles', types: ['property', 'vehicle'] },
+  { key: 'property', label: 'Property', types: ['property'] },
+  { key: 'vehicles', label: 'Vehicles', types: ['vehicle'] },
   { key: 'other', label: 'Other', types: ['other'] },
   { key: 'cards', label: 'Credit cards', types: ['credit_card'] },
   { key: 'loans', label: 'Mortgage & loans', types: ['mortgage', 'loan'] },
@@ -101,7 +102,7 @@ export const NET_WORTH_GROUPS = [
 
 export type NetWorthGroup = (typeof NET_WORTH_GROUPS)[number]['key']
 
-const groupOf = (type: string): NetWorthGroup => NET_WORTH_GROUPS.find((g) => (g.types as readonly string[]).includes(type))?.key ?? 'other'
+export const groupOf = (type: string): NetWorthGroup => NET_WORTH_GROUPS.find((g) => (g.types as readonly string[]).includes(type))?.key ?? 'other'
 
 export type NetWorth = {
   currency: string
