@@ -192,9 +192,7 @@ declare
   metric record;
 begin
   select household_id into hh from household_members where user_id = tim;
-  -- Tim shares exercise; Sophie shares exercise and periods. Weight is private.
-  insert into health_category_visibility (user_id, household_id, category, shared)
-  values (tim, hh, 'exercise', true), (sophie, hh, 'exercise', true), (sophie, hh, 'cycle', true);
+  -- Everything is shared by default; no category settings needed.
   update user_preferences set settings = settings || '{"track_periods": true}' where user_id = sophie;
   insert into health_periods (household_id, user_id, started_on, ended_on)
   select hh, sophie, current_date - 100 + n * 29 + (n % 2), current_date - 96 + n * 29 + (n % 2)

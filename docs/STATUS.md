@@ -8,7 +8,7 @@ Validation actually run against the local Supabase stack (Docker):
 
 - `npm run typecheck`: clean (app + node configs).
 - `npm test`: 108 Vitest tests. Recurrence (shared vectors), task statistics, money and finance calculations, calendar layout, activity grouping, health helpers, error messages, login and checkbox components, and static security guards (RLS on every table, no anon grants, definer `search_path`, realtime map in sync, no secrets or `console.log` in `src`).
-- `npm run test:db`: 80 pgTAP tests. Household isolation (an outsider household can't read or reference anything), forged `created_by` and history/activity rejected, completion history for one-off and weekly tasks including reopen, transfers (two legs, one-legged rejected), balances with recorded snapshots, savings-goal detection, health privacy (default private, category sharing, per-record override, owner-only writes), feed permissions, anon denied.
+- `npm run test:db`: 80 pgTAP tests. Household isolation (an outsider household can't read or reference anything), forged `created_by` and history/activity rejected, completion history for one-off and weekly tasks including reopen, transfers (two legs, one-legged rejected), balances with recorded snapshots, savings-goal detection, health privacy (default shared, private categories, per-record override, owner-only writes), feed permissions, anon denied.
 - `npm run build`: production bundle with CSP, PWA service worker and `404.html`, also built and served under `/Life/` to test deep links after sign-in.
 - Manual browser checks: sign-in; create a recurring task, complete it, see the next occurrence and history; finances overview and account history; feed and realtime (a post made as Sophie appeared live in Tim's open feed); health partner view showing only shared categories; dashboard; statistics; settings; phone-width layouts; light and dark modes.
 - Edge Function `calendar-events` tested on the local edge runtime: rejects missing auth and bad ranges, reports "not configured" honestly, and doesn't expose one household's calendar config to another.
@@ -27,7 +27,7 @@ Validation actually run against the local Supabase stack (Docker):
 2. **Supabase project.** Region (London suggested), and the two email addresses for the accounts.
 3. **Google Calendar method.** Service account (recommended; needs a free Google Cloud project) or the simpler embed fallback (see DECISIONS.md, ADR 6).
 4. **Chesterfield FC scores.** Whether to create a free API-Football key, plus any news feeds you want (hosts must be allow-listed).
-5. **Health defaults.** Everything starts private; each of you opts in per category. Say if you'd rather default to shared.
+5. **Health defaults.** Decided 2026-10-26: shared by default; either of you can make a category or a single record private.
 6. **Units.** Weight is kg; stones/pounds display isn't implemented.
 
 ## Next steps (suggested)

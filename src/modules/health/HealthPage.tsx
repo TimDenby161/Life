@@ -83,20 +83,20 @@ export default function HealthPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {weight && (own || weights.length) ? (
               <section>
-                <SectionTitle action={own ? <SharedBadge shared={shared.get('body') ?? false} /> : null}>Weight</SectionTitle>
+                <SectionTitle action={own ? <SharedBadge shared={shared.get('body') ?? true} /> : null}>Weight</SectionTitle>
                 <WeightTile def={weight} rows={weights} onOpen={() => setDetail(true)} onLog={own ? () => setLogging(true) : undefined} />
               </section>
             ) : null}
-            {showPeriods ? <PeriodSection own={own} periods={personPeriods} categoryShared={shared.get('cycle') ?? false} /> : null}
+            {showPeriods ? <PeriodSection own={own} periods={personPeriods} categoryShared={shared.get('cycle') ?? true} /> : null}
           </div>
-          <ExerciseSection own={own} sessions={sessions} categoryShared={shared.get('exercise') ?? false} />
+          <ExerciseSection own={own} sessions={sessions} categoryShared={shared.get('exercise') ?? true} />
 
           {own ? <HealthSettingsPanel shared={shared} partnerName={partner?.display_name} /> : null}
         </>
       )}
 
-      {weight ? <LogWeightDialog open={logging} def={weight} categoryShared={shared.get('body') ?? false} onClose={() => setLogging(false)} /> : null}
-      {weight && detail ? <WeightDetailDialog def={weight} rows={weights} own={own} categoryShared={shared.get('body') ?? false} onClose={() => setDetail(false)} /> : null}
+      {weight ? <LogWeightDialog open={logging} def={weight} categoryShared={shared.get('body') ?? true} onClose={() => setLogging(false)} /> : null}
+      {weight && detail ? <WeightDetailDialog def={weight} rows={weights} own={own} categoryShared={shared.get('body') ?? true} onClose={() => setDetail(false)} /> : null}
     </>
   )
 }
@@ -501,7 +501,7 @@ export function HealthSettingsPanel({ shared, partnerName }: { shared: Map<strin
                   Share {c.label.toLowerCase()} with {partnerName}
                   <span className="block text-xs text-muted-foreground">{shared.get(c.key) ? `${partnerName} can see these` : 'Only you'}</span>
                 </span>
-                <Switch checked={shared.get(c.key) ?? false} onCheckedChange={(v) => set.mutate({ category: c.key, shared: v })} aria-label={`Share ${c.label} with ${partnerName}`} />
+                <Switch checked={shared.get(c.key) ?? true} onCheckedChange={(v) => set.mutate({ category: c.key, shared: v })} aria-label={`Share ${c.label} with ${partnerName}`} />
               </label>
             ))
           : null}
