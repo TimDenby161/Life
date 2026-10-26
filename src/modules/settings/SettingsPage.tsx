@@ -257,7 +257,11 @@ function FeedSourcesSection() {
             e.preventDefault()
             if (!name.trim()) return
             const cfg: Record<string, unknown> = {}
-            for (const f of def.configFields) if (config[f.key]) cfg[f.key] = f.type === 'number' ? Number(config[f.key]) : config[f.key].trim()
+            for (const f of def.configFields) {
+              if (!config[f.key]) continue
+              const value = config[f.key].trim()
+              cfg[f.key] = f.type === 'number' ? Number(value) : f.type === 'url' ? value.replace(/^http:\/\//i, 'https://') : value
+            }
             save.mutate({ provider, name: name.trim(), config: cfg, enabled: true }, { onSuccess: () => { setName(''); setConfig({}) } })
           }}
         >

@@ -45,6 +45,8 @@ async function fetchRss(config: Record<string, unknown>): Promise<Result> {
   } catch {
     return { status: 'not_configured', message: 'This source has no valid feed URL.' }
   }
+  // Many publishers still advertise http:// feed links; fetch them over https.
+  if (url.protocol === 'http:') url.protocol = 'https:'
   if (url.protocol !== 'https:') return { status: 'not_configured', message: 'Feed URLs must use https.' }
   if (!allowedHosts().includes(url.hostname.toLowerCase())) {
     return { status: 'not_configured', message: `${url.hostname} is not in the server's FEED_ALLOWED_HOSTS list.` }
