@@ -240,12 +240,14 @@ function BoxHeading({
   return (
     <Pickable selection={{ kind: 'owner', owner }} {...pick} className="-mx-2 -my-1 w-[calc(100%+1rem)] flex-col items-start gap-0 px-2 py-1">
       <span className="text-xs font-medium text-muted-foreground">{title}</span>
-      <span className={cn('mt-1 font-semibold tracking-tight tabular', large ? 'text-3xl' : 'text-2xl')}>{total}</span>
-      {change ? (
-        <span className={cn('mt-0.5 text-xs font-medium tabular', up ? 'text-success' : 'text-destructive')}>
-          {up ? '▲' : '▼'} {Math.abs(change.pct).toFixed(1)}% ({formatSigned(change.amount, money)}) vs a month ago
-        </span>
-      ) : null}
+      <span className="mt-1 flex flex-wrap items-baseline gap-x-2">
+        <span className={cn('font-semibold tracking-tight tabular', large ? 'text-3xl' : 'text-2xl')}>{total}</span>
+        {change ? (
+          <span className={cn('text-xs font-medium tabular', up ? 'text-success' : 'text-destructive')} title="Change since the same day last month">
+            {up ? '▲' : '▼'} {Math.abs(change.pct).toFixed(1)}% ({formatSigned(change.amount, money)})
+          </span>
+        ) : null}
+      </span>
       {sub ? <span className="mt-0.5 text-xs text-muted-foreground">{sub}</span> : null}
     </Pickable>
   )
