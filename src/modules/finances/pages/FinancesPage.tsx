@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns'
-import { Plus, Wallet } from 'lucide-react'
+import { ChevronRight, Plus, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -106,6 +106,14 @@ function Overview() {
   const others = derived.nw.filter((n) => n.currency !== currency)
   const money = (v: number) => formatMoney(v, currency, { hidePence: true })
   const compact = (v: number) => formatMoney(v, currency, { compact: true })
+  // The accounts behind a breakdown line, for the same currency and accounts the totals use.
+  const accountsIn: GroupAccounts = (owner, group) =>
+    accounts.data!
+      .filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === currency && groupOf(a.account_type) === group)
+      .filter((a) => owner === 'all' || (a.ownership === 'joint' ? 'joint' : a.owner_id) === owner)
+      .map((a) => ({ id: a.id, name: a.name, balance: balances.data!.get(a.id) ?? 0 }))
+      .filter((a) => a.balance !== 0)
+      .sort((x, y) => y.balance - x.balance)
 
   return (
     <div className="grid gap-4">
@@ -114,21 +122,21 @@ function Overview() {
           <p className="text-xs font-medium text-muted-foreground">Combined</p>
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular">{money(primary.total)}</p>
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
-          <CombinedBreakdown groups={primary.byGroup.all} money={money} estimated={derived.estimatedGroups} />
+          <CombinedBreakdown groups={primary.byGroup.all} owner="all" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
         </Card>
         {members.map((m) => (
           <Card key={m.id} className="p-4">
             <p className="text-xs font-medium text-muted-foreground">{m.display_name}'s accounts</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner[m.id] ?? 0)}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">personal net worth</p>
-            <Breakdown groups={primary.byGroup[m.id]} money={money} estimated={derived.estimatedGroups} />
+            <Breakdown groups={primary.byGroup[m.id]} owner={m.id} accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
           </Card>
         ))}
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Joint</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{money(primary.byOwner.joint ?? 0)}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">shared accounts</p>
-          <Breakdown groups={primary.byGroup.joint} money={money} estimated={derived.estimatedGroups} />
+          <Breakdown groups={primary.byGroup.joint} owner="joint" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} />
         </Card>
       </div>
 
@@ -159,21 +167,56 @@ function Overview() {
   )
 }
 
+type GroupAccounts = (owner: string, group: NetWorthGroup) => { id: string; name: string; balance: number }[]
+type BreakdownProps = {
+  groups?: Partial<Record<NetWorthGroup, number>>
+  /** 'all' for Combined, else 'joint' or a member id. */
+  owner: string
+  accountsIn: GroupAccounts
+  money: (v: number) => string
+  estimated: ReadonlySet<NetWorthGroup>
+}
+
+/** One breakdown line; clicking it lists the accounts behind it, largest first. */
+function GroupLine({ group, value, owner, accountsIn, money, estimated }: Omit<BreakdownProps, 'groups'> & { group: NetWorthGroup; value: number }) {
+  const [open, setOpen] = useState(false)
+  const label = `${NET_WORTH_GROUPS.find((g) => g.key === group)!.label}${estimated.has(group) ? ' (est.)' : ''}`
+  const accounts = open ? accountsIn(owner, group) : []
+  return (
+    <li>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="-mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded px-1 text-left hover:bg-muted/60"
+      >
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+          {label}
+        </span>
+        <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
+      </button>
+      {open ? (
+        <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
+          {accounts.map((a) => (
+            <li key={a.id} className="flex justify-between gap-2">
+              <span className="truncate text-muted-foreground">{a.name}</span>
+              <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
 /** What a net worth figure is made of, largest first; empty groups are left out. */
-function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: ReadonlySet<NetWorthGroup> }) {
+function Breakdown({ groups, ...props }: BreakdownProps) {
   const rows = NET_WORTH_GROUPS.filter((g) => groups?.[g.key]).sort((a, b) => groups![b.key]! - groups![a.key]!)
   if (!rows.length) return null
   return (
     <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
-      {rows.map((g) => (
-        <li key={g.key} className="flex justify-between gap-2">
-          <span className="text-muted-foreground">
-            {g.label}
-            {estimated.has(g.key) ? ' (est.)' : ''}
-          </span>
-          <span className={cn('tabular', groups![g.key]! < 0 && 'text-destructive')}>{money(groups![g.key]!)}</span>
-        </li>
-      ))}
+      {rows.map((g) => <GroupLine key={g.key} group={g.key} value={groups![g.key]!} {...props} />)}
     </ul>
   )
 }
@@ -182,29 +225,29 @@ function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWo
  * The Combined box: the home first (property, mortgage, and the equity between
  * them), then every other group from largest to smallest.
  */
-function CombinedBreakdown({ groups = {}, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: ReadonlySet<NetWorthGroup> }) {
-  const label = (key: NetWorthGroup) => `${NET_WORTH_GROUPS.find((g) => g.key === key)!.label}${estimated.has(key) ? ' (est.)' : ''}`
+function CombinedBreakdown({ groups = {}, ...props }: BreakdownProps) {
   const home = groups.property || groups.mortgage
   const equity = (groups.property ?? 0) + (groups.mortgage ?? 0)
   const rest = NET_WORTH_GROUPS.filter((g) => g.key !== 'property' && g.key !== 'mortgage' && groups[g.key])
     .map((g) => ({ key: g.key, value: groups[g.key]! }))
     .sort((a, b) => b.value - a.value)
-  const line = (text: string, value: number, strong = false) => (
-    <li key={text} className={cn('flex justify-between gap-2', strong && 'font-medium')}>
-      <span className={strong ? undefined : 'text-muted-foreground'}>{text}</span>
-      <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
-    </li>
-  )
   return (
     <>
       {home ? (
         <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
-          {groups.property ? line(label('property'), groups.property) : null}
-          {groups.mortgage ? line(label('mortgage'), groups.mortgage) : null}
-          {line(`Equity${estimated.has('property') ? ' (est.)' : ''}`, equity, true)}
+          {groups.property ? <GroupLine group="property" value={groups.property} {...props} /> : null}
+          {groups.mortgage ? <GroupLine group="mortgage" value={groups.mortgage} {...props} /> : null}
+          <li className="flex justify-between gap-2 font-medium">
+            <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}</span>
+            <span className={cn('tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
+          </li>
         </ul>
       ) : null}
-      {rest.length ? <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">{rest.map((r) => line(label(r.key), r.value))}</ul> : null}
+      {rest.length ? (
+        <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
+          {rest.map((r) => <GroupLine key={r.key} group={r.key} value={r.value} {...props} />)}
+        </ul>
+      ) : null}
     </>
   )
 }
