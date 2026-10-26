@@ -260,9 +260,9 @@ function Overview() {
   )
 }
 
-/** What a net worth figure is made of, in NET_WORTH_GROUPS order; empty groups are left out. */
+/** What a net worth figure is made of, largest first; empty groups are left out. */
 function Breakdown({ groups, money, estimated }: { groups?: Partial<Record<NetWorthGroup, number>>; money: (v: number) => string; estimated: ReadonlySet<NetWorthGroup> }) {
-  const rows = NET_WORTH_GROUPS.filter((g) => groups?.[g.key])
+  const rows = NET_WORTH_GROUPS.filter((g) => groups?.[g.key]).sort((a, b) => groups![b.key]! - groups![a.key]!)
   if (!rows.length) return null
   return (
     <ul className="mt-3 grid gap-1 border-t pt-3 text-xs">
