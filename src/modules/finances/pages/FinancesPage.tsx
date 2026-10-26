@@ -129,19 +129,20 @@ function Overview() {
     : selected.kind === 'equity' ? 'Home equity'
     : selected.kind === 'account' ? accountName(selected.accountId)
     : `${selected.label} (in ${accountName(selected.accountId)})`
-  const series = (
-    selected.kind === 'part'
-      ? sheetPartHistory(snapshots.data!, selected.accountId, selected.label, derived.dates)
-      : netWorthHistory(accountsForSelection(derived.included, selected), snapshots.data!, transactions.data!, derived.dates)
-  ).map((p) => ({ ...p, label: p.date === today ? 'Now' : format(parseISO(p.date), derived.fromSheet ? 'd MMM' : 'MMM') }))
-  const pick: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> = { selectedKey: selectionKey(selected), onSelect: setSelected }
+  const historyOf = (s: ChartSelection, dates: readonly string[]) =>
+    s.kind === 'part'
+      ? sheetPartHistory(snapshots.data!, s.accountId, s.label, dates)
+      : netWorthHistory(accountsForSelection(derived.included, s), snapshots.data!, transactions.data!, dates)
+  const series = historyOf(selected, derived.dates).map((p) => ({ ...p, label: p.date === today ? 'Now' : format(parseISO(p.date), derived.fromSheet ? 'd MMM' : 'MMM') }))
   // Each box's change since the same day last month, from the same figures as the chart.
   const monthAgo = toISODate(subMonths(parseISO(today), 1))
-  const changeFor = (owner: string): MonthChange | null => {
-    const [then, now] = netWorthHistory(accountsForSelection(derived.included, { kind: 'owner', owner }), snapshots.data!, transactions.data!, [monthAgo, today])
+  const changeOf = (s: ChartSelection): MonthChange | null => {
+    const [then, now] = historyOf(s, [monthAgo, today])
     const pct = percentChange(then.value, now.value)
     return pct === null ? null : { pct, amount: now.value! - then.value! }
   }
+  const changeFor = (owner: string) => changeOf({ kind: 'owner', owner })
+  const pick: Pick<BreakdownProps, 'selectedKey' | 'onSelect' | 'changeOf'> = { selectedKey: selectionKey(selected), onSelect: setSelected, changeOf }
   const isCombined = selected.kind === 'owner' && selected.owner === 'all'
 
   return (
@@ -207,10 +208,12 @@ type BreakdownProps = {
   /** The chart's current selection, and how to change it. */
   selectedKey: string
   onSelect: (s: ChartSelection) => void
+  /** Change since the same day last month, for any row. */
+  changeOf: (s: ChartSelection) => MonthChange | null
 }
 
 /** A clickable row that charts `selection`; highlighted while it is the chart's selection. */
-function Pickable({ selection, selectedKey, onSelect, className, children }: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> & { selection: ChartSelection; className?: string; children: React.ReactNode }) {
+function Pickable({ selection, selectedKey, onSelect, className, children }: Pick<BreakdownProps, 'selectedKey' | 'onSelect'> & Partial<Pick<BreakdownProps, 'changeOf'>> & { selection: ChartSelection; className?: string; children: React.ReactNode }) {
   const active = selectionKey(selection) === selectedKey
   return (
     <button
@@ -255,6 +258,17 @@ function BoxHeading({
 
 const formatSigned = (v: number, money: (v: number) => string) => `${v >= 0 ? '+' : '−'}${money(Math.abs(v))}`
 
+/** A breakdown row's monthly change, e.g. "+0.1%", coloured by direction. */
+function Pct({ change }: { change: MonthChange | null }) {
+  if (!change) return null
+  const flat = Math.abs(change.pct) < 0.05
+  return (
+    <span className={cn('ml-1.5 tabular text-[11px] font-medium', flat ? 'text-muted-foreground' : change.amount > 0 ? 'text-success' : 'text-destructive')}>
+      {flat ? '0.0' : `${change.amount > 0 ? '+' : '−'}${Math.abs(change.pct).toFixed(1)}`}%
+    </span>
+  )
+}
+
 /** One breakdown line: clicking charts it and lists the accounts behind it (each also clickable), largest first. */
 function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick }: Omit<BreakdownProps, 'groups'> & { group: NetWorthGroup; value: number }) {
   const [open, setOpen] = useState(false)
@@ -267,6 +281,7 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
         <span className="flex items-center gap-1 text-muted-foreground">
           <ChevronRight aria-hidden className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
           {label}
+          <Pct change={pick.changeOf({ kind: 'group', owner, group })} />
         </span>
         <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
       </Pickable>
@@ -280,7 +295,7 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
                 return (
                   <li key={o}>
                     <Pickable selection={{ kind: 'group', owner: o, group }} {...pick}>
-                      <span className="truncate text-muted-foreground">{theirs[0].ownerName}</span>
+                      <span className="truncate text-muted-foreground">{theirs[0].ownerName}<Pct change={pick.changeOf({ kind: 'group', owner: o, group })} /></span>
                       <span className={cn('tabular', total < 0 && 'text-destructive')}>{money(total)}</span>
                     </Pickable>
                     {/* Several accounts: list them. One account made of sheet rows: its rows straight under the name. */}
@@ -300,11 +315,11 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
 }
 
 /** Accounts in a breakdown line (each clickable), and the sheet rows behind combined ones. */
-function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect'> & { accounts: GroupAccount[]; className?: string }) {
+function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect' | 'changeOf'> & { accounts: GroupAccount[]; className?: string }) {
   const rows = accounts.map((a) => (
     <li key={a.id}>
       <Pickable selection={{ kind: 'account', accountId: a.id }} {...pick}>
-        <span className="truncate text-muted-foreground">{a.name}</span>
+        <span className="truncate text-muted-foreground">{a.name}<Pct change={pick.changeOf({ kind: 'account', accountId: a.id })} /></span>
         <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
       </Pickable>
       {a.parts.length ? <PartRows account={a} money={money} {...pick} /> : null}
@@ -314,13 +329,13 @@ function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProp
 }
 
 /** The sheet rows behind a combined account, each clickable. */
-function PartRows({ account, money, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect'> & { account: GroupAccount }) {
+function PartRows({ account, money, ...pick }: Pick<BreakdownProps, 'money' | 'selectedKey' | 'onSelect' | 'changeOf'> & { account: GroupAccount }) {
   return (
     <ul className="ml-3 grid gap-0.5 border-l pl-2">
       {account.parts.map((p) => (
         <li key={p.label}>
           <Pickable selection={{ kind: 'part', accountId: account.id, label: p.label }} {...pick} className="text-muted-foreground/80">
-            <span className="truncate">{p.label}</span>
+            <span className="truncate">{p.label}<Pct change={pick.changeOf({ kind: 'part', accountId: account.id, label: p.label })} /></span>
             <span className={cn('tabular', p.balance_minor < 0 && 'text-destructive')}>{money(p.balance_minor)}</span>
           </Pickable>
         </li>
@@ -358,7 +373,7 @@ function CombinedBreakdown({ groups = {}, ...props }: BreakdownProps) {
           {groups.mortgage ? <GroupLine group="mortgage" value={groups.mortgage} {...props} /> : null}
           <li>
             <Pickable selection={{ kind: 'equity' }} selectedKey={props.selectedKey} onSelect={props.onSelect} className="font-medium">
-              <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}</span>
+              <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}<Pct change={props.changeOf({ kind: 'equity' })} /></span>
               <span className={cn('tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
             </Pickable>
           </li>
