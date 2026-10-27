@@ -6,7 +6,7 @@ import { Segmented } from '@/components/ui/misc'
 import { addDaysISO, formatDay, todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { useTaskRooms } from '../hooks'
+import { useTaskCategories, useTaskRooms } from '../hooks'
 import { dueInWords, nextDueAfter } from '../lib/jobs'
 import type { RecurrenceRule } from '../lib/recurrence'
 
@@ -15,6 +15,7 @@ export type JobValues = {
   rule: RecurrenceRule
   assigneeId: string | null
   roomId: string | null
+  categoryId: string | null
   lastDone: string | null
 }
 
@@ -38,11 +39,13 @@ type Props = {
 export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDelete }: Props) {
   const { members } = useHousehold()
   const rooms = useTaskRooms().data ?? []
+  const categories = useTaskCategories().data ?? []
   const [title, setTitle] = useState(initial?.title ?? '')
   const [every, setEvery] = useState(initial?.rule?.interval ?? 1)
   const [unit, setUnit] = useState<Unit>(initial?.rule?.freq === 'yearly' ? 'monthly' : (initial?.rule?.freq ?? 'weekly'))
   const [assigneeId, setAssigneeId] = useState(initial?.assigneeId ?? '')
   const [roomId, setRoomId] = useState(initial?.roomId ?? '')
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '')
   const [lastDone, setLastDone] = useState(initial?.lastDone ?? '')
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -60,7 +63,7 @@ export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDele
     e.preventDefault()
     if (!title.trim()) return setError('Give the job a name')
     if (lastDone > today) return setError("Last done can't be in the future")
-    onSubmit({ title: title.trim(), rule, assigneeId: assigneeId || null, roomId: roomId || null, lastDone: lastDone || null })
+    onSubmit({ title: title.trim(), rule, assigneeId: assigneeId || null, roomId: roomId || null, categoryId: categoryId || null, lastDone: lastDone || null })
   }
 
   return (
@@ -79,16 +82,28 @@ export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDele
         />
       </Field>
 
-      <Field label="Room" htmlFor="job-room">
-        <NativeSelect id="job-room" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-          <option value="">No particular room</option>
-          {rooms.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Room" htmlFor="job-room">
+          <NativeSelect id="job-room" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+            <option value="">No particular room</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+        <Field label="Category" htmlFor="job-category">
+          <NativeSelect id="job-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">None</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      </div>
 
       <Field label="Comes back every">
         <div className="flex items-center gap-2">

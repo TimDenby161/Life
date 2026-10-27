@@ -16,6 +16,7 @@ import type { OccurrenceWithTask, TaskCategory } from '../api'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
+import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import {
   useCompleteOccurrence,
   useCreateTask,
@@ -38,31 +39,6 @@ export default function TasksPage() {
 }
 
 const SECTION_ORDER: Section[] = ['overdue', 'today', 'upcoming', 'later', 'someday']
-
-const COLLAPSED_KEY = 'life.tasks.collapsed'
-
-/** Which groups are collapsed, remembered on this device. */
-function useCollapsedGroups() {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[])
-    } catch {
-      return new Set()
-    }
-  })
-  const toggle = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(key)) next.add(key)
-      try {
-        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
-      } catch {
-        // Storage blocked: collapsing still works for this visit.
-      }
-      return next
-    })
-  return { collapsed, toggle }
-}
 
 type Group = {
   key: string
@@ -104,7 +80,7 @@ function TaskListView() {
   const reopen = useReopenOccurrence()
   const [creating, setCreating] = useState(false)
   const [showDone, setShowDone] = useState(false)
-  const { collapsed, toggle: toggleGroup } = useCollapsedGroups()
+  const { collapsed, toggle: toggleGroup } = useCollapsedGroups('life.tasks.collapsed')
 
   const setParam = (key: string, value: string | null) =>
     setParams(

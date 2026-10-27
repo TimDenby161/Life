@@ -1,4 +1,4 @@
-import { Check, Plus, RotateCw } from 'lucide-react'
+import { Check, ChevronDown, Plus, RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { formatDay, todayISO } from '@/lib/dates'
-import { groupBy } from '@/lib/utils'
+import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { Job } from '../api'
 import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskLists, useTaskRooms, useUpdateTask } from '../hooks'
 import { agoInWords, dueInWords, jobRule, lastDoneOf } from '../lib/jobs'
 import { dueTone } from '../lib/format'
+import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import { describeInterval } from '../lib/recurrence'
 import { JobForm, type JobValues } from '../components/JobForm'
 
@@ -28,6 +29,7 @@ const toneClass = { overdue: 'text-destructive font-medium', today: 'text-warnin
 export default function JobsPage() {
   const jobs = useJobs()
   const rooms = useTaskRooms().data ?? []
+  const { collapsed, toggle } = useCollapsedGroups('life.jobs.collapsed')
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
   const sorted = (jobs.data ?? []).toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
@@ -79,20 +81,25 @@ export default function JobsPage() {
         ) : (
           groups.map((group) => (
             <section key={group.key} aria-labelledby={`room-${group.key}`} className="mb-2 last:mb-0">
-              <h2
-                id={`room-${group.key}`}
-                className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-              >
-                {group.label} <span className="font-normal">· {group.items.length}</span>
+              <h2 id={`room-${group.key}`}>
+                <button
+                  type="button"
+                  onClick={() => toggle(group.key)}
+                  aria-expanded={!collapsed.has(group.key)}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(group.key) && '-rotate-90')} />
+                  {group.label} <span className="font-normal">· {group.items.length}</span>
+                </button>
               </h2>
-              {group.items.length ? (
+              {collapsed.has(group.key) ? null : group.items.length ? (
                 <ul>
                   {group.items.map((job) => (
                     <JobRow key={job.id} job={job} onOpen={() => setEditing(job)} />
                   ))}
                 </ul>
               ) : (
-                <p className="px-3 pb-2 text-sm text-muted-foreground">No jobs</p>
+                <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No jobs</p>
               )}
             </section>
           ))
@@ -183,6 +190,7 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
         rule: jobRule(job.recurrence) ?? undefined,
         assigneeId: job.assignee_id,
         roomId: job.room_id,
+        categoryId: job.category_id,
         lastDone: initialLastDone,
       }
     : preset
@@ -197,6 +205,7 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
             recurrence: v.rule,
             assignee_id: v.assigneeId,
             room_id: v.roomId,
+            category_id: v.categoryId,
             // Only a changed date reschedules the job.
             ...(v.lastDone !== initialLastDone ? { last_done_on: v.lastDone } : {}),
           },
@@ -212,7 +221,7 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
           due_date: todayISO(),
           due_time: null,
           priority: 'normal',
-          category_id: null,
+          category_id: v.categoryId,
           description: null,
           recurrence: v.rule,
           room_id: v.roomId,

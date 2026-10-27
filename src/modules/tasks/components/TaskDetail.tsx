@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input, Textarea } from '@/components/ui/input'
+import { Input, NativeSelect, Textarea } from '@/components/ui/input'
 import { Badge, Checkbox } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { formatDateTime, formatDay, parseISODate, todayISO } from '@/lib/dates'
@@ -219,6 +219,25 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
           </Button>
         ) : null}
       </div>
+
+      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        Category
+        <NativeSelect
+          aria-label="Category"
+          className="h-10 w-auto"
+          value={task.category_id ?? ''}
+          disabled={update.isPending}
+          // An owned category also reassigns the task (the database sees to that).
+          onChange={(e) => update.mutate({ id: task.id, patch: { category_id: e.target.value || null } })}
+        >
+          <option value="">None</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </NativeSelect>
+      </label>
 
       <Subtasks taskId={task.id} subtasks={data.subtasks} />
       <Comments taskId={task.id} comments={data.comments} />
