@@ -20,7 +20,7 @@ import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/h
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
-import { useCreateCategory, useTaskCategories } from '@/modules/tasks/hooks'
+import { useCreateCategory, useSetCategoryOwner, useTaskCategories } from '@/modules/tasks/hooks'
 
 export default function SettingsPage() {
   const { hash } = useLocation()
@@ -320,16 +320,33 @@ function FeedSourcesSection() {
 function CategoriesSection() {
   const categories = useTaskCategories()
   const create = useCreateCategory()
+  const setOwner = useSetCategoryOwner()
+  const { members } = useHousehold()
   const [name, setName] = useState('')
   return (
     <section>
       <SectionTitle>Task categories</SectionTitle>
       <Card className="grid gap-3 p-4">
-        <div className="flex flex-wrap gap-1.5">
+        <p className="text-xs text-muted-foreground">Give a category to one person and every task in it is assigned to them.</p>
+        <ul className="grid gap-1">
           {(categories.data ?? []).map((c) => (
-            <Badge key={c.id} tone="neutral"><span className={cn('size-1.5 rounded-full', colorOf(c.color).dot)} />{c.name}</Badge>
+            <li key={c.id} className="flex items-center gap-2">
+              <span className={cn('size-2 shrink-0 rounded-full', colorOf(c.color).dot)} />
+              <span className="min-w-0 flex-1 truncate text-sm">{c.name}</span>
+              <NativeSelect
+                aria-label={`Who ${c.name} belongs to`}
+                value={c.owner_id ?? ''}
+                onChange={(e) => setOwner.mutate({ id: c.id, ownerId: e.target.value || null })}
+                className="h-9 w-32"
+              >
+                <option value="">Joint</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.display_name}</option>
+                ))}
+              </NativeSelect>
+            </li>
           ))}
-        </div>
+        </ul>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) create.mutate({ name: name.trim(), color: 'slate' }, { onSuccess: () => setName('') }) }}>
           <Input aria-label="New category" placeholder="New category" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} className="h-9" />
           <Button type="submit" variant="secondary" size="sm" disabled={!name.trim()}>Add</Button>

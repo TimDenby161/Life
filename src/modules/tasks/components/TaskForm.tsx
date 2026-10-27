@@ -47,6 +47,9 @@ export function TaskForm({ initial, defaultListId, submitLabel, busy, onSubmit, 
   const [description, setDescription] = useState(initial?.description ?? '')
   const [rule, setRule] = useState<RecurrenceRule | null>(parseRecurrence(initial?.recurrence))
   const [error, setError] = useState<string | null>(null)
+  // An owned category decides the assignee (the database enforces this too).
+  const category = categories.find((c) => c.id === categoryId)
+  const categoryOwner = category?.owner_id ? members.find((m) => m.id === category.owner_id) : undefined
 
   function chooseList(id: string) {
     setListId(id)
@@ -63,7 +66,7 @@ export function TaskForm({ initial, defaultListId, submitLabel, busy, onSubmit, 
     onSubmit({
       title: title.trim(),
       list_id: listId,
-      assignee_id: assigneeId || null,
+      assignee_id: categoryOwner?.id ?? (assigneeId || null),
       due_date: dueDate || null,
       due_time: dueTime || null,
       priority,
@@ -108,13 +111,19 @@ export function TaskForm({ initial, defaultListId, submitLabel, busy, onSubmit, 
           />
         </Field>
         <Field label="Assigned to">
-          <Segmented
-            aria-label="Assigned to"
-            value={assigneeId || 'none'}
-            onChange={(v) => setAssigneeId(v === 'none' ? '' : v)}
-            options={[{ value: 'none', label: 'Anyone' }, ...members.map((m) => ({ value: m.id, label: m.display_name }))]}
-            className="w-full [&>*]:flex-1"
-          />
+          {categoryOwner && category ? (
+            <p className="flex h-10 items-center text-sm text-muted-foreground">
+              {categoryOwner.display_name} (all {category.name} tasks are theirs)
+            </p>
+          ) : (
+            <Segmented
+              aria-label="Assigned to"
+              value={assigneeId || 'none'}
+              onChange={(v) => setAssigneeId(v === 'none' ? '' : v)}
+              options={[{ value: 'none', label: 'Anyone' }, ...members.map((m) => ({ value: m.id, label: m.display_name }))]}
+              className="w-full [&>*]:flex-1"
+            />
+          )}
         </Field>
       </div>
 

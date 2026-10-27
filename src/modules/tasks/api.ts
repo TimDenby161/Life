@@ -194,3 +194,8 @@ export async function deleteComment(id: string) {
 export async function createCategory(householdId: string, name: string, color: string) {
   return unwrap(await supabase.from('task_categories').insert({ household_id: householdId, name, color }).select('*').single())
 }
+
+/** The database reassigns the category's tasks to a new owner. */
+export async function setCategoryOwner(id: string, ownerId: string | null) {
+  unwrap(await supabase.from('task_categories').update({ owner_id: ownerId }).eq('id', id))
+}

@@ -1243,6 +1243,7 @@ export type Database = {
           household_id: string
           id: string
           name: string
+          owner_id: string | null
         }
         Insert: {
           color?: string
@@ -1250,6 +1251,7 @@ export type Database = {
           household_id: string
           id?: string
           name: string
+          owner_id?: string | null
         }
         Update: {
           color?: string
@@ -1257,6 +1259,7 @@ export type Database = {
           household_id?: string
           id?: string
           name?: string
+          owner_id?: string | null
         }
         Relationships: [
           {
@@ -1265,6 +1268,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "households"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_categories_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
           },
         ]
       }
@@ -2172,6 +2182,7 @@ export type Database = {
         Args: { p_household_id: string }
         Returns: undefined
       }
+      task_category_owner: { Args: { p_category_id: string }; Returns: string }
       task_generate_next_occurrence: {
         Args: { p_after: string; p_generated_from: string; p_task_id: string }
         Returns: string

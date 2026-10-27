@@ -149,3 +149,12 @@ export function useCreateCategory() {
     onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.categories }),
   })
 }
+
+export function useSetCategoryOwner() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ownerId }: { id: string; ownerId: string | null }) => api.setCategoryOwner(id, ownerId),
+    // Tasks in the category may have been reassigned too.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+}
