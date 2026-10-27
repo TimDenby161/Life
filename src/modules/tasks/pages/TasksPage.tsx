@@ -72,17 +72,15 @@ type Group = {
   items: OccurrenceWithTask[]
 }
 
-/** Categories in name order, then anything without a category. Empty categories are left out. */
+/** Every category in name order (empty ones too), then anything without a category. */
 function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] {
   const byCategory = groupBy(items, (o) => o.task.category_id ?? '')
-  const groups: Group[] = categories
-    .filter((c) => byCategory[c.id]?.length)
-    .map((c) => ({
-      key: c.id,
-      label: c.name,
-      dot: colorOf(c.color).dot,
-      items: byCategory[c.id],
-    }))
+  const groups: Group[] = categories.map((c) => ({
+    key: c.id,
+    label: c.name,
+    dot: colorOf(c.color).dot,
+    items: byCategory[c.id] ?? [],
+  }))
   // A category that isn't loaded yet (or was deleted) falls in with the uncategorised ones.
   const known = new Set(categories.map((c) => c.id))
   const rest = items.filter((o) => !o.task.category_id || !known.has(o.task.category_id))
@@ -234,7 +232,9 @@ function TaskListView() {
                     {group.label} <span className="font-normal">· {group.items.length}</span>
                   </button>
                 </h2>
-                {isCollapsed ? null : (
+                {isCollapsed ? null : !group.items.length ? (
+                  <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
+                ) : (
                   <ul>
                     {group.items.map((o) => (
                       <TaskRow
