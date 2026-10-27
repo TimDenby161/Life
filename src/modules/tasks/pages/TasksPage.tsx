@@ -25,7 +25,6 @@ import {
   useTaskLists,
 } from '../hooks'
 import { compareOccurrences, type Section, SECTION_LABELS, sectionOf } from '../lib/format'
-import { isWaitingJob } from '../lib/jobs'
 import TaskStatsPage from './TaskStatsPage'
 
 export default function TasksPage() {
@@ -70,9 +69,7 @@ function TaskListView() {
 
   const today = todayISO()
   const sections = useMemo(() => {
-    const visible = (open.data ?? [])
-      .filter((o) => filter(o) && !isWaitingJob(o, today))
-      .toSorted(compareOccurrences)
+    const visible = (open.data ?? []).filter(filter).toSorted(compareOccurrences)
     return groupBy(visible, (o) => sectionOf(o.due_date, today))
   }, [open.data, listParam, mine, today])
   const recentDone = (done.data ?? []).filter(filter)

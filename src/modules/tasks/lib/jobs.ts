@@ -37,8 +37,3 @@ export function agoInWords(date: ISODate, today: ISODate): string {
   if (diff === 1) return 'yesterday'
   return `${diff} days ago`
 }
-
-/** Jobs stay off the to-do list until they're due. */
-export function isWaitingJob(occ: { due_date: string | null; task: { recurrence: unknown } }, today: ISODate): boolean {
-  return Boolean(occ.due_date && occ.due_date > today && jobRule(occ.task.recurrence))
-}

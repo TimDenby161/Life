@@ -1,4 +1,4 @@
-import { agoInWords, dueInWords, isWaitingJob, jobRule, lastDoneOf, nextDueAfter } from './jobs'
+import { agoInWords, dueInWords, jobRule, lastDoneOf, nextDueAfter } from './jobs'
 
 describe('jobs', () => {
   it('recognises job rules only', () => {
@@ -29,12 +29,5 @@ describe('jobs', () => {
     expect(dueInWords('2026-10-24', '2026-10-27')).toBe('3 days overdue')
     expect(agoInWords('2026-10-26', '2026-10-27')).toBe('yesterday')
     expect(agoInWords('2026-10-20', '2026-10-27')).toBe('7 days ago')
-  })
-
-  it('keeps jobs off the to-do list until due', () => {
-    const job = { recurrence: { freq: 'weekly', afterDone: true } }
-    expect(isWaitingJob({ due_date: '2026-10-28', task: job }, '2026-10-27')).toBe(true)
-    expect(isWaitingJob({ due_date: '2026-10-27', task: job }, '2026-10-27')).toBe(false)
-    expect(isWaitingJob({ due_date: '2026-10-28', task: { recurrence: { freq: 'weekly' } } }, '2026-10-27')).toBe(false)
   })
 })

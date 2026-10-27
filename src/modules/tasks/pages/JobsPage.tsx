@@ -51,7 +51,7 @@ export default function JobsPage() {
           <EmptyState
             icon={RotateCw}
             title="No jobs yet"
-            description="Add the things you do over and over. Each one shows up in your tasks again when it's due."
+            description="Add the things you do over and over. Each one sits on your task list, due again a set time after it was last done."
             action={
               <div className="flex flex-wrap justify-center gap-1.5">
                 {SUGGESTIONS.map((s) => (
