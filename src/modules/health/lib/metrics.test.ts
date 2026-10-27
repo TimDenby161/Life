@@ -1,13 +1,4 @@
-import { cycleSummary, dailySeries, isSharedWithPartner, latestWithChange } from './metrics'
-
-describe('visibility', () => {
-  it('lets a record override its category', () => {
-    expect(isSharedWithPartner('inherit', false)).toBe(false)
-    expect(isSharedWithPartner('inherit', true)).toBe(true)
-    expect(isSharedWithPartner('private', true)).toBe(false)
-    expect(isSharedWithPartner('shared', false)).toBe(true)
-  })
-})
+import { cycleSummary, dailySeries, latestWithChange } from './metrics'
 
 describe('dailySeries', () => {
   const rows = [

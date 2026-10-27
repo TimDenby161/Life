@@ -2,20 +2,6 @@
 import { parseISO } from 'date-fns'
 import { addDaysISO, daysBetween, type ISODate, toISODate } from '@/lib/dates'
 
-export const HEALTH_CATEGORIES = [
-  { key: 'body', label: 'Weight' },
-  { key: 'exercise', label: 'Exercise' },
-  { key: 'cycle', label: 'Periods' },
-] as const
-export type HealthCategory = (typeof HEALTH_CATEGORIES)[number]['key']
-
-export type Visibility = 'inherit' | 'private' | 'shared'
-
-/** Mirrors public.health_is_visible for labelling in the UI (RLS is the real gate). */
-export function isSharedWithPartner(visibility: Visibility, categoryShared: boolean): boolean {
-  return visibility === 'shared' || (visibility === 'inherit' && categoryShared)
-}
-
 export type MeasurementLike = { measured_at: string; value: number }
 export type Aggregation = 'latest' | 'sum' | 'average'
 

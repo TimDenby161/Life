@@ -27,7 +27,7 @@ Validation actually run against the local Supabase stack (Docker):
 2. **Supabase project.** Region (London suggested), and the two email addresses for the accounts.
 3. **Google Calendar method.** Service account (recommended; needs a free Google Cloud project) or the simpler embed fallback (see DECISIONS.md, ADR 6).
 4. **Chesterfield FC scores.** Whether to create a free API-Football key, plus any news feeds you want (hosts must be allow-listed).
-5. **Health defaults.** Decided 2026-10-26: shared by default; either of you can make a category or a single record private.
+5. **Health privacy.** Decided 2026-10-27: no privacy settings; all health records are visible to both of you.
 6. **Units.** Weight is kg; stones/pounds display isn't implemented.
 
 ## Next steps (suggested)

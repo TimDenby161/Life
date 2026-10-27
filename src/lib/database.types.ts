@@ -766,52 +766,6 @@ export type Database = {
           },
         ]
       }
-      health_category_visibility: {
-        Row: {
-          category: string
-          household_id: string
-          shared: boolean
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          category: string
-          household_id: string
-          shared?: boolean
-          updated_at?: string
-          user_id?: string
-        }
-        Update: {
-          category?: string
-          household_id?: string
-          shared?: boolean
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "health_category_visibility_household_id_fkey"
-            columns: ["household_id"]
-            isOneToOne: false
-            referencedRelation: "households"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "health_category_visibility_household_id_user_id_fkey"
-            columns: ["household_id", "user_id"]
-            isOneToOne: false
-            referencedRelation: "household_members"
-            referencedColumns: ["household_id", "user_id"]
-          },
-          {
-            foreignKeyName: "health_category_visibility_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       health_exercise_sessions: {
         Row: {
           created_at: string
@@ -824,7 +778,6 @@ export type Database = {
           started_at: string
           updated_at: string
           user_id: string
-          visibility: string
         }
         Insert: {
           created_at?: string
@@ -837,7 +790,6 @@ export type Database = {
           started_at: string
           updated_at?: string
           user_id?: string
-          visibility?: string
         }
         Update: {
           created_at?: string
@@ -850,7 +802,6 @@ export type Database = {
           started_at?: string
           updated_at?: string
           user_id?: string
-          visibility?: string
         }
         Relationships: [
           {
@@ -884,7 +835,6 @@ export type Database = {
           updated_at: string
           user_id: string
           value: number
-          visibility: string
         }
         Insert: {
           category?: string
@@ -900,7 +850,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           value: number
-          visibility?: string
         }
         Update: {
           category?: string
@@ -916,7 +865,6 @@ export type Database = {
           updated_at?: string
           user_id?: string
           value?: number
-          visibility?: string
         }
         Relationships: [
           {
@@ -1009,7 +957,6 @@ export type Database = {
           started_on: string
           updated_at: string
           user_id: string
-          visibility: string
         }
         Insert: {
           created_at?: string
@@ -1020,7 +967,6 @@ export type Database = {
           started_on: string
           updated_at?: string
           user_id?: string
-          visibility?: string
         }
         Update: {
           created_at?: string
@@ -1031,7 +977,6 @@ export type Database = {
           started_on?: string
           updated_at?: string
           user_id?: string
-          visibility?: string
         }
         Relationships: [
           {
@@ -2182,15 +2127,6 @@ export type Database = {
         Returns: string
       }
       current_household_id: { Args: never; Returns: string }
-      health_is_visible: {
-        Args: {
-          p_category: string
-          p_household_id: string
-          p_owner: string
-          p_visibility: string
-        }
-        Returns: boolean
-      }
       household_today: { Args: { p_household_id: string }; Returns: string }
       is_household_member: {
         Args: { p_household_id: string }

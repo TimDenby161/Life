@@ -1,6 +1,6 @@
 import { format, parseISO, startOfWeek } from 'date-fns'
-import { CalendarHeart, Dumbbell, Eye, EyeOff, HeartPulse, Lock, Plus, Share2, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { CalendarHeart, Dumbbell, HeartPulse, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { axisProps, ChartTooltip, DataTable, gridProps } from '@/components/charts'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, Textarea } from '@/components/ui/input'
 import { Badge, Segmented, Skeleton, Switch } from '@/components/ui/misc'
 import { daysBetween, formatDay, todayISO } from '@/lib/dates'
-import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import {
   type ExerciseSession,
@@ -20,7 +19,6 @@ import {
   useAddExercise,
   useAddMeasurement,
   useAddPeriod,
-  useCategoryVisibility,
   useDeleteExercise,
   useDeleteMeasurement,
   useDeletePeriod,
@@ -28,13 +26,11 @@ import {
   useMeasurements,
   useMetricDefinitions,
   usePeriods,
-  useSetCategoryShared,
   useSetTrackPeriods,
   useTrackPeriods,
-  useUpdateMeasurement,
   useUpdatePeriod,
 } from './api'
-import { type Aggregation, cycleSummary, dailySeries, formatValue, HEALTH_CATEGORIES, isSharedWithPartner, latestWithChange, type Visibility } from './lib/metrics'
+import { type Aggregation, cycleSummary, dailySeries, formatValue, latestWithChange } from './lib/metrics'
 
 export default function HealthPage() {
   const { me, partner, member } = useHousehold()
@@ -46,15 +42,8 @@ export default function HealthPage() {
   const exercise = useExerciseSessions()
   const periods = usePeriods()
   const trackPeriods = useTrackPeriods()
-  const visibility = useCategoryVisibility()
   const [logging, setLogging] = useState(false)
   const [detail, setDetail] = useState(false)
-
-  const shared = useMemo(() => {
-    const map = new Map<string, boolean>()
-    for (const v of visibility.data ?? []) if (v.user_id === personId) map.set(v.category, v.shared)
-    return map
-  }, [visibility.data, personId])
 
   const weight = defs.data?.find((d) => d.key === 'weight' && d.owner_id === null)
   const weights = (measurements.data ?? []).filter((m) => m.user_id === personId && m.metric_id === weight?.id)
@@ -65,55 +54,37 @@ export default function HealthPage() {
 
   return (
     <>
-      <PageHeader title="Health" description="Your own records. Nothing here is medical advice, and nothing is interpreted for you." />
+      <PageHeader title="Health" description="Visible to both of you. Nothing here is medical advice, and nothing is interpreted for you." />
       {partner ? (
         <Segmented aria-label="Person" value={personId} onChange={setPersonId} className="mb-4" options={[{ value: me.id, label: 'Me' }, { value: partner.id, label: partner.display_name }]} />
       ) : null}
-
-      {!own ? <PartnerNotice name={person.display_name} shared={shared} /> : null}
 
       {error ? (
         <ErrorState error={error} onRetry={() => { defs.refetch(); measurements.refetch(); exercise.refetch(); periods.refetch() }} />
       ) : defs.isPending || measurements.isPending || exercise.isPending || periods.isPending ? (
         <div className="grid gap-4 lg:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-40" />)}</div>
       ) : !own && !weights.length && !sessions.length && !personPeriods.length ? (
-        <Card><EmptyState icon={HeartPulse} title="Nothing shared yet" description={`${person.display_name} hasn't shared any health records with you.`} /></Card>
+        <Card><EmptyState icon={HeartPulse} title="Nothing logged yet" description={`${person.display_name} hasn't logged any weight, exercise or periods.`} /></Card>
       ) : (
         <>
           <div className="grid gap-4 lg:grid-cols-2">
             {weight && (own || weights.length) ? (
               <section>
-                <SectionTitle action={own ? <SharedBadge shared={shared.get('body') ?? true} /> : null}>Weight</SectionTitle>
+                <SectionTitle>Weight</SectionTitle>
                 <WeightTile def={weight} rows={weights} onOpen={() => setDetail(true)} onLog={own ? () => setLogging(true) : undefined} />
               </section>
             ) : null}
-            {showPeriods ? <PeriodSection own={own} periods={personPeriods} categoryShared={shared.get('cycle') ?? true} /> : null}
+            {showPeriods ? <PeriodSection own={own} periods={personPeriods} /> : null}
           </div>
-          <ExerciseSection own={own} sessions={sessions} categoryShared={shared.get('exercise') ?? true} />
+          <ExerciseSection own={own} sessions={sessions} />
 
-          {own ? <HealthSettingsPanel shared={shared} partnerName={partner?.display_name} /> : null}
+          {own ? <HealthSettingsPanel /> : null}
         </>
       )}
 
-      {weight ? <LogWeightDialog open={logging} def={weight} categoryShared={shared.get('body') ?? true} onClose={() => setLogging(false)} /> : null}
-      {weight && detail ? <WeightDetailDialog def={weight} rows={weights} own={own} categoryShared={shared.get('body') ?? true} onClose={() => setDetail(false)} /> : null}
+      {weight ? <LogWeightDialog open={logging} def={weight} onClose={() => setLogging(false)} /> : null}
+      {weight && detail ? <WeightDetailDialog def={weight} rows={weights} own={own} onClose={() => setDetail(false)} /> : null}
     </>
-  )
-}
-
-function SharedBadge({ shared }: { shared: boolean }) {
-  return shared ? <Badge tone="primary"><Eye className="size-3" /> Shared</Badge> : <Badge><Lock className="size-3" /> Private</Badge>
-}
-
-function PartnerNotice({ name, shared }: { name: string; shared: Map<string, boolean> }) {
-  const cats = HEALTH_CATEGORIES.filter((c) => shared.get(c.key)).map((c) => c.label)
-  return (
-    <Card className="mb-4 flex items-start gap-3 p-4 text-sm text-muted-foreground">
-      <Share2 className="mt-0.5 size-4 shrink-0" />
-      <p>
-        {cats.length ? <>{name} shares <span className="text-foreground">{cats.join(', ')}</span> with you, plus any individual records marked as shared.</> : <>{name} hasn't shared any health categories. You'll only see records they've shared individually.</>}
-      </p>
-    </Card>
   )
 }
 
@@ -155,52 +126,18 @@ function WeightTile({ def, rows, onOpen, onLog }: { def: MetricDefinition; rows:
   )
 }
 
-const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
-  { value: 'inherit', label: 'Category default' },
-  { value: 'shared', label: 'Shared' },
-  { value: 'private', label: 'Private' },
-]
-
-function VisibilityField({ value, onChange, categoryShared }: { value: Visibility; onChange: (v: Visibility) => void; categoryShared: boolean }) {
-  const { partner } = useHousehold()
-  if (!partner) return null
-  const visible = isSharedWithPartner(value, categoryShared)
-  return (
-    <Field label="Who can see this" hint={`${visible ? `${partner.display_name} can see this` : `Only you`}${value === 'inherit' ? ` (category is ${categoryShared ? 'shared' : 'private'})` : ''}`}>
-      <Segmented aria-label="Visibility" size="sm" value={value} onChange={onChange} options={VISIBILITY_OPTIONS} className="w-full [&>*]:flex-1" />
-    </Field>
-  )
-}
-
-/** Cycles inherit → override → back to inherit, labelled with the effective result. */
-function VisibilityToggle({ visibility, categoryShared, onChange }: { visibility: string; categoryShared: boolean; onChange: (v: Visibility) => void }) {
-  const visible = isSharedWithPartner(visibility as Visibility, categoryShared)
-  return (
-    <button
-      type="button"
-      className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs', visible ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground')}
-      title={visibility === 'inherit' ? 'Follows the category setting. Tap to override.' : 'Tap to change'}
-      onClick={() => onChange(visibility === 'inherit' ? (categoryShared ? 'private' : 'shared') : visibility === 'shared' ? 'private' : 'inherit')}
-    >
-      {visible ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
-      {visibility === 'inherit' ? (visible ? 'Shared (default)' : 'Private (default)') : visible ? 'Shared' : 'Private'}
-    </button>
-  )
-}
-
 function nowLocalInput() {
   return format(new Date(), "yyyy-MM-dd'T'HH:mm")
 }
 
-function LogWeightDialog({ open, def, categoryShared, onClose }: { open: boolean; def: MetricDefinition; categoryShared: boolean; onClose: () => void }) {
+function LogWeightDialog({ open, def, onClose }: { open: boolean; def: MetricDefinition; onClose: () => void }) {
   const add = useAddMeasurement()
   const [value, setValue] = useState('')
   const [when, setWhen] = useState(nowLocalInput)
   const [notes, setNotes] = useState('')
-  const [vis, setVis] = useState<Visibility>('inherit')
   const [error, setError] = useState<string | null>(null)
 
-  const reset = () => { setValue(''); setNotes(''); setVis('inherit'); setError(null); setWhen(nowLocalInput()) }
+  const reset = () => { setValue(''); setNotes(''); setError(null); setWhen(nowLocalInput()) }
   const close = () => { reset(); onClose() }
 
   return (
@@ -212,7 +149,7 @@ function LogWeightDialog({ open, def, categoryShared, onClose }: { open: boolean
             e.preventDefault()
             const n = Number(value.replace(',', '.'))
             if (!value.trim() || !Number.isFinite(n) || n <= 0) return setError('Enter a weight')
-            add.mutate({ metric_id: def.id, value: n, measured_at: new Date(when).toISOString(), notes: notes.trim() || null, visibility: vis }, { onSuccess: close })
+            add.mutate({ metric_id: def.id, value: n, measured_at: new Date(when).toISOString(), notes: notes.trim() || null }, { onSuccess: close })
           }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -226,7 +163,6 @@ function LogWeightDialog({ open, def, categoryShared, onClose }: { open: boolean
           <Field label="Note" htmlFor="log-notes">
             <Input id="log-notes" value={notes} maxLength={1000} placeholder="Optional" onChange={(e) => setNotes(e.target.value)} />
           </Field>
-          <VisibilityField value={vis} onChange={setVis} categoryShared={categoryShared} />
           <DialogFooter>
             <Button variant="ghost" onClick={close}>Cancel</Button>
             <Button type="submit" disabled={add.isPending}>Save</Button>
@@ -237,9 +173,8 @@ function LogWeightDialog({ open, def, categoryShared, onClose }: { open: boolean
   )
 }
 
-function WeightDetailDialog({ def, rows, own, categoryShared, onClose }: { def: MetricDefinition; rows: { id: string; measured_at: string; value: number; notes: string | null; visibility: string }[]; own: boolean; categoryShared: boolean; onClose: () => void }) {
+function WeightDetailDialog({ def, rows, own, onClose }: { def: MetricDefinition; rows: { id: string; measured_at: string; value: number; notes: string | null }[]; own: boolean; onClose: () => void }) {
   const del = useDeleteMeasurement()
-  const update = useUpdateMeasurement()
   const [showTable, setShowTable] = useState(false)
   const series = dailySeries(rows, def.aggregation as Aggregation).map((p) => ({ ...p, label: format(parseISO(p.date), 'd MMM') }))
   const fmt = (v: number) => `${formatValue(v, def.decimals)} ${def.unit}`
@@ -275,12 +210,7 @@ function WeightDetailDialog({ def, rows, own, categoryShared, onClose }: { def: 
                 <span className="font-medium tabular">{fmt(Number(r.value))}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{format(parseISO(r.measured_at), 'd MMM yyyy, HH:mm')}{r.notes ? ` · ${r.notes}` : ''}</span>
               </span>
-              {own ? (
-                <>
-                  <VisibilityToggle visibility={r.visibility} categoryShared={categoryShared} onChange={(v) => update.mutate({ id: r.id, patch: { visibility: v } })} />
-                  <button type="button" aria-label="Delete entry" className="rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => del.mutate(r.id)}><Trash2 className="size-3.5" /></button>
-                </>
-              ) : null}
+              {own ? <button type="button" aria-label="Delete entry" className="rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => del.mutate(r.id)}><Trash2 className="size-3.5" /></button> : null}
             </li>
           ))}
         </ul>
@@ -294,7 +224,7 @@ function formatMinutes(mins: number) {
   return h ? `${h} h${mins % 60 ? ` ${mins % 60} min` : ''}` : `${mins} min`
 }
 
-function ExerciseSection({ own, sessions, categoryShared }: { own: boolean; sessions: ExerciseSession[]; categoryShared: boolean }) {
+function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSession[] }) {
   const add = useAddExercise()
   const del = useDeleteExercise()
   const [open, setOpen] = useState(false)
@@ -302,12 +232,11 @@ function ExerciseSection({ own, sessions, categoryShared }: { own: boolean; sess
   const [description, setDescription] = useState('')
   const [when, setWhen] = useState(nowLocalInput)
   const [duration, setDuration] = useState('')
-  const [vis, setVis] = useState<Visibility>('inherit')
   const [error, setError] = useState<string | null>(null)
   if (!own && !sessions.length) return null
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
   const thisWeek = sessions.filter((s) => parseISO(s.started_at) >= weekStart)
-  const close = () => { setOpen(false); setDescription(''); setDuration(''); setVis('inherit'); setError(null) }
+  const close = () => { setOpen(false); setDescription(''); setDuration(''); setError(null) }
   return (
     <section className="mt-2">
       <SectionTitle action={own ? <Button variant="ghost" size="sm" onClick={() => { setWhen(nowLocalInput()); setOpen(true) }}><Plus /> Add</Button> : null}>Exercise</SectionTitle>
@@ -346,7 +275,7 @@ function ExerciseSection({ own, sessions, categoryShared }: { own: boolean; sess
               const mins = Number.parseInt(duration, 10)
               if (!description.trim()) return setError('Say what you did')
               if (!Number.isFinite(mins) || mins <= 0 || mins > 1440) return setError('Enter how many minutes')
-              add.mutate({ description: description.trim(), started_at: new Date(when).toISOString(), duration_minutes: mins, visibility: vis }, { onSuccess: close })
+              add.mutate({ description: description.trim(), started_at: new Date(when).toISOString(), duration_minutes: mins }, { onSuccess: close })
             }}
           >
             <Field label="What did you do?" htmlFor="ex-desc" error={error}>
@@ -356,7 +285,6 @@ function ExerciseSection({ own, sessions, categoryShared }: { own: boolean; sess
               <Field label="Minutes" htmlFor="ex-min"><Input id="ex-min" inputMode="numeric" value={duration} onChange={(e) => { setDuration(e.target.value); setError(null) }} /></Field>
               <Field label="When" htmlFor="ex-when"><Input id="ex-when" type="datetime-local" value={when} max={nowLocalInput()} onChange={(e) => setWhen(e.target.value)} /></Field>
             </div>
-            <VisibilityField value={vis} onChange={setVis} categoryShared={categoryShared} />
             <DialogFooter>
               <Button variant="ghost" onClick={close}>Cancel</Button>
               <Button type="submit" disabled={add.isPending}>Save</Button>
@@ -368,7 +296,7 @@ function ExerciseSection({ own, sessions, categoryShared }: { own: boolean; sess
   )
 }
 
-function PeriodSection({ own, periods, categoryShared }: { own: boolean; periods: Period[]; categoryShared: boolean }) {
+function PeriodSection({ own, periods }: { own: boolean; periods: Period[] }) {
   const add = useAddPeriod()
   const update = useUpdatePeriod()
   const del = useDeletePeriod()
@@ -378,7 +306,7 @@ function PeriodSection({ own, periods, categoryShared }: { own: boolean; periods
   const summary = cycleSummary(periods)
   return (
     <section>
-      <SectionTitle action={own ? <SharedBadge shared={categoryShared} /> : null}>Periods</SectionTitle>
+      <SectionTitle>Periods</SectionTitle>
       <Card className="p-4">
         {current ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -402,7 +330,7 @@ function PeriodSection({ own, periods, categoryShared }: { own: boolean; periods
               )}
             </div>
             {own ? (
-              <Button size="sm" onClick={() => add.mutate({ started_on: today, ended_on: null, notes: null, visibility: 'inherit' })} disabled={add.isPending || periods.some((p) => p.started_on === today)}>
+              <Button size="sm" onClick={() => add.mutate({ started_on: today, ended_on: null, notes: null })} disabled={add.isPending || periods.some((p) => p.started_on === today)}>
                 <CalendarHeart /> Started today
               </Button>
             ) : null}
@@ -426,31 +354,25 @@ function PeriodSection({ own, periods, categoryShared }: { own: boolean; periods
                     {p.ended_on ? `${daysBetween(p.started_on, p.ended_on) + 1} days` : 'ongoing'}{p.notes ? ` · ${p.notes}` : ''}
                   </span>
                 </span>
-                {own ? (
-                  <>
-                    <VisibilityToggle visibility={p.visibility} categoryShared={categoryShared} onChange={(v) => update.mutate({ id: p.id, patch: { visibility: v } })} />
-                    <button type="button" aria-label="Delete period" className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => del.mutate(p.id)}><Trash2 className="size-3.5" /></button>
-                  </>
-                ) : null}
+                {own ? <button type="button" aria-label="Delete period" className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => del.mutate(p.id)}><Trash2 className="size-3.5" /></button> : null}
               </li>
             ))}
           </ul>
         ) : null}
         {own ? <button type="button" className="mt-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen(true)}>Log a past period</button> : null}
       </Card>
-      {own ? <PastPeriodDialog open={open} categoryShared={categoryShared} onClose={() => setOpen(false)} /> : null}
+      {own ? <PastPeriodDialog open={open} onClose={() => setOpen(false)} /> : null}
     </section>
   )
 }
 
-function PastPeriodDialog({ open, categoryShared, onClose }: { open: boolean; categoryShared: boolean; onClose: () => void }) {
+function PastPeriodDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const add = useAddPeriod()
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [notes, setNotes] = useState('')
-  const [vis, setVis] = useState<Visibility>('inherit')
   const [error, setError] = useState<string | null>(null)
-  const close = () => { setStart(''); setEnd(''); setNotes(''); setVis('inherit'); setError(null); onClose() }
+  const close = () => { setStart(''); setEnd(''); setNotes(''); setError(null); onClose() }
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
       <DialogContent title="Log a period">
@@ -460,7 +382,7 @@ function PastPeriodDialog({ open, categoryShared, onClose }: { open: boolean; ca
             e.preventDefault()
             if (!start) return setError('Choose the start date')
             if (end && end < start) return setError('The end must be on or after the start')
-            add.mutate({ started_on: start, ended_on: end || null, notes: notes.trim() || null, visibility: vis }, { onSuccess: close, onError: () => setError('Couldn’t save. Is there already a period starting that day?') })
+            add.mutate({ started_on: start, ended_on: end || null, notes: notes.trim() || null }, { onSuccess: close, onError: () => setError('Couldn’t save. Is there already a period starting that day?') })
           }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -468,7 +390,6 @@ function PastPeriodDialog({ open, categoryShared, onClose }: { open: boolean; ca
             <Field label="Ended" htmlFor="pd-end" hint="Leave blank if it's ongoing"><Input id="pd-end" type="date" value={end} min={start || undefined} max={todayISO()} onChange={(e) => { setEnd(e.target.value); setError(null) }} /></Field>
           </div>
           <Field label="Note" htmlFor="pd-notes"><Input id="pd-notes" value={notes} maxLength={1000} placeholder="Optional" onChange={(e) => setNotes(e.target.value)} /></Field>
-          <VisibilityField value={vis} onChange={setVis} categoryShared={categoryShared} />
           <DialogFooter>
             <Button variant="ghost" onClick={close}>Cancel</Button>
             <Button type="submit" disabled={add.isPending}>Save</Button>
@@ -479,14 +400,13 @@ function PastPeriodDialog({ open, categoryShared, onClose }: { open: boolean; ca
   )
 }
 
-export function HealthSettingsPanel({ shared, partnerName }: { shared: Map<string, boolean>; partnerName?: string }) {
+export function HealthSettingsPanel() {
   const trackPeriods = useTrackPeriods().data === true
-  const set = useSetCategoryShared()
   const setTrack = useSetTrackPeriods()
   return (
-    <section id="health-sharing">
+    <section id="health-settings">
       <SectionTitle>Settings</SectionTitle>
-      <Card className="divide-y">
+      <Card>
         <label className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
           <span>
             Period tracker
@@ -494,19 +414,7 @@ export function HealthSettingsPanel({ shared, partnerName }: { shared: Map<strin
           </span>
           <Switch checked={trackPeriods} onCheckedChange={(v) => setTrack.mutate(v)} aria-label="Show the period tracker" />
         </label>
-        {partnerName
-          ? HEALTH_CATEGORIES.map((c) => (
-              <label key={c.key} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <span>
-                  Share {c.label.toLowerCase()} with {partnerName}
-                  <span className="block text-xs text-muted-foreground">{shared.get(c.key) ? `${partnerName} can see these` : 'Only you'}</span>
-                </span>
-                <Switch checked={shared.get(c.key) ?? true} onCheckedChange={(v) => set.mutate({ category: c.key, shared: v })} aria-label={`Share ${c.label} with ${partnerName}`} />
-              </label>
-            ))
-          : null}
       </Card>
-      {partnerName ? <p className="mt-2 text-xs text-muted-foreground">Individual entries can override sharing. Enforced by the database, not just hidden in the app.</p> : null}
     </section>
   )
 }

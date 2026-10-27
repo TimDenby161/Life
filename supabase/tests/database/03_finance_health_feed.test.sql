@@ -1,7 +1,7 @@
--- Finances, health privacy and feed permissions.
+-- Finances, health access and feed permissions.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(34);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -78,28 +78,18 @@ select throws_ok(
   format('select create_transfer(%L, %L, 100, current_date, ''steal'')', current_setting('t.current'), current_setting('t.isa')),
   'P0002', null, 'Outsider cannot move money between another household''s accounts');
 
--- Health privacy -------------------------------------------------------------------
+-- Health: visible to the household, owner-only writes -----------------------------
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 insert into health_measurements (household_id, metric_id, value, measured_at)
 values (current_setting('t.hh')::uuid, (select id from health_metric_definitions where key = 'weight' and owner_id is null), 61.2, now() - interval '1 day');
-insert into health_measurements (household_id, metric_id, value, visibility)
-values (current_setting('t.hh')::uuid, (select id from health_metric_definitions where key = 'weight' and owner_id is null), 61.0, 'private');
-insert into health_measurements (household_id, metric_id, value, visibility)
-values (current_setting('t.hh')::uuid, (select id from health_metric_definitions where key = 'weight' and owner_id is null), 60.8, 'shared');
+insert into health_measurements (household_id, metric_id, value)
+values (current_setting('t.hh')::uuid, (select id from health_metric_definitions where key = 'weight' and owner_id is null), 60.8);
 -- Rows created in this test share the transaction timestamp.
-select is((select count(*)::int from health_measurements where created_at = now()), 3, 'Sophie sees all her own records');
+select is((select count(*)::int from health_measurements where created_at = now()), 2, 'Sophie sees her own records');
 select is((select unit from health_measurements where value = 60.8 and created_at = now()), 'kg', 'Unit defaults from the metric');
 
 select pg_temp.as_user(current_setting('t.tim')::uuid);
-select is((select count(*)::int from health_measurements where created_at = now()), 2, 'Tim sees everything except the private record by default');
-
-select pg_temp.as_user(current_setting('t.sophie')::uuid);
-insert into health_category_visibility (household_id, category, shared) values (current_setting('t.hh')::uuid, 'body', false)
-  on conflict (user_id, category) do update set shared = false;
-
-select pg_temp.as_user(current_setting('t.tim')::uuid);
-select is((select count(*)::int from health_measurements where category = 'body' and created_at = now()), 1,
-  'Making a category private hides inherited records but not explicitly shared ones');
+select is((select count(*)::int from health_measurements where created_at = now()), 2, 'Tim sees all of Sophie''s records');
 with u as (update health_measurements set value = 1 where user_id = current_setting('t.sophie')::uuid returning 1)
 select is((select count(*)::int from u), 0, 'Tim cannot edit Sophie''s health records');
 select throws_ok(
@@ -110,7 +100,7 @@ select throws_ok(
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select is((select count(*)::int from health_measurements), 0, 'Outsider sees no health data');
 
--- Periods: shared by default, can be made private, owner-only writes.
+-- Periods: visible to the household, owner-only writes.
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 insert into health_periods (household_id, started_on, ended_on) values (current_setting('t.hh')::uuid, current_date - 30, current_date - 26);
 insert into health_periods (household_id, started_on) values (current_setting('t.hh')::uuid, current_date - 2);
@@ -119,16 +109,10 @@ select throws_ok(
   '23514', null, 'A period cannot end before it starts');
 
 select pg_temp.as_user(current_setting('t.tim')::uuid);
-select is((select count(*)::int from health_periods where created_at = now()), 2, 'Periods are shared by default');
+select is((select count(*)::int from health_periods where created_at = now()), 2, 'Tim sees Sophie''s periods');
 select throws_ok(
   format('insert into health_periods (household_id, user_id, started_on) values (%L, %L, current_date)', current_setting('t.hh'), current_setting('t.sophie')),
   '42501', null, 'Tim cannot log a period as Sophie');
-
-select pg_temp.as_user(current_setting('t.sophie')::uuid);
-insert into health_category_visibility (household_id, category, shared) values (current_setting('t.hh')::uuid, 'cycle', false);
-
-select pg_temp.as_user(current_setting('t.tim')::uuid);
-select is((select count(*)::int from health_periods where created_at = now()), 0, 'Making the cycle category private hides periods');
 with u as (update health_periods set ended_on = current_date returning 1)
 select is((select count(*)::int from u), 0, 'Tim cannot edit Sophie''s periods');
 
@@ -140,6 +124,8 @@ select pg_temp.as_user(current_setting('t.tim')::uuid);
 insert into health_exercise_sessions (household_id, description, started_at, duration_minutes)
 values (current_setting('t.hh')::uuid, 'Swim, 40 lengths', now(), 45);
 select is((select description from health_exercise_sessions where created_at = now()), 'Swim, 40 lengths', 'Exercise is logged with a free-text description');
+select pg_temp.as_user(current_setting('t.sophie')::uuid);
+select is((select count(*)::int from health_exercise_sessions where created_at = now()), 1, 'Sophie sees Tim''s exercise');
 select throws_ok(
   'select 1 from health_metric_definitions; insert into health_metric_definitions (key, name, unit, category) values (''x'', ''X'', ''u'', ''custom'')',
   '42501', null, 'Clients can no longer define metrics');

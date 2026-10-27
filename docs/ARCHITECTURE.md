@@ -38,7 +38,7 @@ Adding a module means a folder under `src/modules`, one entry in `registry.tsx`,
 ### Server state and sync
 
 - TanStack Query owns server state. Keys start with the module root (`['tasks', …]`, `['finances', …]`), and mutations invalidate the root.
-- `useHouseholdRealtime` subscribes once to `postgres_changes` for all household tables (filtered by `household_id`) and invalidates the matching roots, debounced 300 ms because one action touches several tables. After a reconnect it refetches everything. Realtime applies RLS per subscriber, so private health rows are never broadcast to the partner.
+- `useHouseholdRealtime` subscribes once to `postgres_changes` for all household tables (filtered by `household_id`) and invalidates the matching roots, debounced 300 ms because one action touches several tables. After a reconnect it refetches everything. Realtime applies RLS per subscriber, so rows never reach another household.
 - Completing a task is optimistic (instant tick with Undo); everything else waits for the server.
 
 ### Offline
@@ -74,7 +74,7 @@ Read-only. The `calendar-events` Edge Function signs a JWT for a Google service 
 
 ## Health
 
-Per-user records: weight (`health_measurements`), exercise (`health_exercise_sessions`: a description and a duration) and periods (`health_periods`). The next-period date is the last start plus the average cycle, labelled as an estimate. RLS function `health_is_visible(owner, household, category, visibility)`: the owner always sees their own records; the partner sees a record if it is marked `shared`, or if it is `inherit` and the owner hasn't made that category private. Default is shared (you asked for this on 2026-10-26); categories and single records can still be made private. Only the owner can write. The app shows numbers and trends only, never interpretations. `source`/`external_id` columns are ready for Apple Health / Health Connect imports.
+Per-user records: weight (`health_measurements`), exercise (`health_exercise_sessions`: a description and a duration) and periods (`health_periods`). The next-period date is the last start plus the average cycle, labelled as an estimate. Both household members can read every health record (there are no privacy settings, by request); only the owner can write. The app shows numbers and trends only, never interpretations. `source`/`external_id` columns are ready for Apple Health / Health Connect imports.
 
 ## Charts
 

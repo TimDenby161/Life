@@ -33,8 +33,8 @@ Options considered:
 ## ADR 8: Recorded vs calculated balances
 Balances can be *recorded* (from a statement) or *calculated* (opening + transactions). Charts show recorded points as solid dots and calculated series as dashed lines labelled "calculated", so estimates are never presented as historical fact.
 
-## ADR 9: Health is shared-by-default, enforced in RLS
-Originally private-by-default; switched to shared on 2026-10-26 at Tim and Sophie's request. Each category can be made private, with per-record overrides either way. The policy function is the single source of truth; the UI mirrors it only for labels. Health data never appears in the activity feed, logs or household analytics.
+## ADR 9: Health is visible to the household, writes enforced in RLS
+Originally private-by-default with per-category and per-record sharing. On 2026-10-27 Tim and Sophie asked for no privacy settings at all, so both members read everything; only the owner can write. Health data never appears in the activity feed, logs or household analytics.
 
 ## ADR 10: No offline editing
 The PWA caches the app shell only. Safe offline edits need a local store, a sync queue and conflict resolution, and finance and task history make conflicts consequential. Mutations fail fast offline with a clear message; reading already-loaded data still works.

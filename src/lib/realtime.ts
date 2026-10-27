@@ -25,7 +25,6 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   health_measurements: ['health'],
   health_exercise_sessions: ['health'],
   health_periods: ['health'],
-  health_category_visibility: ['health'],
   calendar_integrations: ['calendar'],
   profiles: ['household'],
 }

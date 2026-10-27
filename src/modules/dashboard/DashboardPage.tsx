@@ -321,7 +321,7 @@ function ActivityCard() {
   )
 }
 
-/** Only shows what RLS returns: your own records and anything your partner shares. */
+/** Latest health records from both of you. */
 function HealthCard() {
   const { member, me } = useHousehold()
   const measurements = useMeasurements()

@@ -19,7 +19,6 @@ import { calendarKeys, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/hooks'
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
-import { useCategoryVisibility } from '@/modules/health/api'
 import { HealthSettingsPanel } from '@/modules/health/HealthPage'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
 import { useCreateCategory, useTaskCategories } from '@/modules/tasks/hooks'
@@ -39,7 +38,7 @@ export default function SettingsPage() {
         <HouseholdSection />
         <CalendarSection />
         <FeedSourcesSection />
-        <HealthSharingSection />
+        <HealthSettingsSection />
         <CategoriesSection />
         <AccountSection />
       </div>
@@ -320,11 +319,8 @@ function FeedSourcesSection() {
   )
 }
 
-function HealthSharingSection() {
-  const { me, partner } = useHousehold()
-  const visibility = useCategoryVisibility()
-  const shared = new Map((visibility.data ?? []).filter((v) => v.user_id === me.id).map((v) => [v.category, v.shared]))
-  return <div className="mt-4"><HealthSettingsPanel shared={shared} partnerName={partner?.display_name} /></div>
+function HealthSettingsSection() {
+  return <div className="mt-4"><HealthSettingsPanel /></div>
 }
 
 function CategoriesSection() {
