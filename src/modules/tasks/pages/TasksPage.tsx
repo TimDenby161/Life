@@ -89,10 +89,10 @@ function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]
 }
 
 function TaskListView() {
-  const { me } = useHousehold()
+  const { members } = useHousehold()
   const [params, setParams] = useSearchParams()
-  const listParam = params.get('list') ?? 'all'
-  const mine = params.get('mine') === '1'
+  // 'all', a member's id, or 'none' for unassigned.
+  const who = params.get('who') ?? 'all'
   const groupMode = params.get('group') === 'date' ? 'date' : 'category'
   const openTaskId = params.get('task')
 
@@ -117,12 +117,12 @@ function TaskListView() {
     )
 
   const filter = (o: OccurrenceWithTask) =>
-    (listParam === 'all' || o.task.list_id === listParam) && (!mine || o.assignee_id === me.id)
+    who === 'all' || (who === 'none' ? !o.assignee_id : o.assignee_id === who)
 
   const today = todayISO()
   const visible = useMemo(
     () => (open.data ?? []).filter(filter).toSorted(compareOccurrences),
-    [open.data, listParam, mine],
+    [open.data, who],
   )
   const sections = useMemo(() => groupBy(visible, (o) => sectionOf(o.due_date, today)), [visible, today])
   const recentDone = (done.data ?? []).filter(filter)
@@ -131,12 +131,16 @@ function TaskListView() {
     today: sections.today?.length ?? 0,
     overdue: sections.overdue?.length ?? 0,
   }
-  const currentList = (lists.data ?? []).find((l) => l.id === listParam)
   const allLists = lists.data ?? []
+  // New tasks land where the filter will show them: a person's own list, otherwise the joint one.
+  const addList = allLists.find((l) => l.kind === 'personal' && l.owner_id === who) ?? allLists.find((l) => l.kind === 'joint')
   const allCategories = categories.data ?? []
+  // A category that belongs to someone else (or to anyone, for Unassigned) has nothing for this view.
+  const shownCategories =
+    who === 'all' ? allCategories : allCategories.filter((c) => !c.owner_id || c.owner_id === who)
   const groups: Group[] =
     groupMode === 'category'
-      ? groupByCategory(visible, allCategories)
+      ? groupByCategory(visible, shownCategories)
       : SECTION_ORDER.filter((s) => sections[s]?.length).map((s) => ({
           key: s,
           label: SECTION_LABELS[s],
@@ -171,22 +175,15 @@ function TaskListView() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Segmented
-          aria-label="List"
-          value={listParam}
-          onChange={(v) => setParam('list', v === 'all' ? null : v)}
-          options={[{ value: 'all', label: 'All' }, ...allLists.map((l) => ({ value: l.id, label: l.name }))]}
+          aria-label="Assigned to"
+          value={who}
+          onChange={(v) => setParam('who', v === 'all' ? null : v)}
+          options={[
+            { value: 'all', label: 'All' },
+            ...members.map((m) => ({ value: m.id, label: m.display_name })),
+            { value: 'none', label: 'Unassigned' },
+          ]}
         />
-        <button
-          type="button"
-          aria-pressed={mine}
-          onClick={() => setParam('mine', mine ? null : '1')}
-          className={cn(
-            'h-10 rounded-full border px-4 text-sm font-medium transition-colors',
-            mine ? 'border-primary bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted',
-          )}
-        >
-          Assigned to me
-        </button>
         <Segmented
           aria-label="Group by"
           className="ml-auto"
@@ -199,7 +196,7 @@ function TaskListView() {
         />
       </div>
 
-      <QuickAdd listId={currentList?.id ?? allLists.find((l) => l.kind === 'joint')?.id} />
+      <QuickAdd listId={addList?.id} />
 
       <Card className="mt-4 p-2 sm:p-3">
         {open.isPending || lists.isPending ? (
@@ -210,7 +207,7 @@ function TaskListView() {
           <EmptyState
             icon={CheckCircle2}
             title="All clear"
-            description={mine ? 'Nothing is assigned to you right now.' : 'Nothing to do here. Enjoy it.'}
+            description="Nothing to do here. Enjoy it."
           />
         ) : (
           groups.map((group) => {
@@ -242,7 +239,7 @@ function TaskListView() {
                         occurrence={o}
                         lists={allLists}
                         categories={allCategories}
-                        showList={listParam === 'all'}
+                        showList
                         showCategory={groupMode !== 'category'}
                         onOpen={() => setParam('task', o.task_id)}
                         onToggle={() => complete.mutate({ occurrenceId: o.id })}
@@ -277,7 +274,7 @@ function TaskListView() {
                     occurrence={o}
                     lists={allLists}
                     categories={allCategories}
-                    showList={listParam === 'all'}
+                    showList
                     onOpen={() => setParam('task', o.task_id)}
                     onToggle={() => reopen.mutate(o.id)}
                   />
@@ -288,7 +285,7 @@ function TaskListView() {
         </div>
       ) : null}
 
-      <NewTaskDialog open={creating} onOpenChange={setCreating} defaultListId={currentList?.id} />
+      <NewTaskDialog open={creating} onOpenChange={setCreating} defaultListId={addList?.id} />
       <TaskDetailDialog taskId={openTaskId} onClose={() => setParam('task', null)} />
     </>
   )
