@@ -23,7 +23,9 @@ with g as (
 ) select set_config('t.goal', id::text, true) from g;
 
 select lives_ok(
-  format($q$insert into wedding_settings (household_id, pot_goal_id) values (%L, %L)$q$, current_setting('t.hh'), current_setting('t.goal')),
+  -- Upsert: a settings row may already exist (the checklist creates one).
+  format($q$insert into wedding_settings (household_id, pot_goal_id) values (%L, %L)
+            on conflict (household_id) do update set pot_goal_id = excluded.pot_goal_id$q$, current_setting('t.hh'), current_setting('t.goal')),
   'The wedding can be linked to a pot item');
 select is((select target_minor from savings_goals where id = current_setting('t.goal')::uuid), 2000000::bigint,
   'With no budget the pot item keeps its placeholder target');
