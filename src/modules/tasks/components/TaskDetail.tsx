@@ -188,6 +188,30 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
                 />
               </label>
             ) : null}
+            {!rule ? (
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <label className="inline-flex items-center gap-2">
+                  Due
+                  <Input
+                    type="date"
+                    className="h-10 w-auto"
+                    value={task.due_date ?? ''}
+                    disabled={update.isPending}
+                    onChange={(e) => e.target.value && update.mutate({ id: task.id, patch: { due_date: e.target.value } })}
+                  />
+                </label>
+                {task.due_date ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={update.isPending}
+                    onClick={() => update.mutate({ id: task.id, patch: { due_date: null, due_time: null } })}
+                  >
+                    No date
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </>
         ) : lastCompletion ? (
           <Button variant="outline" disabled={reopen.isPending} onClick={() => reopen.mutate(lastCompletion.occurrence_id)}>
