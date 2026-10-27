@@ -197,10 +197,12 @@ function RecurrencePicker({
   anchor: string
 }) {
   const unit = { daily: 'days', weekly: 'weeks', monthly: 'months', yearly: 'years' }
-  const preview = rule ? upcomingOccurrences(rule, anchor, anchor, 3) : []
+  const preview = rule && !rule.afterDone ? upcomingOccurrences(rule, anchor, anchor, 3) : []
 
   function setFreq(freq: Frequency | 'none') {
     if (freq === 'none') return onChange(null)
+    // Jobs keep their plain interval; they never have fixed days.
+    if (rule?.afterDone) return onChange({ ...rule, freq })
     onChange({ freq, ...(freq === 'weekly' ? { weekdays: [isoWeekday(anchor)] } : {}), ...(rule?.until ? { until: rule.until } : {}) })
   }
 
@@ -226,7 +228,7 @@ function RecurrencePicker({
             />
             {unit[rule.freq]}
           </div>
-          {rule.freq === 'weekly' ? (
+          {rule.freq === 'weekly' && !rule.afterDone ? (
             <div className="flex flex-wrap gap-1" role="group" aria-label="Days of the week">
               {WEEKDAYS.map((d) => {
                 const on = rule.weekdays?.includes(d.iso) ?? false
@@ -252,7 +254,7 @@ function RecurrencePicker({
               })}
             </div>
           ) : null}
-          {rule.freq === 'monthly' ? (
+          {rule.freq === 'monthly' && !rule.afterDone ? (
             <div className="flex items-center gap-2 text-sm">
               On day
               <Input
@@ -286,7 +288,7 @@ function RecurrencePicker({
           </div>
           <p className="text-xs text-muted-foreground">
             {describeRecurrence(rule, anchor)}
-            {preview.length ? ` · next ${preview.map((d) => formatDay(d)).join(', ')}` : ' · no upcoming dates'}
+            {rule.afterDone ? null : preview.length ? ` · next ${preview.map((d) => formatDay(d)).join(', ')}` : ' · no upcoming dates'}
           </p>
         </div>
       ) : null}

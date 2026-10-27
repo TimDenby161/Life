@@ -14,6 +14,8 @@ export type RecurrenceRule = {
   /** 1–31, clamped to the month's last day (monthly only). */
   monthDay?: number
   until?: ISODate
+  /** A job: due one interval after it was last done, not on fixed dates. */
+  afterDone?: true
 }
 
 export const WEEKDAYS = [
@@ -103,8 +105,16 @@ function ordinal(n: number) {
 
 const plural = (n: number, unit: string) => (n === 1 ? unit : `${n} ${unit}s`)
 
+const UNITS: Record<Frequency, string> = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }
+
+/** "Every week", "Every 10 days": the interval of a job. */
+export function describeInterval(rule: RecurrenceRule): string {
+  return `Every ${plural(rule.interval ?? 1, UNITS[rule.freq])}`
+}
+
 /** Human description, e.g. "Every Tuesday", "Every 2 weeks on Mon, Thu". */
 export function describeRecurrence(rule: RecurrenceRule, anchor: ISODate): string {
+  if (rule.afterDone) return `${describeInterval(rule)} after it's done`
   const interval = rule.interval ?? 1
   let text: string
   switch (rule.freq) {

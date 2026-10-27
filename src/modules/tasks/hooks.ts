@@ -40,6 +40,10 @@ export function useStatsOccurrences(from: string) {
   return useQuery({ queryKey: [...taskKeys.statsOccurrences, from], queryFn: () => api.fetchStatsOccurrences(from) })
 }
 
+export function useJobs() {
+  return useQuery({ queryKey: taskKeys.jobs, queryFn: api.fetchJobs })
+}
+
 function useInvalidateTasks() {
   const qc = useQueryClient()
   return () => qc.invalidateQueries({ queryKey: taskKeys.all })

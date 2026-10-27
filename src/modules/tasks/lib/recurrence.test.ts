@@ -34,6 +34,8 @@ describe('describeRecurrence', () => {
     [{ freq: 'monthly', monthDay: 1 }, 'Monthly on the 1st'],
     [{ freq: 'monthly', interval: 3 }, 'Every 3 months on the 20th'],
     [{ freq: 'yearly' }, 'Every year on 20 October'],
+    [{ freq: 'weekly', afterDone: true }, "Every week after it's done"],
+    [{ freq: 'daily', interval: 10, afterDone: true }, "Every 10 days after it's done"],
   ] as [RecurrenceRule, string][])('%o -> %s', (rule, text) => {
     expect(describeRecurrence(rule, '2026-10-20')).toBe(text)
   })

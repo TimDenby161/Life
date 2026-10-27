@@ -22,6 +22,7 @@ export const taskKeys = {
   detail: (taskId: string) => ['tasks', 'detail', taskId] as const,
   events: ['tasks', 'events'] as const,
   statsOccurrences: ['tasks', 'stats-occurrences'] as const,
+  jobs: ['tasks', 'jobs'] as const,
 }
 
 export async function fetchTaskLists() {
@@ -97,9 +98,36 @@ export async function fetchStatsOccurrences(from: ISODate) {
   )
 }
 
+export type Job = Awaited<ReturnType<typeof fetchJobs>>[number]
+
+/** Jobs with their open occurrence and latest completion. */
+export async function fetchJobs() {
+  return unwrap(
+    await supabase
+      .from('tasks')
+      .select('*, open:task_occurrences(id, due_date, assignee_id), done:task_occurrences(completed_at, completed_by)')
+      .eq('recurrence->>afterDone', 'true')
+      .is('archived_at', null)
+      .eq('open.status', 'open')
+      .eq('done.status', 'done')
+      .order('completed_at', { referencedTable: 'done', ascending: false })
+      .limit(1, { referencedTable: 'done' })
+      .order('title'),
+  )
+}
+
 export type TaskInput = Pick<
   TablesInsert<'tasks'>,
-  'list_id' | 'title' | 'description' | 'assignee_id' | 'category_id' | 'priority' | 'due_date' | 'due_time' | 'recurrence'
+  | 'list_id'
+  | 'title'
+  | 'description'
+  | 'assignee_id'
+  | 'category_id'
+  | 'priority'
+  | 'due_date'
+  | 'due_time'
+  | 'recurrence'
+  | 'last_done_on'
 >
 
 export async function createTask(householdId: string, input: TaskInput) {

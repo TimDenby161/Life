@@ -1609,6 +1609,7 @@ export type Database = {
           due_time: string | null
           household_id: string
           id: string
+          last_done_on: string | null
           list_id: string
           priority: string
           recurrence: Json | null
@@ -1629,6 +1630,7 @@ export type Database = {
           due_time?: string | null
           household_id: string
           id?: string
+          last_done_on?: string | null
           list_id: string
           priority?: string
           recurrence?: Json | null
@@ -1649,6 +1651,7 @@ export type Database = {
           due_time?: string | null
           household_id?: string
           id?: string
+          last_done_on?: string | null
           list_id?: string
           priority?: string
           recurrence?: Json | null
@@ -2173,6 +2176,7 @@ export type Database = {
         Args: { p_after: string; p_generated_from: string; p_task_id: string }
         Returns: string
       }
+      task_last_done_on: { Args: { p_task_id: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

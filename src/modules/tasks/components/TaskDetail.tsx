@@ -102,7 +102,7 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
   const today = todayISO()
   const tone = dueTone(occ?.due_date ?? null, today)
   const lastCompletion = data.events.find((e) => e.event_type === 'completed')
-  const upcoming = rule && occ?.due_date ? upcomingOccurrences(rule, task.due_date!, occ.due_date, 4).slice(1) : []
+  const upcoming = rule && !rule.afterDone && occ?.due_date ? upcomingOccurrences(rule, task.due_date!, occ.due_date, 4).slice(1) : []
 
   return (
     <div className="grid gap-5">

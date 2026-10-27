@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Segmented } from '@/components/ui/misc'
+import { Segmented, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
 import { todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask } from '../api'
+import { JobsTab } from '../components/JobsTab'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
@@ -25,6 +26,7 @@ import {
   useTaskLists,
 } from '../hooks'
 import { compareOccurrences, type Section, SECTION_LABELS, sectionOf } from '../lib/format'
+import { isWaitingJob } from '../lib/jobs'
 import TaskStatsPage from './TaskStatsPage'
 
 export default function TasksPage() {
@@ -44,6 +46,7 @@ function TaskListView() {
   const listParam = params.get('list') ?? 'all'
   const mine = params.get('mine') === '1'
   const openTaskId = params.get('task')
+  const tab = params.get('tab') === 'jobs' ? 'jobs' : 'todo'
 
   const lists = useTaskLists()
   const categories = useTaskCategories()
@@ -69,7 +72,9 @@ function TaskListView() {
 
   const today = todayISO()
   const sections = useMemo(() => {
-    const visible = (open.data ?? []).filter(filter).toSorted(compareOccurrences)
+    const visible = (open.data ?? [])
+      .filter((o) => filter(o) && !isWaitingJob(o, today))
+      .toSorted(compareOccurrences)
     return groupBy(visible, (o) => sectionOf(o.due_date, today))
   }, [open.data, listParam, mine, today])
   const recentDone = (done.data ?? []).filter(filter)
@@ -110,102 +115,113 @@ function TaskListView() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Segmented
-          aria-label="List"
-          value={listParam}
-          onChange={(v) => setParam('list', v === 'all' ? null : v)}
-          options={[{ value: 'all', label: 'All' }, ...allLists.map((l) => ({ value: l.id, label: l.name }))]}
-        />
-        <button
-          type="button"
-          aria-pressed={mine}
-          onClick={() => setParam('mine', mine ? null : '1')}
-          className={cn(
-            'h-10 rounded-full border px-4 text-sm font-medium transition-colors',
-            mine ? 'border-primary bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted',
-          )}
-        >
-          Assigned to me
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setParam('tab', v === 'jobs' ? 'jobs' : null)}>
+        <TabsList>
+          <TabsTrigger value="todo">To do</TabsTrigger>
+          <TabsTrigger value="jobs">Jobs</TabsTrigger>
+        </TabsList>
+        <TabsContent value="jobs">
+          <JobsTab />
+        </TabsContent>
+        <TabsContent value="todo">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Segmented
+              aria-label="List"
+              value={listParam}
+              onChange={(v) => setParam('list', v === 'all' ? null : v)}
+              options={[{ value: 'all', label: 'All' }, ...allLists.map((l) => ({ value: l.id, label: l.name }))]}
+            />
+            <button
+              type="button"
+              aria-pressed={mine}
+              onClick={() => setParam('mine', mine ? null : '1')}
+              className={cn(
+                'h-10 rounded-full border px-4 text-sm font-medium transition-colors',
+                mine ? 'border-primary bg-accent text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-muted',
+              )}
+            >
+              Assigned to me
+            </button>
+          </div>
 
-      <QuickAdd listId={currentList?.id ?? allLists.find((l) => l.kind === 'joint')?.id} />
+          <QuickAdd listId={currentList?.id ?? allLists.find((l) => l.kind === 'joint')?.id} />
 
-      <Card className="mt-4 p-2 sm:p-3">
-        {open.isPending || lists.isPending ? (
-          <ListSkeleton rows={5} className="p-3" />
-        ) : open.error ? (
-          <ErrorState error={open.error} onRetry={() => open.refetch()} />
-        ) : SECTION_ORDER.every((s) => !sections[s]?.length) ? (
-          <EmptyState
-            icon={CheckCircle2}
-            title="All clear"
-            description={mine ? 'Nothing is assigned to you right now.' : 'Nothing to do here. Enjoy it.'}
-          />
-        ) : (
-          SECTION_ORDER.map((section) =>
-            sections[section]?.length ? (
-              <section key={section} aria-labelledby={`sec-${section}`} className="mb-2 last:mb-0">
-                <h2
-                  id={`sec-${section}`}
-                  className={cn(
-                    'px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                    section === 'overdue' && 'text-destructive',
-                  )}
-                >
-                  {SECTION_LABELS[section]} <span className="font-normal">· {sections[section].length}</span>
-                </h2>
-                <ul>
-                  {sections[section].map((o) => (
-                    <TaskRow
-                      key={o.id}
-                      occurrence={o}
-                      lists={allLists}
-                      categories={allCategories}
-                      showList={listParam === 'all'}
-                      onOpen={() => setParam('task', o.task_id)}
-                      onToggle={() => complete.mutate({ occurrenceId: o.id })}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ) : null,
-          )
-        )}
-      </Card>
+          <Card className="mt-4 p-2 sm:p-3">
+            {open.isPending || lists.isPending ? (
+              <ListSkeleton rows={5} className="p-3" />
+            ) : open.error ? (
+              <ErrorState error={open.error} onRetry={() => open.refetch()} />
+            ) : SECTION_ORDER.every((s) => !sections[s]?.length) ? (
+              <EmptyState
+                icon={CheckCircle2}
+                title="All clear"
+                description={mine ? 'Nothing is assigned to you right now.' : 'Nothing to do here. Enjoy it.'}
+              />
+            ) : (
+              SECTION_ORDER.map((section) =>
+                sections[section]?.length ? (
+                  <section key={section} aria-labelledby={`sec-${section}`} className="mb-2 last:mb-0">
+                    <h2
+                      id={`sec-${section}`}
+                      className={cn(
+                        'px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
+                        section === 'overdue' && 'text-destructive',
+                      )}
+                    >
+                      {SECTION_LABELS[section]} <span className="font-normal">· {sections[section].length}</span>
+                    </h2>
+                    <ul>
+                      {sections[section].map((o) => (
+                        <TaskRow
+                          key={o.id}
+                          occurrence={o}
+                          lists={allLists}
+                          categories={allCategories}
+                          showList={listParam === 'all'}
+                          onOpen={() => setParam('task', o.task_id)}
+                          onToggle={() => complete.mutate({ occurrenceId: o.id })}
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ) : null,
+              )
+            )}
+          </Card>
 
-      {recentDone.length ? (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => setShowDone(!showDone)}
-            aria-expanded={showDone}
-            className="flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ChevronDown className={cn('size-4 transition-transform', !showDone && '-rotate-90')} />
-            Completed this week · {recentDone.length}
-          </button>
-          {showDone ? (
-            <Card className="mt-2 p-2 sm:p-3">
-              <ul>
-                {recentDone.map((o) => (
-                  <TaskRow
-                    key={o.id}
-                    done
-                    occurrence={o}
-                    lists={allLists}
-                    categories={allCategories}
-                    showList={listParam === 'all'}
-                    onOpen={() => setParam('task', o.task_id)}
-                    onToggle={() => reopen.mutate(o.id)}
-                  />
-                ))}
-              </ul>
-            </Card>
+          {recentDone.length ? (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setShowDone(!showDone)}
+                aria-expanded={showDone}
+                className="flex items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown className={cn('size-4 transition-transform', !showDone && '-rotate-90')} />
+                Completed this week · {recentDone.length}
+              </button>
+              {showDone ? (
+                <Card className="mt-2 p-2 sm:p-3">
+                  <ul>
+                    {recentDone.map((o) => (
+                      <TaskRow
+                        key={o.id}
+                        done
+                        occurrence={o}
+                        lists={allLists}
+                        categories={allCategories}
+                        showList={listParam === 'all'}
+                        onOpen={() => setParam('task', o.task_id)}
+                        onToggle={() => reopen.mutate(o.id)}
+                      />
+                    ))}
+                  </ul>
+                </Card>
+              ) : null}
+            </div>
           ) : null}
-        </div>
-      ) : null}
+        </TabsContent>
+      </Tabs>
 
       <NewTaskDialog open={creating} onOpenChange={setCreating} defaultListId={currentList?.id} />
       <TaskDetailDialog taskId={openTaskId} onClose={() => setParam('task', null)} />
