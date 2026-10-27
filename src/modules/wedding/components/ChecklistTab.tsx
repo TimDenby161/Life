@@ -1,4 +1,4 @@
-import { ListChecks, Plus, Trash2 } from 'lucide-react'
+import { ListChecks, ListPlus, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
@@ -10,18 +10,13 @@ import { formatDay, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { useAddWeddingTasks, useDeleteWeddingTask, useSaveWeddingTask, useWeddingTasks } from '../api'
-
-/** A starting point; dates are left for the couple to set. */
-const STARTER = [
-  'Set the budget', 'Draft the guest list', 'Book the venue', 'Book the registrar or officiant', 'Book the photographer',
-  'Book catering', 'Choose outfits', 'Send save-the-dates', 'Book music', 'Order flowers', 'Send invitations',
-  'Order the cake', 'Buy rings', 'Give notice of marriage', 'Plan the seating', 'Book the honeymoon',
-]
+import { useAddWeddingTasks, useDeleteWeddingTask, useSaveWeddingTask, useWeddingSettings, useWeddingTasks } from '../api'
+import { ASSUMED_WEDDING_DATE, missingStarterTasks } from '../lib/starterChecklist'
 
 export function ChecklistTab() {
   const { members } = useHousehold()
   const tasks = useWeddingTasks()
+  const settings = useWeddingSettings()
   const save = useSaveWeddingTask()
   const del = useDeleteWeddingTask()
   const addMany = useAddWeddingTasks()
@@ -32,6 +27,11 @@ export function ChecklistTab() {
 
   if (tasks.isPending) return <ListSkeleton rows={5} />
   if (tasks.error) return <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
+  const weddingDate = settings.data?.wedding_date ?? null
+  const missing = missingStarterTasks(tasks.data, weddingDate ?? ASSUMED_WEDDING_DATE, today)
+  const addUsual = () =>
+    addMany.mutate(missing, { onSuccess: () => toast.success(`Added ${missing.length} tasks`), onError })
+  const datesFrom = weddingDate ? 'counting back from your wedding date' : 'counting back from 1 September 2028 until you set the exact date'
 
   return (
     <div className="grid gap-3">
@@ -46,6 +46,11 @@ export function ChecklistTab() {
         <Input aria-label="New task" placeholder="Add a task, e.g. Book the venue" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} className="min-w-48 flex-1" />
         <Input aria-label="Due date" type="date" value={due} onChange={(e) => setDue(e.target.value)} className="w-40" />
         <Button type="submit" variant="secondary" disabled={!title.trim() || save.isPending}><Plus /> Add</Button>
+        {tasks.data.length && missing.length ? (
+          <Button type="button" variant="ghost" disabled={addMany.isPending} onClick={addUsual} title={`Adds ${missing.length} usual tasks with due dates ${datesFrom}`}>
+            <ListPlus /> Add the usual tasks
+          </Button>
+        ) : null}
       </form>
 
       {!tasks.data.length ? (
@@ -53,10 +58,10 @@ export function ChecklistTab() {
           <EmptyState
             icon={ListChecks}
             title="Nothing on the checklist yet"
-            description="Add tasks above, or start from the usual wedding checklist and add dates as you go."
+            description={`Add tasks above, or start from the usual wedding checklist, with due dates ${datesFrom}. You can change any date.`}
             action={
-              <Button variant="outline" disabled={addMany.isPending} onClick={() => addMany.mutate(STARTER, { onError })}>
-                <Plus /> Add the usual checklist
+              <Button variant="outline" disabled={addMany.isPending} onClick={addUsual}>
+                <ListPlus /> Add the usual checklist
               </Button>
             }
           />

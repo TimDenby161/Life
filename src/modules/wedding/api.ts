@@ -74,15 +74,20 @@ export const useSaveWeddingSettings = () =>
   })
 
 export const useSaveBudgetItem = () => useWeddingMutation(saveBudgetItem)
+/** Adds the typical-costs starter lines in one insert, in the given order. */
+export const useAddBudgetItems = () =>
+  useWeddingMutation(async (h, lines: { category: string; name: string; budget_minor: number; notes: string | null }[]) =>
+    unwrap(await supabase.from('wedding_budget_items').insert(lines.map((l, i) => ({ ...l, sort_order: i, household_id: h })))),
+  )
 export const useDeleteBudgetItem = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_budget_items').delete().eq('id', id)))
 export const useSaveGuest = () => useWeddingMutation(saveGuest)
 export const useDeleteGuest = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_guests').delete().eq('id', id)))
 export const useSaveWeddingTask = () => useWeddingMutation(saveTask)
-/** Adds tasks one after another so they list in the given order (the checklist sorts by creation). */
+/** Adds several tasks in one insert; the checklist orders them by due date. */
 export const useAddWeddingTasks = () =>
-  useWeddingMutation(async (h, titles: string[]) => {
-    for (const title of titles) unwrap(await supabase.from('wedding_tasks').insert({ title, household_id: h }))
-  })
+  useWeddingMutation(async (h, tasks: { title: string; due_date: string | null }[]) =>
+    unwrap(await supabase.from('wedding_tasks').insert(tasks.map((t) => ({ ...t, household_id: h })))),
+  )
 export const useDeleteWeddingTask = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_tasks').delete().eq('id', id)))
 export const useSaveSupplier = () => useWeddingMutation(saveSupplier)
 export const useDeleteSupplier = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_suppliers').delete().eq('id', id)))

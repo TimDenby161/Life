@@ -1,4 +1,4 @@
-import { Pencil, Plus, Receipt, Trash2 } from 'lucide-react'
+import { ListPlus, Pencil, Plus, Receipt, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
@@ -12,21 +12,29 @@ import { getErrorMessage } from '@/lib/errors'
 import { parseMoney, toMoneyInput } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { MoneyInput } from '@/modules/finances/components/forms'
-import { type BudgetItem, useBudgetItems, useDeleteBudgetItem, useSaveBudgetItem, useSuppliers } from '../api'
+import { type BudgetItem, useAddBudgetItems, useBudgetItems, useDeleteBudgetItem, useSaveBudgetItem, useSuppliers } from '../api'
 import { budgetTotals, byCategory } from '../lib/summary'
 import { money } from '../lib/money'
+import { missingStarterLines, STARTER_NOTE } from '../lib/starterBudget'
 
 export const BUDGET_CATEGORIES = ['Venue', 'Food & drink', 'Photography & video', 'Attire & beauty', 'Flowers & decor', 'Music & entertainment', 'Stationery', 'Rings', 'Transport', 'Honeymoon', 'Other']
 
 export function BudgetTab() {
   const items = useBudgetItems()
   const suppliers = useSuppliers()
+  const addMany = useAddBudgetItems()
   const [editing, setEditing] = useState<BudgetItem | 'new' | null>(null)
 
   if (items.isPending) return <ListSkeleton rows={4} />
   if (items.error) return <ErrorState error={items.error} onRetry={() => items.refetch()} />
   const totals = budgetTotals(items.data)
   const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name
+  const missing = missingStarterLines(items.data)
+  const addTypical = () =>
+    addMany.mutate(missing.map((l) => ({ category: l.category, name: l.name, budget_minor: l.pounds * 100, notes: STARTER_NOTE })), {
+      onSuccess: () => toast.success(`Added ${missing.length} typical costs`),
+      onError: (err) => toast.error(getErrorMessage(err)),
+    })
 
   return (
     <div className="grid gap-3">
@@ -34,10 +42,20 @@ export function BudgetTab() {
         <p className="text-sm text-muted-foreground tabular">
           {items.data.length ? `${money(totals.budget)} budgeted · ${money(totals.paid)} paid · ${money(totals.remaining)} to pay` : 'The budget total sets the Wedding pot’s target.'}
         </p>
-        <Button variant="outline" size="sm" onClick={() => setEditing('new')}><Plus /> Add line</Button>
+        <div className="flex shrink-0 gap-2">
+          {items.data.length && missing.length ? <Button variant="ghost" size="sm" disabled={addMany.isPending} onClick={addTypical}><ListPlus /> Add typical costs</Button> : null}
+          <Button variant="outline" size="sm" onClick={() => setEditing('new')}><Plus /> Add line</Button>
+        </div>
       </div>
       {!items.data.length ? (
-        <Card><EmptyState icon={Receipt} title="No budget yet" description="Add a line for each cost: venue, catering, photographer… Until then the pot keeps its £20k placeholder." /></Card>
+        <Card>
+          <EmptyState
+            icon={Receipt}
+            title="No budget yet"
+            description="Add a line for each cost, or start from typical costs for a North of England wedding (rough estimates to replace with quotes). Until then the pot keeps its £20k placeholder."
+            action={<Button variant="outline" disabled={addMany.isPending} onClick={addTypical}><ListPlus /> Add typical costs</Button>}
+          />
+        </Card>
       ) : (
         byCategory(items.data).map((group) => (
           <Card key={group.category} className="overflow-hidden">
