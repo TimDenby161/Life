@@ -20,7 +20,7 @@ import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/h
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
-import { useCreateCategory, useSetCategoryOwner, useTaskCategories } from '@/modules/tasks/hooks'
+import { useCreateCategory, useCreateRoom, useSetCategoryOwner, useTaskCategories, useTaskRooms } from '@/modules/tasks/hooks'
 
 export default function SettingsPage() {
   const { hash } = useLocation()
@@ -38,6 +38,7 @@ export default function SettingsPage() {
         <CalendarSection />
         <FeedSourcesSection />
         <CategoriesSection />
+        <RoomsSection />
         <AccountSection />
       </div>
     </>
@@ -349,6 +350,40 @@ function CategoriesSection() {
         </ul>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim()) create.mutate({ name: name.trim(), color: 'slate' }, { onSuccess: () => setName('') }) }}>
           <Input aria-label="New category" placeholder="New category" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} className="h-9" />
+          <Button type="submit" variant="secondary" size="sm" disabled={!name.trim()}>Add</Button>
+        </form>
+      </Card>
+    </section>
+  )
+}
+
+function RoomsSection() {
+  const rooms = useTaskRooms()
+  const create = useCreateRoom()
+  const [name, setName] = useState('')
+  const all = rooms.data ?? []
+  return (
+    <section>
+      <SectionTitle>Rooms</SectionTitle>
+      <Card className="grid gap-3 p-4">
+        <p className="text-xs text-muted-foreground">The Jobs page groups regular jobs by room.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {all.map((r) => (
+            <Badge key={r.id} tone="neutral">{r.name}</Badge>
+          ))}
+        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (name.trim())
+              create.mutate(
+                { name: name.trim(), sortOrder: Math.max(0, ...all.map((r) => r.sort_order)) + 1 },
+                { onSuccess: () => setName('') },
+              )
+          }}
+        >
+          <Input aria-label="New room" placeholder="New room" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} className="h-9" />
           <Button type="submit" variant="secondary" size="sm" disabled={!name.trim()}>Add</Button>
         </form>
       </Card>

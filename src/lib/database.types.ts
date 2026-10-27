@@ -1547,6 +1547,38 @@ export type Database = {
           },
         ]
       }
+      task_rooms: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_rooms_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_subtasks: {
         Row: {
           created_at: string
@@ -1623,6 +1655,7 @@ export type Database = {
           list_id: string
           priority: string
           recurrence: Json | null
+          room_id: string | null
           status: string
           title: string
           updated_at: string
@@ -1644,6 +1677,7 @@ export type Database = {
           list_id: string
           priority?: string
           recurrence?: Json | null
+          room_id?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -1665,6 +1699,7 @@ export type Database = {
           list_id?: string
           priority?: string
           recurrence?: Json | null
+          room_id?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1710,6 +1745,13 @@ export type Database = {
             columns: ["list_id", "household_id"]
             isOneToOne: false
             referencedRelation: "task_lists"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "tasks_room_id_household_id_fkey"
+            columns: ["room_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "task_rooms"
             referencedColumns: ["id", "household_id"]
           },
         ]

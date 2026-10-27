@@ -4,6 +4,7 @@ import { fetchAllPages, unwrap } from '@/lib/utils'
 
 export type TaskList = Tables<'task_lists'>
 export type TaskCategory = Tables<'task_categories'>
+export type TaskRoom = Tables<'task_rooms'>
 export type Task = Tables<'tasks'>
 export type TaskOccurrence = Tables<'task_occurrences'>
 export type CompletionEvent = Tables<'task_completion_events'>
@@ -17,6 +18,7 @@ export const taskKeys = {
   all: ['tasks'] as const,
   lists: ['tasks', 'lists'] as const,
   categories: ['tasks', 'categories'] as const,
+  rooms: ['tasks', 'rooms'] as const,
   open: ['tasks', 'open'] as const,
   done: ['tasks', 'done'] as const,
   detail: (taskId: string) => ['tasks', 'detail', taskId] as const,
@@ -31,6 +33,14 @@ export async function fetchTaskLists() {
 
 export async function fetchTaskCategories() {
   return unwrap(await supabase.from('task_categories').select('*').order('name'))
+}
+
+export async function fetchTaskRooms() {
+  return unwrap(await supabase.from('task_rooms').select('*').order('sort_order').order('name'))
+}
+
+export async function createRoom(householdId: string, name: string, sortOrder: number) {
+  return unwrap(await supabase.from('task_rooms').insert({ household_id: householdId, name, sort_order: sortOrder }).select('*').single())
 }
 
 export async function fetchOpenOccurrences() {
@@ -128,6 +138,7 @@ export type TaskInput = Pick<
   | 'due_time'
   | 'recurrence'
   | 'last_done_on'
+  | 'room_id'
 >
 
 export async function createTask(householdId: string, input: TaskInput) {

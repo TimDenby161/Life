@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
-import { Field, Input } from '@/components/ui/input'
+import { Field, Input, NativeSelect } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/misc'
 import { addDaysISO, formatDay, todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { useTaskRooms } from '../hooks'
 import { dueInWords, nextDueAfter } from '../lib/jobs'
 import type { RecurrenceRule } from '../lib/recurrence'
 
@@ -13,6 +14,7 @@ export type JobValues = {
   title: string
   rule: RecurrenceRule
   assigneeId: string | null
+  roomId: string | null
   lastDone: string | null
 }
 
@@ -35,10 +37,12 @@ type Props = {
 
 export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDelete }: Props) {
   const { members } = useHousehold()
+  const rooms = useTaskRooms().data ?? []
   const [title, setTitle] = useState(initial?.title ?? '')
   const [every, setEvery] = useState(initial?.rule?.interval ?? 1)
   const [unit, setUnit] = useState<Unit>(initial?.rule?.freq === 'yearly' ? 'monthly' : (initial?.rule?.freq ?? 'weekly'))
   const [assigneeId, setAssigneeId] = useState(initial?.assigneeId ?? '')
+  const [roomId, setRoomId] = useState(initial?.roomId ?? '')
   const [lastDone, setLastDone] = useState(initial?.lastDone ?? '')
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -56,7 +60,7 @@ export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDele
     e.preventDefault()
     if (!title.trim()) return setError('Give the job a name')
     if (lastDone > today) return setError("Last done can't be in the future")
-    onSubmit({ title: title.trim(), rule, assigneeId: assigneeId || null, lastDone: lastDone || null })
+    onSubmit({ title: title.trim(), rule, assigneeId: assigneeId || null, roomId: roomId || null, lastDone: lastDone || null })
   }
 
   return (
@@ -73,6 +77,17 @@ export function JobForm({ initial, submitLabel, busy, onSubmit, onCancel, onDele
             setError(null)
           }}
         />
+      </Field>
+
+      <Field label="Room" htmlFor="job-room">
+        <NativeSelect id="job-room" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+          <option value="">No particular room</option>
+          {rooms.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </NativeSelect>
       </Field>
 
       <Field label="Comes back every">

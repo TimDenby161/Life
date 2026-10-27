@@ -48,3 +48,10 @@ select public.bootstrap_household('Somebody else', '[
 
 -- The period tracker shows on Sophie's Health tab (profiles created above, after migrations ran).
 update public.profiles set tracks_periods = true where id = '22222222-2222-2222-2222-222222222222';
+
+-- Starting rooms (migration 0600 adds these for households that existed then).
+insert into public.task_rooms (household_id, name, sort_order)
+select h.id, r.name, r.sort_order
+from public.households h
+cross join (values ('Kitchen', 1), ('Bathroom', 2), ('Bedroom', 3), ('Living room', 4), ('Hallway', 5)) as r (name, sort_order)
+on conflict do nothing;

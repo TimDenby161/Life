@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { formatDay, todayISO } from '@/lib/dates'
+import { groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { Job } from '../api'
-import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskLists, useUpdateTask } from '../hooks'
+import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskLists, useTaskRooms, useUpdateTask } from '../hooks'
 import { agoInWords, dueInWords, jobRule, lastDoneOf } from '../lib/jobs'
 import { dueTone } from '../lib/format'
 import { describeInterval } from '../lib/recurrence'
@@ -26,9 +27,17 @@ const toneClass = { overdue: 'text-destructive font-medium', today: 'text-warnin
 
 export default function JobsPage() {
   const jobs = useJobs()
+  const rooms = useTaskRooms().data ?? []
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
   const sorted = (jobs.data ?? []).toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
+  // Every room in order (empty ones too), then jobs without a room.
+  const byRoom = groupBy(sorted, (j) => j.room_id ?? '')
+  const known = new Set(rooms.map((r) => r.id))
+  const groups = [
+    ...rooms.map((r) => ({ key: r.id, label: r.name, items: byRoom[r.id] ?? [] })),
+    { key: 'none', label: rooms.length ? 'Other jobs' : 'Jobs', items: sorted.filter((j) => !j.room_id || !known.has(j.room_id)) },
+  ].filter((g) => g.key !== 'none' || g.items.length)
 
   return (
     <>
@@ -68,11 +77,25 @@ export default function JobsPage() {
             }
           />
         ) : (
-          <ul>
-            {sorted.map((job) => (
-              <JobRow key={job.id} job={job} onOpen={() => setEditing(job)} />
-            ))}
-          </ul>
+          groups.map((group) => (
+            <section key={group.key} aria-labelledby={`room-${group.key}`} className="mb-2 last:mb-0">
+              <h2
+                id={`room-${group.key}`}
+                className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {group.label} <span className="font-normal">· {group.items.length}</span>
+              </h2>
+              {group.items.length ? (
+                <ul>
+                  {group.items.map((job) => (
+                    <JobRow key={job.id} job={job} onOpen={() => setEditing(job)} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3 pb-2 text-sm text-muted-foreground">No jobs</p>
+              )}
+            </section>
+          ))
         )}
       </Card>
 
@@ -155,7 +178,13 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
 
   const initialLastDone = job ? lastDoneOf(job.last_done_on, job.done[0]?.completed_at) : null
   const initial: Partial<JobValues> | undefined = job
-    ? { title: job.title, rule: jobRule(job.recurrence) ?? undefined, assigneeId: job.assignee_id, lastDone: initialLastDone }
+    ? {
+        title: job.title,
+        rule: jobRule(job.recurrence) ?? undefined,
+        assigneeId: job.assignee_id,
+        roomId: job.room_id,
+        lastDone: initialLastDone,
+      }
     : preset
 
   function save(v: JobValues) {
@@ -167,6 +196,7 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
             title: v.title,
             recurrence: v.rule,
             assignee_id: v.assigneeId,
+            room_id: v.roomId,
             // Only a changed date reschedules the job.
             ...(v.lastDone !== initialLastDone ? { last_done_on: v.lastDone } : {}),
           },
@@ -185,6 +215,7 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
           category_id: null,
           description: null,
           recurrence: v.rule,
+          room_id: v.roomId,
           last_done_on: v.lastDone,
         },
         { onSuccess: onClose },

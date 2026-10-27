@@ -13,6 +13,19 @@ export function useTaskCategories() {
   return useQuery({ queryKey: taskKeys.categories, queryFn: api.fetchTaskCategories, staleTime: 5 * 60_000 })
 }
 
+export function useTaskRooms() {
+  return useQuery({ queryKey: taskKeys.rooms, queryFn: api.fetchTaskRooms, staleTime: 5 * 60_000 })
+}
+
+export function useCreateRoom() {
+  const { household } = useHousehold()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, sortOrder }: { name: string; sortOrder: number }) => api.createRoom(household.id, name, sortOrder),
+    onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.rooms }),
+  })
+}
+
 export function useOpenOccurrences() {
   return useQuery({ queryKey: taskKeys.open, queryFn: api.fetchOpenOccurrences })
 }

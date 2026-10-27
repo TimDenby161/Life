@@ -11,6 +11,7 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   task_comments: ['tasks'],
   task_subtasks: ['tasks'],
   task_categories: ['tasks'],
+  task_rooms: ['tasks'],
   financial_accounts: ['finances'],
   financial_transactions: ['finances'],
   account_balance_history: ['finances'],
