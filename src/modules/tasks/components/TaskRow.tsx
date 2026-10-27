@@ -60,6 +60,7 @@ export function TaskRow({
   lists,
   categories,
   showList,
+  showCategory = true,
   onOpen,
   onToggle,
   done = false,
@@ -68,6 +69,7 @@ export function TaskRow({
   lists: TaskList[]
   categories: TaskCategory[]
   showList?: boolean
+  showCategory?: boolean
   onOpen: () => void
   onToggle: () => void
   done?: boolean
@@ -114,7 +116,7 @@ export function TaskRow({
             </span>
           ) : null}
           {showList && list ? <span>{list.name}</span> : null}
-          {category ? (
+          {showCategory && category ? (
             <span className="inline-flex items-center gap-1">
               <span className={cn('size-1.5 rounded-full', colorOf(category.color).dot)} />
               {category.name}

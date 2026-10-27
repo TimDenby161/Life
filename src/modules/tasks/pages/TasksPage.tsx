@@ -8,10 +8,11 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/misc'
+import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import type { OccurrenceWithTask } from '../api'
+import type { OccurrenceWithTask, TaskCategory } from '../api'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
@@ -38,11 +39,27 @@ export default function TasksPage() {
 
 const SECTION_ORDER: Section[] = ['overdue', 'today', 'upcoming', 'later', 'someday']
 
+type Group = { key: string; label: string; dot?: string; danger?: boolean; items: OccurrenceWithTask[] }
+
+/** Categories in name order, then anything without a category. Empty categories are left out. */
+function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] {
+  const byCategory = groupBy(items, (o) => o.task.category_id ?? '')
+  const groups: Group[] = categories
+    .filter((c) => byCategory[c.id]?.length)
+    .map((c) => ({ key: c.id, label: c.name, dot: colorOf(c.color).dot, items: byCategory[c.id] }))
+  // A category that isn't loaded yet (or was deleted) falls in with the uncategorised ones.
+  const known = new Set(categories.map((c) => c.id))
+  const rest = items.filter((o) => !o.task.category_id || !known.has(o.task.category_id))
+  if (rest.length) groups.push({ key: 'none', label: 'No category', items: rest })
+  return groups
+}
+
 function TaskListView() {
   const { me } = useHousehold()
   const [params, setParams] = useSearchParams()
   const listParam = params.get('list') ?? 'all'
   const mine = params.get('mine') === '1'
+  const groupMode = params.get('group') === 'date' ? 'date' : 'category'
   const openTaskId = params.get('task')
 
   const lists = useTaskLists()
@@ -68,10 +85,11 @@ function TaskListView() {
     (listParam === 'all' || o.task.list_id === listParam) && (!mine || o.assignee_id === me.id)
 
   const today = todayISO()
-  const sections = useMemo(() => {
-    const visible = (open.data ?? []).filter(filter).toSorted(compareOccurrences)
-    return groupBy(visible, (o) => sectionOf(o.due_date, today))
-  }, [open.data, listParam, mine, today])
+  const visible = useMemo(
+    () => (open.data ?? []).filter(filter).toSorted(compareOccurrences),
+    [open.data, listParam, mine],
+  )
+  const sections = useMemo(() => groupBy(visible, (o) => sectionOf(o.due_date, today)), [visible, today])
   const recentDone = (done.data ?? []).filter(filter)
 
   const counts = {
@@ -81,6 +99,15 @@ function TaskListView() {
   const currentList = (lists.data ?? []).find((l) => l.id === listParam)
   const allLists = lists.data ?? []
   const allCategories = categories.data ?? []
+  const groups: Group[] =
+    groupMode === 'category'
+      ? groupByCategory(visible, allCategories)
+      : SECTION_ORDER.filter((s) => sections[s]?.length).map((s) => ({
+          key: s,
+          label: SECTION_LABELS[s],
+          danger: s === 'overdue',
+          items: sections[s],
+        }))
 
   return (
     <>
@@ -128,6 +155,16 @@ function TaskListView() {
         >
           Assigned to me
         </button>
+        <Segmented
+          aria-label="Group by"
+          className="ml-auto"
+          value={groupMode}
+          onChange={(v) => setParam('group', v === 'category' ? null : v)}
+          options={[
+            { value: 'category', label: 'Category' },
+            { value: 'date', label: 'Date' },
+          ]}
+        />
       </div>
 
       <QuickAdd listId={currentList?.id ?? allLists.find((l) => l.kind === 'joint')?.id} />
@@ -137,41 +174,41 @@ function TaskListView() {
           <ListSkeleton rows={5} className="p-3" />
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
-        ) : SECTION_ORDER.every((s) => !sections[s]?.length) ? (
+        ) : !groups.length ? (
           <EmptyState
             icon={CheckCircle2}
             title="All clear"
             description={mine ? 'Nothing is assigned to you right now.' : 'Nothing to do here. Enjoy it.'}
           />
         ) : (
-          SECTION_ORDER.map((section) =>
-            sections[section]?.length ? (
-              <section key={section} aria-labelledby={`sec-${section}`} className="mb-2 last:mb-0">
-                <h2
-                  id={`sec-${section}`}
-                  className={cn(
-                    'px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                    section === 'overdue' && 'text-destructive',
-                  )}
-                >
-                  {SECTION_LABELS[section]} <span className="font-normal">· {sections[section].length}</span>
-                </h2>
-                <ul>
-                  {sections[section].map((o) => (
-                    <TaskRow
-                      key={o.id}
-                      occurrence={o}
-                      lists={allLists}
-                      categories={allCategories}
-                      showList={listParam === 'all'}
-                      onOpen={() => setParam('task', o.task_id)}
-                      onToggle={() => complete.mutate({ occurrenceId: o.id })}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ) : null,
-          )
+          groups.map((group) => (
+            <section key={group.key} aria-labelledby={`sec-${group.key}`} className="mb-2 last:mb-0">
+              <h2
+                id={`sec-${group.key}`}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
+                  group.danger && 'text-destructive',
+                )}
+              >
+                {group.dot ? <span className={cn('size-2 rounded-full', group.dot)} /> : null}
+                {group.label} <span className="font-normal">· {group.items.length}</span>
+              </h2>
+              <ul>
+                {group.items.map((o) => (
+                  <TaskRow
+                    key={o.id}
+                    occurrence={o}
+                    lists={allLists}
+                    categories={allCategories}
+                    showList={listParam === 'all'}
+                    showCategory={groupMode !== 'category'}
+                    onOpen={() => setParam('task', o.task_id)}
+                    onToggle={() => complete.mutate({ occurrenceId: o.id })}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))
         )}
       </Card>
 
