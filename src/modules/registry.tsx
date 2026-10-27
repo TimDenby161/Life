@@ -5,6 +5,7 @@ import {
   Gem,
   HeartPulse,
   Home,
+  ListRestart,
   type LucideIcon,
   MessagesSquare,
   Settings,
@@ -30,6 +31,7 @@ export type AppModule = {
 export const modules: AppModule[] = [
   { id: 'home', label: 'Home', path: '/', icon: Home, mobilePrimary: true, component: lazy(() => import('./dashboard/DashboardPage')) },
   { id: 'tasks', label: 'Tasks', path: '/tasks', icon: CheckCircle2, mobilePrimary: true, component: lazy(() => import('./tasks/pages/TasksPage')) },
+  { id: 'jobs', label: 'Jobs', path: '/jobs', icon: ListRestart, component: lazy(() => import('./tasks/pages/JobsPage')) },
   { id: 'finances', label: 'Finances', path: '/finances', icon: Wallet, component: lazy(() => import('./finances/pages/FinancesPage')) },
   { id: 'wedding', label: 'Wedding', path: '/wedding', icon: Gem, component: lazy(() => import('./wedding/WeddingPage')) },
   { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, mobilePrimary: true, component: lazy(() => import('./calendar/CalendarPage')) },

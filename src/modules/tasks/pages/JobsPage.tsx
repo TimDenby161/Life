@@ -1,6 +1,7 @@
 import { Check, Plus, RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar } from '@/components/Avatar'
+import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,7 +13,7 @@ import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskLi
 import { agoInWords, dueInWords, jobRule, lastDoneOf } from '../lib/jobs'
 import { dueTone } from '../lib/format'
 import { describeInterval } from '../lib/recurrence'
-import { JobForm, type JobValues } from './JobForm'
+import { JobForm, type JobValues } from '../components/JobForm'
 
 const SUGGESTIONS: Partial<JobValues>[] = [
   { title: 'Change the bed sheets', rule: { freq: 'weekly', interval: 2, afterDone: true } },
@@ -23,7 +24,7 @@ const SUGGESTIONS: Partial<JobValues>[] = [
 
 const toneClass = { overdue: 'text-destructive font-medium', today: 'text-warning font-medium', soon: 'text-foreground/80', later: '', none: '' }
 
-export function JobsTab() {
+export default function JobsPage() {
   const jobs = useJobs()
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
@@ -31,12 +32,15 @@ export function JobsTab() {
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Regular jobs come back a set time after they were last done.</p>
-        <Button onClick={() => setEditing('new')}>
-          <Plus /> New job
-        </Button>
-      </div>
+      <PageHeader
+        title="Jobs"
+        description="Regular jobs come back a set time after they were last done."
+        actions={
+          <Button onClick={() => setEditing('new')}>
+            <Plus /> New job
+          </Button>
+        }
+      />
 
       <Card className="p-2 sm:p-3">
         {jobs.isPending ? (
