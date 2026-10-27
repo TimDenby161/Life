@@ -1866,18 +1866,21 @@ export type Database = {
         Row: {
           household_id: string
           pot_goal_id: string | null
+          task_category_id: string | null
           updated_at: string
           wedding_date: string | null
         }
         Insert: {
           household_id: string
           pot_goal_id?: string | null
+          task_category_id?: string | null
           updated_at?: string
           wedding_date?: string | null
         }
         Update: {
           household_id?: string
           pot_goal_id?: string | null
+          task_category_id?: string | null
           updated_at?: string
           wedding_date?: string | null
         }
@@ -1895,6 +1898,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "savings_goals"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wedding_settings_task_category_id_household_id_fkey"
+            columns: ["task_category_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "task_categories"
+            referencedColumns: ["id", "household_id"]
           },
         ]
       }
@@ -1944,60 +1954,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "wedding_suppliers_household_id_fkey"
-            columns: ["household_id"]
-            isOneToOne: false
-            referencedRelation: "households"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      wedding_tasks: {
-        Row: {
-          assignee_id: string | null
-          created_at: string
-          created_by: string
-          done_at: string | null
-          due_date: string | null
-          household_id: string
-          id: string
-          notes: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          assignee_id?: string | null
-          created_at?: string
-          created_by?: string
-          done_at?: string | null
-          due_date?: string | null
-          household_id: string
-          id?: string
-          notes?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          assignee_id?: string | null
-          created_at?: string
-          created_by?: string
-          done_at?: string | null
-          due_date?: string | null
-          household_id?: string
-          id?: string
-          notes?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wedding_tasks_household_id_assignee_id_fkey"
-            columns: ["household_id", "assignee_id"]
-            isOneToOne: false
-            referencedRelation: "household_members"
-            referencedColumns: ["household_id", "user_id"]
-          },
-          {
-            foreignKeyName: "wedding_tasks_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"

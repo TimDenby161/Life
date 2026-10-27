@@ -37,10 +37,10 @@ describe('guest counts', () => {
 describe('checklist counts', () => {
   it('counts done, open and overdue', () => {
     const tasks = [
-      { done_at: '2026-10-01T10:00:00Z', due_date: '2026-09-01' },
-      { done_at: null, due_date: '2026-10-01' },
-      { done_at: null, due_date: '2027-01-01' },
-      { done_at: null, due_date: null },
+      { done: true, due_date: '2026-09-01' },
+      { done: false, due_date: '2026-10-01' },
+      { done: false, due_date: '2027-01-01' },
+      { done: false, due_date: null },
     ]
     expect(taskCounts(tasks, '2026-10-26')).toEqual({ done: 1, open: 3, overdue: 1 })
   })

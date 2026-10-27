@@ -13,7 +13,7 @@ import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { fundPot } from '@/modules/finances/lib/pots'
-import { type WeddingSettings, useBudgetItems, useGuests, useSaveWeddingSettings, useWeddingSettings, useWeddingTasks } from './api'
+import { type WeddingSettings, useBudgetItems, useGuests, useSaveWeddingSettings, useWeddingChecklist, useWeddingSettings } from './api'
 import { BudgetTab } from './components/BudgetTab'
 import { ChecklistTab } from './components/ChecklistTab'
 import { GuestsTab } from './components/GuestsTab'
@@ -30,7 +30,7 @@ export default function WeddingPage() {
   const settings = useWeddingSettings()
   const budget = useBudgetItems()
   const guests = useGuests()
-  const tasks = useWeddingTasks()
+  const tasks = useWeddingChecklist(settings.data?.task_category_id)
   const pots = usePots()
   const balances = useBalances()
   const [editing, setEditing] = useState(false)

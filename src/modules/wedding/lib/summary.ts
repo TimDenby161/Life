@@ -2,7 +2,7 @@
 
 type BudgetLike = { category: string; budget_minor: number; paid_minor: number }
 type GuestLike = { invite: string; rsvp: string; plus_one: boolean }
-type TaskLike = { done_at: string | null; due_date: string | null }
+type TaskLike = { done: boolean; due_date: string | null }
 
 export type BudgetTotals = { budget: number; paid: number; remaining: number }
 
@@ -33,6 +33,6 @@ export function guestCounts(guests: readonly GuestLike[]) {
 }
 
 export function taskCounts(tasks: readonly TaskLike[], today: string) {
-  const open = tasks.filter((t) => !t.done_at)
+  const open = tasks.filter((t) => !t.done)
   return { done: tasks.length - open.length, open: open.length, overdue: open.filter((t) => t.due_date && t.due_date < today).length }
 }
