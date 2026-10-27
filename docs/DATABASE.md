@@ -39,7 +39,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | Health | `health_metric_definitions` | Built-in metrics; only `weight` remains. Not client-writable. |
 | | `health_measurements` | Value + unit + time; import fields. |
 | | `health_exercise_sessions` | Free-text `description`, `started_at`, `duration_minutes` |
-| | `health_periods` | `started_on`, optional `ended_on`. Tracker shown when `user_preferences.settings.track_periods`. |
+| | `health_periods` | `started_on`, optional `ended_on`. Tracker shown on the Health tab of a profile with `tracks_periods` (Sophie; set by migration, not client-writable). |
 
 ## Functions (RPC)
 

@@ -1,7 +1,7 @@
 -- Finances, health access and feed permissions.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(35);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -118,6 +118,11 @@ select is((select count(*)::int from u), 0, 'Tim cannot edit Sophie''s periods')
 
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select is((select count(*)::int from health_periods), 0, 'Outsider sees no periods');
+
+select pg_temp.as_user(current_setting('t.sophie')::uuid);
+select throws_ok(
+  format('update profiles set tracks_periods = false where id = %L', current_setting('t.sophie')),
+  '42501', null, 'Who has the period tracker is not client-writable');
 
 -- Exercise: a description and a duration.
 select pg_temp.as_user(current_setting('t.tim')::uuid);

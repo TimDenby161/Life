@@ -19,7 +19,6 @@ import { calendarKeys, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/hooks'
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
-import { HealthSettingsPanel } from '@/modules/health/HealthPage'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
 import { useCreateCategory, useTaskCategories } from '@/modules/tasks/hooks'
 
@@ -38,7 +37,6 @@ export default function SettingsPage() {
         <HouseholdSection />
         <CalendarSection />
         <FeedSourcesSection />
-        <HealthSettingsSection />
         <CategoriesSection />
         <AccountSection />
       </div>
@@ -317,10 +315,6 @@ function FeedSourcesSection() {
       </Card>
     </section>
   )
-}
-
-function HealthSettingsSection() {
-  return <div className="mt-4"><HealthSettingsPanel /></div>
 }
 
 function CategoriesSection() {

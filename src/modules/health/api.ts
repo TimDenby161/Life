@@ -15,7 +15,6 @@ export const healthKeys = {
   measurements: ['health', 'measurements'] as const,
   exercise: ['health', 'exercise'] as const,
   periods: ['health', 'periods'] as const,
-  trackPeriods: ['health', 'track-periods'] as const,
 }
 
 export const useMetricDefinitions = () =>
@@ -33,15 +32,6 @@ export const useExerciseSessions = () =>
 export const usePeriods = () =>
   useQuery({ queryKey: healthKeys.periods, queryFn: async () => unwrap(await supabase.from('health_periods').select('*').order('started_on', { ascending: false }).limit(200)) })
 
-// Own row only (RLS), so this is always the signed-in person's setting.
-export const useTrackPeriods = () =>
-  useQuery({
-    queryKey: healthKeys.trackPeriods,
-    queryFn: async () => {
-      const prefs = unwrap(await supabase.from('user_preferences').select('settings').maybeSingle())
-      return (prefs?.settings as { track_periods?: boolean } | undefined)?.track_periods === true
-    },
-  })
 
 function useHealthMutation<TArgs>(fn: (householdId: string, args: TArgs) => Promise<unknown>) {
   const { household } = useHousehold()
@@ -72,10 +62,3 @@ export const useUpdatePeriod = () =>
     unwrap(await supabase.from('health_periods').update(a.patch).eq('id', a.id)),
   )
 export const useDeletePeriod = () => useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('health_periods').delete().eq('id', id)))
-
-export const useSetTrackPeriods = () =>
-  useHealthMutation(async (_h, on: boolean) => {
-    const prefs = unwrap(await supabase.from('user_preferences').select('user_id, settings').single())
-    const settings = { ...(prefs.settings as Record<string, unknown>), track_periods: on }
-    unwrap(await supabase.from('user_preferences').update({ settings }).eq('user_id', prefs.user_id))
-  })

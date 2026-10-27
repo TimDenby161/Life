@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, Textarea } from '@/components/ui/input'
-import { Badge, Segmented, Skeleton, Switch } from '@/components/ui/misc'
+import { Badge, Segmented, Skeleton } from '@/components/ui/misc'
 import { daysBetween, formatDay, todayISO } from '@/lib/dates'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import {
@@ -26,8 +26,6 @@ import {
   useMeasurements,
   useMetricDefinitions,
   usePeriods,
-  useSetTrackPeriods,
-  useTrackPeriods,
   useUpdatePeriod,
 } from './api'
 import { type Aggregation, cycleSummary, dailySeries, formatValue, latestWithChange } from './lib/metrics'
@@ -41,7 +39,6 @@ export default function HealthPage() {
   const measurements = useMeasurements()
   const exercise = useExerciseSessions()
   const periods = usePeriods()
-  const trackPeriods = useTrackPeriods()
   const [logging, setLogging] = useState(false)
   const [detail, setDetail] = useState(false)
 
@@ -49,7 +46,7 @@ export default function HealthPage() {
   const weights = (measurements.data ?? []).filter((m) => m.user_id === personId && m.metric_id === weight?.id)
   const sessions = (exercise.data ?? []).filter((s) => s.user_id === personId)
   const personPeriods = (periods.data ?? []).filter((p) => p.user_id === personId)
-  const showPeriods = own ? trackPeriods.data === true : personPeriods.length > 0
+  const showPeriods = person.tracks_periods
   const error = defs.error ?? measurements.error ?? exercise.error ?? periods.error
 
   return (
@@ -78,7 +75,6 @@ export default function HealthPage() {
           </div>
           <ExerciseSection own={own} sessions={sessions} />
 
-          {own ? <HealthSettingsPanel /> : null}
         </>
       )}
 
@@ -397,24 +393,5 @@ function PastPeriodDialog({ open, onClose }: { open: boolean; onClose: () => voi
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function HealthSettingsPanel() {
-  const trackPeriods = useTrackPeriods().data === true
-  const setTrack = useSetTrackPeriods()
-  return (
-    <section id="health-settings">
-      <SectionTitle>Settings</SectionTitle>
-      <Card>
-        <label className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-          <span>
-            Period tracker
-            <span className="block text-xs text-muted-foreground">Show the period tracker on your Health page</span>
-          </span>
-          <Switch checked={trackPeriods} onCheckedChange={(v) => setTrack.mutate(v)} aria-label="Show the period tracker" />
-        </label>
-      </Card>
-    </section>
   )
 }

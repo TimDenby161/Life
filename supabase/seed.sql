@@ -45,3 +45,6 @@ select public.bootstrap_household('Tim & Sophie', '[
 select public.bootstrap_household('Somebody else', '[
   {"email": "outsider@life.local", "display_name": "Outsider", "avatar_color": "amber"}
 ]'::jsonb);
+
+-- The period tracker shows on Sophie's Health tab (profiles created above, after migrations ran).
+update public.profiles set tracks_periods = true where id = '22222222-2222-2222-2222-222222222222';
