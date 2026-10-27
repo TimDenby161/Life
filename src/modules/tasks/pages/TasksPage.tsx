@@ -39,14 +39,50 @@ export default function TasksPage() {
 
 const SECTION_ORDER: Section[] = ['overdue', 'today', 'upcoming', 'later', 'someday']
 
-type Group = { key: string; label: string; dot?: string; danger?: boolean; items: OccurrenceWithTask[] }
+const COLLAPSED_KEY = 'life.tasks.collapsed'
+
+/** Which groups are collapsed, remembered on this device. */
+function useCollapsedGroups() {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[])
+    } catch {
+      return new Set()
+    }
+  })
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(key)) next.add(key)
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Storage blocked: collapsing still works for this visit.
+      }
+      return next
+    })
+  return { collapsed, toggle }
+}
+
+type Group = {
+  key: string
+  label: string
+  dot?: string
+  danger?: boolean
+  items: OccurrenceWithTask[]
+}
 
 /** Categories in name order, then anything without a category. Empty categories are left out. */
 function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] {
   const byCategory = groupBy(items, (o) => o.task.category_id ?? '')
   const groups: Group[] = categories
     .filter((c) => byCategory[c.id]?.length)
-    .map((c) => ({ key: c.id, label: c.name, dot: colorOf(c.color).dot, items: byCategory[c.id] }))
+    .map((c) => ({
+      key: c.id,
+      label: c.name,
+      dot: colorOf(c.color).dot,
+      items: byCategory[c.id],
+    }))
   // A category that isn't loaded yet (or was deleted) falls in with the uncategorised ones.
   const known = new Set(categories.map((c) => c.id))
   const rest = items.filter((o) => !o.task.category_id || !known.has(o.task.category_id))
@@ -70,6 +106,7 @@ function TaskListView() {
   const reopen = useReopenOccurrence()
   const [creating, setCreating] = useState(false)
   const [showDone, setShowDone] = useState(false)
+  const { collapsed, toggle: toggleGroup } = useCollapsedGroups()
 
   const setParam = (key: string, value: string | null) =>
     setParams(
@@ -115,10 +152,7 @@ function TaskListView() {
         title="Tasks"
         description={
           open.data
-            ? [
-                counts.overdue ? `${counts.overdue} overdue` : null,
-                `${counts.today} due today`,
-              ]
+            ? [counts.overdue ? `${counts.overdue} overdue` : null, `${counts.today} due today`]
                 .filter(Boolean)
                 .join(' · ')
             : undefined
@@ -181,34 +215,44 @@ function TaskListView() {
             description={mine ? 'Nothing is assigned to you right now.' : 'Nothing to do here. Enjoy it.'}
           />
         ) : (
-          groups.map((group) => (
-            <section key={group.key} aria-labelledby={`sec-${group.key}`} className="mb-2 last:mb-0">
-              <h2
-                id={`sec-${group.key}`}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                  group.danger && 'text-destructive',
+          groups.map((group) => {
+            const isCollapsed = collapsed.has(group.key)
+            return (
+              <section key={group.key} aria-labelledby={`sec-${group.key}`} className="mb-2 last:mb-0">
+                <h2 id={`sec-${group.key}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={!isCollapsed}
+                    className={cn(
+                      'flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground',
+                      group.danger && 'text-destructive hover:text-destructive',
+                    )}
+                  >
+                    <ChevronDown className={cn('size-3.5 transition-transform', isCollapsed && '-rotate-90')} />
+                    {group.dot ? <span className={cn('size-2 rounded-full', group.dot)} /> : null}
+                    {group.label} <span className="font-normal">· {group.items.length}</span>
+                  </button>
+                </h2>
+                {isCollapsed ? null : (
+                  <ul>
+                    {group.items.map((o) => (
+                      <TaskRow
+                        key={o.id}
+                        occurrence={o}
+                        lists={allLists}
+                        categories={allCategories}
+                        showList={listParam === 'all'}
+                        showCategory={groupMode !== 'category'}
+                        onOpen={() => setParam('task', o.task_id)}
+                        onToggle={() => complete.mutate({ occurrenceId: o.id })}
+                      />
+                    ))}
+                  </ul>
                 )}
-              >
-                {group.dot ? <span className={cn('size-2 rounded-full', group.dot)} /> : null}
-                {group.label} <span className="font-normal">· {group.items.length}</span>
-              </h2>
-              <ul>
-                {group.items.map((o) => (
-                  <TaskRow
-                    key={o.id}
-                    occurrence={o}
-                    lists={allLists}
-                    categories={allCategories}
-                    showList={listParam === 'all'}
-                    showCategory={groupMode !== 'category'}
-                    onOpen={() => setParam('task', o.task_id)}
-                    onToggle={() => complete.mutate({ occurrenceId: o.id })}
-                  />
-                ))}
-              </ul>
-            </section>
-          ))
+              </section>
+            )
+          })
         )}
       </Card>
 
