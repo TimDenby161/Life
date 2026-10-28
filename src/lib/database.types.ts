@@ -774,6 +774,7 @@ export type Database = {
           external_id: string | null
           household_id: string
           id: string
+          logged_by: string | null
           source: string
           started_at: string
           updated_at: string
@@ -786,6 +787,7 @@ export type Database = {
           external_id?: string | null
           household_id: string
           id?: string
+          logged_by?: string | null
           source?: string
           started_at: string
           updated_at?: string
@@ -798,6 +800,7 @@ export type Database = {
           external_id?: string | null
           household_id?: string
           id?: string
+          logged_by?: string | null
           source?: string
           started_at?: string
           updated_at?: string
@@ -817,6 +820,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "household_members"
             referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "health_exercise_sessions_logged_by_fkey"
+            columns: ["logged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }

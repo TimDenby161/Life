@@ -46,9 +46,10 @@ export const useAddMeasurement = () =>
 export const useDeleteMeasurement = () =>
   useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('health_measurements').delete().eq('id', id)))
 
+/** Logs a session for each person given (one each when you did it together). */
 export const useAddExercise = () =>
-  useHealthMutation(async (h, s: { description: string; started_at: string; duration_minutes: number }) =>
-    unwrap(await supabase.from('health_exercise_sessions').insert({ ...s, household_id: h })),
+  useHealthMutation(async (h, { people, ...s }: { people: string[]; description: string; started_at: string; duration_minutes: number }) =>
+    unwrap(await supabase.from('health_exercise_sessions').insert(people.map((user_id) => ({ ...s, user_id, household_id: h })))),
   )
 export const useDeleteExercise = () =>
   useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('health_exercise_sessions').delete().eq('id', id)))

@@ -1,7 +1,7 @@
 -- Finances, health access and feed permissions.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(41);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -131,6 +131,27 @@ values (current_setting('t.hh')::uuid, 'Swim, 40 lengths', now(), 45);
 select is((select description from health_exercise_sessions where created_at = now()), 'Swim, 40 lengths', 'Exercise is logged with a free-text description');
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 select is((select count(*)::int from health_exercise_sessions where created_at = now()), 1, 'Sophie sees Tim''s exercise');
+
+-- Exercise can be logged for each other; weight cannot.
+select pg_temp.as_user(current_setting('t.tim')::uuid);
+insert into health_exercise_sessions (household_id, user_id, description, started_at, duration_minutes)
+values (current_setting('t.hh')::uuid, current_setting('t.sophie')::uuid, 'Yoga', now(), 60);
+select is((select user_id::text from health_exercise_sessions where description = 'Yoga'), current_setting('t.sophie'), 'Tim can log exercise for Sophie');
+select is((select logged_by::text from health_exercise_sessions where description = 'Yoga'), current_setting('t.tim'), 'the session records that Tim logged it');
+select throws_ok(
+  format('insert into health_exercise_sessions (household_id, user_id, description, started_at, duration_minutes) values (%L, %L, ''Run'', now(), 20)', current_setting('t.hh'), current_setting('t.out')),
+  '23503', null, 'exercise can only be for a member of the household');
+select throws_ok(
+  format('insert into health_measurements (household_id, user_id, metric_id, value, measured_at) values (%L, %L, (select id from health_metric_definitions where key = ''weight''), 70, now())', current_setting('t.hh'), current_setting('t.sophie')),
+  '42501', null, 'weight is still owner-only');
+
+with u as (update health_exercise_sessions set duration_minutes = 61 where description = 'Yoga' returning 1)
+select is((select count(*)::int from u), 0, 'only the person it belongs to can edit it, not whoever logged it');
+
+select pg_temp.as_user(current_setting('t.sophie')::uuid);
+with d as (delete from health_exercise_sessions where description = 'Swim, 40 lengths' returning 1)
+select is((select count(*)::int from d), 0, 'Sophie cannot delete a session Tim logged for himself');
+
 select throws_ok(
   'select 1 from health_metric_definitions; insert into health_metric_definitions (key, name, unit, category) values (''x'', ''X'', ''u'', ''custom'')',
   '42501', null, 'Clients can no longer define metrics');

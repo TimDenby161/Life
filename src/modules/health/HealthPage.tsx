@@ -300,6 +300,7 @@ function formatMinutes(mins: number) {
 }
 
 function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSession[] }) {
+  const { me } = useHousehold()
   const del = useDeleteExercise()
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -323,7 +324,7 @@ function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSe
                     <span className="block whitespace-pre-wrap font-medium">{s.description}</span>
                     <span className="block text-xs text-muted-foreground">{format(parseISO(s.started_at), 'EEE d MMM, HH:mm')} · {formatMinutes(s.duration_minutes)}</span>
                   </span>
-                  {own ? <button type="button" aria-label="Delete session" className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => del.mutate(s.id)}><Trash2 className="size-3.5" /></button> : null}
+                  {own || s.logged_by === me.id ? <button type="button" aria-label="Delete session" className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => del.mutate(s.id)}><Trash2 className="size-3.5" /></button> : null}
                 </li>
               ))}
             </ul>
