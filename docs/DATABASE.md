@@ -40,7 +40,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `health_measurements` | Value + unit + time; import fields. |
 | | `health_exercise_sessions` | Free-text `description`, `started_at`, `duration_minutes` |
 | | `health_periods` | `started_on`, optional `ended_on`. Tracker shown on the Health tab of a profile with `tracks_periods` (Sophie; set by migration, not client-writable). |
-| Languages | `language_study` | Per person and language (`zh`, `es`): words/characters a day, HSK start level, the jobs each part ticks off. |
+| Languages | `language_study` | Per person and language (`zh`, `es`); `active` says who learns what (stopping keeps settings and progress): words/characters a day, HSK start level, the jobs each part ticks off. |
 | | `language_progress` | One row per word or character a person has learned, keyed by its text; `due_on`/`interval_days` are the review schedule. The word lists themselves ship with the app. |
 
 ## Functions (RPC)

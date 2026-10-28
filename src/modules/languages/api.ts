@@ -50,6 +50,17 @@ export function useSaveStudy() {
   })
 }
 
+/** Starts or stops learning languages. Stopping keeps settings and progress. */
+export function useSetStudying() {
+  const userId = useUserId()
+  return useLanguageMutation(async (h, changes: { language: Language; active: boolean; exists: boolean; settings: StudySettings }[]) => {
+    for (const { language, active, exists, settings } of changes) {
+      if (exists) unwrap(await supabase.from('language_study').update({ active }).eq('language', language).eq('user_id', userId))
+      else unwrap(await supabase.from('language_study').insert({ household_id: h, language, ...settings, active }))
+    }
+  })
+}
+
 export const useLearnItem = () =>
   useLanguageMutation(async (h, { language, kind, item }: { language: Language; kind: Kind; item: string }) =>
     unwrap(await supabase.from('language_progress').insert({ household_id: h, language, kind, item, ...learnedSchedule(todayISO()) })),

@@ -1,4 +1,4 @@
-import { Check, GraduationCap, Repeat, Settings2, Volume2 } from 'lucide-react'
+import { Check, GraduationCap, Plus, Repeat, Settings2, Volume2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
@@ -22,6 +22,7 @@ import {
   useProgress,
   useReviewItem,
   useSaveStudy,
+  useSetStudying,
   useStudy,
   useTickOffJob,
   useVocab,
@@ -45,14 +46,18 @@ export default function LanguagesPage() {
   const progress = useProgress()
   const jobs = useJobs()
   const categories = useTaskCategories()
+  const setStudying = useSetStudying()
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState(false)
 
-  // Without ?lang=, open the language this person studies (Sophie: Spanish).
+  // Each person sees only the languages they learn (Tim: both; Sophie: Spanish).
+  const learning = languagesOf(personId, study.data ?? [], jobs.data ?? [])
+  const myLanguages = languagesOf(me.id, study.data ?? [], jobs.data ?? [])
   const fromUrl = params.get('lang')
-  const language: Language = isLanguage(fromUrl) ? fromUrl : guessLanguage(personId, study.data ?? [], progress.data ?? [], jobs.data ?? [])
+  const language: Language = isLanguage(fromUrl) && learning.includes(fromUrl) ? fromUrl : (learning[0] ?? 'zh')
   const config = LANGUAGES[language]
   const vocab = useVocab(language)
+  const notLearning = !learning.length
 
   const today = todayISO()
   const rows = useMemo(
@@ -68,6 +73,26 @@ export default function LanguagesPage() {
   )
   const row = study.data?.find((s) => s.user_id === personId && s.language === language)
   const settings = row ?? defaultSettings(config, jobs.data ?? [], categories.data ?? [], personId)
+  const settingsFor = (l: Language) =>
+    study.data?.find((s) => s.user_id === me.id && s.language === l) ?? defaultSettings(LANGUAGES[l], jobs.data ?? [], categories.data ?? [], me.id)
+
+  // Saving every language the person learns makes the choice explicit, so a
+  // guessed list (no rows yet) doesn't change when one is added or stopped.
+  function changeLanguage(target: Language, active: boolean) {
+    const changes = LANGUAGE_IDS.flatMap((l) => {
+      const want = l === target ? active : myLanguages.includes(l)
+      const existing = study.data?.find((s) => s.user_id === me.id && s.language === l)
+      if (existing ? existing.active === want : !want) return []
+      return [{ language: l, active: want, exists: !!existing, settings: settingsFor(l) }]
+    })
+    setStudying.mutate(changes, {
+      onSuccess: () => {
+        setEditing(false)
+        setParams(active ? { lang: target } : {}, { replace: true })
+      },
+    })
+  }
+  const addable = LANGUAGE_IDS.filter((l) => !myLanguages.includes(l))
   const due = dueForReview(rows, today)
   const jobById = (id: string | null) => (id ? jobs.data?.find((j) => j.id === id) : undefined)
   const error = vocab.error ?? study.error ?? progress.error
@@ -76,23 +101,46 @@ export default function LanguagesPage() {
   return (
     <>
       <PageHeader
-        title={config.name}
-        description={config.description}
-        actions={own ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Settings2 /> Settings</Button> : null}
+        title={notLearning ? 'Languages' : config.name}
+        description={notLearning ? 'Words a day, with reviews spaced out so they stick.' : config.description}
+        actions={own && !notLearning ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Settings2 /> Settings</Button> : null}
       />
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Segmented
-          aria-label="Language"
-          value={language}
-          onChange={(l) => setParams({ lang: l }, { replace: true })}
-          options={LANGUAGE_IDS.map((l) => ({ value: l, label: LANGUAGES[l].name }))}
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {learning.length > 1 ? (
+          <Segmented
+            aria-label="Language"
+            value={language}
+            onChange={(l) => setParams({ lang: l }, { replace: true })}
+            options={learning.map((l) => ({ value: l, label: LANGUAGES[l].name }))}
+          />
+        ) : null}
         {partner ? (
           <Segmented aria-label="Person" value={personId} onChange={setPersonId} options={[{ value: me.id, label: 'Me' }, { value: partner.id, label: partner.display_name }]} />
         ) : null}
+        {own && !notLearning
+          ? addable.map((l) => (
+              <Button key={l} variant="ghost" size="sm" disabled={setStudying.isPending} onClick={() => changeLanguage(l, true)}>
+                <Plus /> Learn {LANGUAGES[l].name}
+              </Button>
+            ))
+          : null}
       </div>
 
-      {error ? (
+      {notLearning ? (
+        <Card>
+          <EmptyState
+            icon={GraduationCap}
+            title={own ? "You're not learning a language here" : `${person.display_name} isn't learning a language here`}
+            action={own ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                {LANGUAGE_IDS.map((l) => (
+                  <Button key={l} disabled={setStudying.isPending} onClick={() => changeLanguage(l, true)}><Plus /> Learn {LANGUAGES[l].name}</Button>
+                ))}
+              </div>
+            ) : undefined}
+          />
+        </Card>
+      ) : error ? (
         <ErrorState error={error} onRetry={() => { vocab.refetch(); study.refetch(); progress.refetch() }} />
       ) : !vocab.data || study.isPending || progress.isPending ? (
         <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-28" />)}</div>
@@ -149,6 +197,8 @@ export default function LanguagesPage() {
           exists={!!row}
           initial={settings}
           jobs={(jobs.data ?? []).filter((j) => !j.assignee_id || j.assignee_id === me.id)}
+          stopping={setStudying.isPending}
+          onStop={() => changeLanguage(language, false)}
           onClose={() => setEditing(false)}
         />
       ) : null}
@@ -156,12 +206,16 @@ export default function LanguagesPage() {
   )
 }
 
-/** The language someone has settings or progress in, else one their jobs mention, else Mandarin. */
-function guessLanguage(personId: string, study: Study[], progress: Progress[], jobs: Job[]): Language {
-  const started = LANGUAGE_IDS.find((l) => study.some((s) => s.user_id === personId && s.language === l) || progress.some((p) => p.user_id === personId && p.language === l))
-  if (started) return started
+/**
+ * The languages someone learns: their active settings rows. Before they have
+ * any, the languages their jobs mention, or all of them to choose from.
+ */
+function languagesOf(personId: string, study: Study[], jobs: Job[]): Language[] {
+  const rows = study.filter((s) => s.user_id === personId)
+  if (rows.length) return LANGUAGE_IDS.filter((l) => rows.some((s) => s.language === l && s.active))
   const mine = jobs.filter((j) => j.assignee_id === personId)
-  return LANGUAGE_IDS.find((l) => mine.some((j) => LANGUAGES[l].jobPattern.test(j.title))) ?? 'zh'
+  const guessed = LANGUAGE_IDS.filter((l) => mine.some((j) => LANGUAGES[l].jobPattern.test(j.title)))
+  return guessed.length ? guessed : LANGUAGE_IDS
 }
 
 /** Before anyone saves settings: the language's daily amounts from the start, linked to their jobs by name. */
@@ -398,7 +452,23 @@ function ReviewDialog({ language, rows, vocab, reviewJob, onClose }: { language:
   )
 }
 
-function SettingsDialog({ language, exists, initial, jobs, onClose }: { language: Language; exists: boolean; initial: StudySettings | Study; jobs: Job[]; onClose: () => void }) {
+function SettingsDialog({
+  language,
+  exists,
+  initial,
+  jobs,
+  stopping,
+  onStop,
+  onClose,
+}: {
+  language: Language
+  exists: boolean
+  initial: StudySettings | Study
+  jobs: Job[]
+  stopping: boolean
+  onStop: () => void
+  onClose: () => void
+}) {
   const save = useSaveStudy()
   const config = LANGUAGES[language]
   const [values, setValues] = useState<StudySettings>({
@@ -450,9 +520,12 @@ function SettingsDialog({ language, exists, initial, jobs, onClose }: { language
           {config.hasCharacters ? jobSelect('characters_task_id', 'New characters job') : null}
           {jobSelect('review_task_id', 'Review job')}
           {save.error ? <p className="text-sm text-destructive">{getErrorMessage(save.error)}</p> : null}
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>Save</Button>
+          <DialogFooter className="sm:justify-between">
+            <Button type="button" variant="ghost" className="text-destructive" disabled={stopping} onClick={onStop}>Stop learning {config.name}</Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={save.isPending}>Save</Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

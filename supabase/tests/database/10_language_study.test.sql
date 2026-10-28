@@ -3,7 +3,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(14);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -52,6 +52,9 @@ select throws_ok(
          current_setting('t.hh'), current_setting('t.tim'), 'zh', 'word', '谢谢'),
   '42501', null, 'nobody can record progress for someone else');
 
+select is_empty(
+  format('update language_study set active = false where user_id = %L returning language', current_setting('t.tim')),
+  'the partner cannot stop someone else''s language');
 select lives_ok(
   format('insert into language_progress (household_id, language, kind, item, learned_on, due_on) values (%L, %L, %L, %L, current_date, current_date + 1)',
          current_setting('t.hh'), 'es', 'word', 'hola'),
@@ -71,6 +74,9 @@ select throws_ok(
   '23503', null, 'a linked job must be one of the household''s tasks');
 delete from tasks where id = current_setting('t.task')::uuid;
 select is((select words_task_id from language_study where user_id = current_setting('t.tim')::uuid), null, 'deleting a linked job unlinks it');
+
+update language_study set active = false where user_id = current_setting('t.tim')::uuid;
+select is((select active from language_study where user_id = current_setting('t.tim')::uuid), false, 'a member can stop learning a language');
 
 select throws_ok(
   format('update language_progress set learned_on = current_date - 30 where item = %L', '你好'),

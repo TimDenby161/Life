@@ -1123,6 +1123,7 @@ export type Database = {
       }
       language_study: {
         Row: {
+          active: boolean
           characters_per_day: number
           characters_task_id: string | null
           household_id: string
@@ -1135,6 +1136,7 @@ export type Database = {
           words_task_id: string | null
         }
         Insert: {
+          active?: boolean
           characters_per_day?: number
           characters_task_id?: string | null
           household_id: string
@@ -1147,6 +1149,7 @@ export type Database = {
           words_task_id?: string | null
         }
         Update: {
+          active?: boolean
           characters_per_day?: number
           characters_task_id?: string | null
           household_id?: string
