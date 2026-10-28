@@ -56,3 +56,8 @@ export function cycleSummary(periods: readonly PeriodLike[]) {
     estimatedNext: last && averageCycle ? addDaysISO(last, averageCycle) : null,
   }
 }
+
+/** A task that is really "log my weight": "Weigh in", "Weekly weigh-in", "Weigh myself". */
+export function isWeighIn(title: string): boolean {
+  return /\bweigh(?:[- ]?in|\s+myself)\b/i.test(title)
+}

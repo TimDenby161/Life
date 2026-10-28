@@ -1,4 +1,4 @@
-import { cycleSummary, dailySeries, latestWithChange } from './metrics'
+import { cycleSummary, dailySeries, isWeighIn, latestWithChange } from './metrics'
 
 describe('dailySeries', () => {
   const rows = [
@@ -31,5 +31,14 @@ describe('cycleSummary', () => {
   })
   it('estimates nothing from a single period', () => {
     expect(cycleSummary([{ started_on: '2026-10-01', ended_on: null }])).toEqual({ cycles: [], averageCycle: null, averageLength: null, estimatedNext: null })
+  })
+})
+
+describe('isWeighIn', () => {
+  it('spots weigh-in tasks', () => {
+    for (const t of ['Weigh in', 'Weekly weigh-in', 'weighin', 'Weigh myself']) expect(isWeighIn(t)).toBe(true)
+  })
+  it('ignores other tasks', () => {
+    for (const t of ['Weight training', 'Weigh up the options', 'Bins out']) expect(isWeighIn(t)).toBe(false)
   })
 })
