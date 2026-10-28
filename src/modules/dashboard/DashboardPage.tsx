@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Avatar } from '@/components/Avatar'
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
-import { addDaysISO, formatDay, greeting, monthStart, todayISO } from '@/lib/dates'
+import { addDaysISO, formatDay, greeting, monthStart, parseISODate, todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -44,11 +44,13 @@ function useOccurrencesFor(personId: string, withJoint = true) {
 }
 
 export default function DashboardPage() {
-  const { me } = useHousehold()
-  const { open, items: mine } = useOccurrencesFor(me.id)
+  const { me, partner } = useHousehold()
+  // Mine + joint by default; the partner view is only their own tasks.
+  const [who, setWho] = useState(me.id)
+  const { open, items } = useOccurrencesFor(who, who === me.id)
   const today = todayISO()
-  const dueToday = (mine ?? []).filter((o) => o.due_date === today)
-  const overdue = (mine ?? []).filter((o) => o.due_date && o.due_date < today)
+  const dueToday = (items ?? []).filter((o) => o.due_date === today)
+  const overdue = (items ?? []).filter((o) => o.due_date && o.due_date < today)
   const lists = useTaskLists().data ?? []
   const [composing, setComposing] = useState(false)
 
@@ -63,6 +65,19 @@ export default function DashboardPage() {
 
   return (
     <div className="grid gap-5">
+      {partner ? (
+        <Segmented
+          aria-label="Whose tasks"
+          className="justify-self-start"
+          value={who}
+          onChange={setWho}
+          options={[
+            { value: me.id, label: `${me.display_name} + Joint` },
+            { value: partner.id, label: partner.display_name },
+          ]}
+        />
+      ) : null}
+
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{format(new Date(), 'EEEE d MMMM')}</p>
@@ -79,7 +94,7 @@ export default function DashboardPage() {
       <QuickAdd listId={lists.find((l) => l.kind === 'joint')?.id} placeholder="Quick add a joint task…" />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <TodayCard />
+        <DaysCard open={open} items={items} />
         <UpcomingCard />
         <MessagesCard />
         <FinanceCard />
@@ -104,62 +119,83 @@ function CardLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-function TodayCard() {
-  const { me, partner } = useHousehold()
-  // Mine + joint by default; the partner view is only their own tasks.
-  const [who, setWho] = useState(me.id)
-  const { open, items: theirs } = useOccurrencesFor(who, who === me.id)
+/** Today (including overdue), tomorrow and the day after, each collapsible; only Today starts open. */
+function DaysCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
   const navigate = useNavigate()
   const today = todayISO()
-  const items = (theirs ?? []).filter((o) => o.due_date && o.due_date <= today).toSorted(compareOccurrences)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
+  const toggle = (day: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(day)) next.add(day)
+      return next
+    })
+  const days = [0, 1, 2].map((i) => {
+    const day = addDaysISO(today, i)
+    return {
+      day,
+      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
+      items: (items ?? [])
+        .filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day))
+        .toSorted(compareOccurrences),
+    }
+  })
   return (
     <Card className="md:row-span-2">
       <CardHeader>
-        <CardTitle>Today</CardTitle>
+        <CardTitle>Tasks</CardTitle>
         <CardLink to="/tasks" label="All tasks" />
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
-        {partner ? (
-          <Segmented
-            aria-label="Whose tasks"
-            size="sm"
-            className="mx-1 mb-2 sm:mx-2"
-            value={who}
-            onChange={setWho}
-            options={[
-              { value: me.id, label: `${me.display_name} + Joint` },
-              { value: partner.id, label: partner.display_name },
-            ]}
-          />
-        ) : null}
         {open.isPending ? (
           <ListSkeleton rows={4} className="px-2" />
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
-        ) : !items.length ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <CheckCircle2 className="size-8 text-success" />
-            <p className="text-sm font-medium">Nothing due today</p>
-            <p className="text-xs text-muted-foreground">Enjoy the breathing room.</p>
-          </div>
         ) : (
-          <ul>
-            {items.slice(0, 10).map((o) => (
-              <TaskRow
-                key={o.id}
-                occurrence={o}
-                lists={lists}
-                categories={categories}
-                showList
-                onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
-                onToggle={() => complete.mutate({ occurrenceId: o.id })}
-              />
-            ))}
-            {items.length > 10 ? <li className="px-3 py-2 text-xs text-muted-foreground">+{items.length - 10} more</li> : null}
-          </ul>
+          days.map(({ day, label, items: dayItems }) => {
+            const isOpen = expanded.has(day)
+            return (
+              <section key={day} aria-labelledby={`day-${day}`} className="mb-1 last:mb-0">
+                <h2 id={`day-${day}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(day)}
+                    aria-expanded={isOpen}
+                    className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronDown className={cn('size-3.5 transition-transform', !isOpen && '-rotate-90')} />
+                    {label} <span className="font-normal">· {dayItems.length}</span>
+                  </button>
+                </h2>
+                {!isOpen ? null : !dayItems.length ? (
+                  day === today ? (
+                    <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
+                      <CheckCircle2 className="size-4 text-success" /> Nothing due today
+                    </p>
+                  ) : (
+                    <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
+                  )
+                ) : (
+                  <ul>
+                    {dayItems.map((o) => (
+                      <TaskRow
+                        key={o.id}
+                        occurrence={o}
+                        lists={lists}
+                        categories={categories}
+                        showList
+                        onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
+                        onToggle={() => complete.mutate({ occurrenceId: o.id })}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )
+          })
         )}
       </CardContent>
     </Card>
