@@ -155,3 +155,25 @@ describe('streaksFor', () => {
     expect(streaksFor(['2026-10-20'], '2026-10-22').current).toBe(0)
   })
 })
+
+describe('done together', () => {
+  const events = [
+    ev({ occurrence_id: 'w1', event_type: 'completed', completed_by: TIM, occurred_at: '2026-10-06T19:00:00Z' }),
+    // Sophie ticked it, then it was changed to "we both did it".
+    ev({ occurrence_id: 'w2', event_type: 'completed', completed_by: SOPHIE, occurred_at: '2026-10-13T19:00:00Z' }),
+    ev({ occurrence_id: 'w2', event_type: 'completed', completed_by: SOPHIE, also_completed_by: TIM, occurred_at: '2026-10-13T19:00:00Z' }),
+  ]
+
+  it('credits both people while counting the task once', () => {
+    const stats = computeTaskStats(events, [], [TIM, SOPHIE], range, '2026-10-31')
+    expect(stats.totalCompleted).toBe(2)
+    expect(stats.completedByPerson).toEqual({ [TIM]: 2, [SOPHIE]: 1 })
+    expect(stats.completedShare).toEqual({ [TIM]: 67, [SOPHIE]: 33 })
+    expect(stats.byCategory[0]).toMatchObject({ total: 2, byPerson: { [TIM]: 2, [SOPHIE]: 1 } })
+  })
+
+  it('shows a shared task under either person filter', () => {
+    const stats = computeTaskStats(events, [], [TIM, SOPHIE], { ...range, personId: SOPHIE }, '2026-10-31')
+    expect(stats.totalCompleted).toBe(1)
+  })
+})

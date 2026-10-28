@@ -1473,6 +1473,7 @@ export type Database = {
       }
       task_completion_events: {
         Row: {
+          also_completed_by: string | null
           assignee_id: string | null
           category_id: string | null
           category_name: string | null
@@ -1494,6 +1495,7 @@ export type Database = {
           task_title: string
         }
         Insert: {
+          also_completed_by?: string | null
           assignee_id?: string | null
           category_id?: string | null
           category_name?: string | null
@@ -1515,6 +1517,7 @@ export type Database = {
           task_title: string
         }
         Update: {
+          also_completed_by?: string | null
           assignee_id?: string | null
           category_id?: string | null
           category_name?: string | null
@@ -1536,6 +1539,13 @@ export type Database = {
           task_title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "task_completion_events_also_completed_by_fkey"
+            columns: ["also_completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "task_completion_events_completed_by_fkey"
             columns: ["completed_by"]
@@ -1606,6 +1616,7 @@ export type Database = {
       }
       task_occurrences: {
         Row: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -1621,6 +1632,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          also_completed_by?: string | null
           assignee_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -1636,6 +1648,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          also_completed_by?: string | null
           assignee_id?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -1657,6 +1670,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_occurrences"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_occurrences_household_id_also_completed_by_fkey"
+            columns: ["household_id", "also_completed_by"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
           },
           {
             foreignKeyName: "task_occurrences_household_id_assignee_id_fkey"
@@ -2196,6 +2216,7 @@ export type Database = {
       _task_lock_occurrence: {
         Args: { p_occurrence_id: string }
         Returns: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -2248,6 +2269,7 @@ export type Database = {
           p_occurrence_id: string
         }
         Returns: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -2311,6 +2333,7 @@ export type Database = {
       reopen_task_occurrence: {
         Args: { p_note?: string; p_occurrence_id: string }
         Returns: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -2337,8 +2360,13 @@ export type Database = {
         Returns: undefined
       }
       set_task_occurrence_completed_by: {
-        Args: { p_completed_by: string; p_occurrence_id: string }
+        Args: {
+          p_also_completed_by?: string
+          p_completed_by: string
+          p_occurrence_id: string
+        }
         Returns: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null
@@ -2364,6 +2392,7 @@ export type Database = {
       skip_task_occurrence: {
         Args: { p_note?: string; p_occurrence_id: string }
         Returns: {
+          also_completed_by: string | null
           assignee_id: string | null
           completed_at: string | null
           completed_by: string | null

@@ -78,6 +78,7 @@ export function TaskRow({
   const task = occurrence.task
   const assignee = member(occurrence.assignee_id)
   const completer = member(occurrence.completed_by)
+  const alsoCompleter = member(occurrence.also_completed_by)
   const list = lists.find((l) => l.id === task.list_id)
   const category = categories.find((c) => c.id === task.category_id)
   const tone = done ? 'none' : dueTone(occurrence.due_date, todayISO())
@@ -102,7 +103,12 @@ export function TaskRow({
           {task.title}
         </button>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
-          {done && completer ? <span>Done by {completer.display_name}</span> : null}
+          {done && completer ? (
+            <span>
+              Done by {completer.display_name}
+              {alsoCompleter ? ` & ${alsoCompleter.display_name}` : ''}
+            </span>
+          ) : null}
           {!done && occurrence.due_date ? (
             <span className={toneClass[tone]}>
               {tone === 'overdue' ? 'Overdue · ' : ''}

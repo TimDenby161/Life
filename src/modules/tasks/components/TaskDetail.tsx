@@ -363,6 +363,8 @@ function Comments({ taskId, comments }: { taskId: string; comments: DetailData['
   )
 }
 
+const BOTH = 'both'
+
 function History({ events }: { events: CompletionEvent[] }) {
   const { member, members } = useHousehold()
   const setCompletedBy = useSetCompletedBy()
@@ -395,17 +397,28 @@ function History({ events }: { events: CompletionEvent[] }) {
                     {current ? (
                       <NativeSelect
                         aria-label="Who did it"
-                        value={e.completed_by ?? ''}
+                        value={e.also_completed_by ? BOTH : (e.completed_by ?? '')}
                         disabled={setCompletedBy.isPending}
-                        onChange={(ev) => setCompletedBy.mutate({ occurrenceId: e.occurrence_id, personId: ev.target.value })}
+                        onChange={(ev) => {
+                          const value = ev.target.value
+                          if (value !== BOTH) return setCompletedBy.mutate({ occurrenceId: e.occurrence_id, personId: value })
+                          // Whoever ticked it stays first; the other person is added.
+                          const first = e.completed_by ?? members[0].id
+                          const other = members.find((m) => m.id !== first)
+                          if (other) setCompletedBy.mutate({ occurrenceId: e.occurrence_id, personId: first, alsoPersonId: other.id })
+                        }}
                         className="mr-1 inline-flex h-7 w-auto py-0 pl-2 pr-7 text-sm font-medium text-foreground"
                       >
                         {members.map((m) => (
                           <option key={m.id} value={m.id}>{m.display_name}</option>
                         ))}
+                        {members.length === 2 ? <option value={BOTH}>Both of us</option> : null}
                       </NativeSelect>
                     ) : (
-                      <span className="font-medium text-foreground">{who?.display_name ?? 'Someone'}</span>
+                      <span className="font-medium text-foreground">
+                        {who?.display_name ?? 'Someone'}
+                        {e.also_completed_by ? ` & ${member(e.also_completed_by)?.display_name ?? 'someone'}` : ''}
+                      </span>
                     )}{' '}
                     completed
                     {e.due_date ? <> · due {format(parseISODate(e.due_date), 'EEE d MMM')}</> : null}

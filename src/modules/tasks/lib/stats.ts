@@ -7,6 +7,8 @@
 //   it was done (never double-counted).
 // * Credit goes to completed_by (who did it), which can differ from the
 //   assignee (who was responsible). Both views are reported separately.
+// * "We both did it" (also_completed_by) gives each person a point; totals
+//   still count the task once.
 // * Skipped occurrences are neither completed nor overdue.
 import { differenceInMinutes, format, parseISO, startOfISOWeek, startOfMonth } from 'date-fns'
 import { addDaysISO, daysBetween, type ISODate, toISODate } from '@/lib/dates'
@@ -18,6 +20,7 @@ export type StatsEvent = {
   task_id: string
   event_type: string
   completed_by: string | null
+  also_completed_by?: string | null
   occurred_at: string
   recorded_at: string
   task_title: string
@@ -52,6 +55,8 @@ export type Completion = {
   taskId: string
   title: string
   personId: string
+  /** Everyone credited: personId, plus a second person when it was done together. */
+  people: string[]
   assigneeId: string | null
   categoryId: string | null
   categoryName: string | null
@@ -77,6 +82,7 @@ export function effectiveCompletions(events: readonly StatsEvent[]): Completion[
       taskId: e.task_id,
       title: e.task_title,
       personId: e.completed_by,
+      people: e.also_completed_by ? [e.completed_by, e.also_completed_by] : [e.completed_by],
       assigneeId: e.assignee_id,
       categoryId: e.category_id,
       categoryName: e.category_name,
@@ -128,7 +134,7 @@ function matches(c: Completion, f: StatsFilters) {
   return (
     c.day >= f.from &&
     c.day <= f.to &&
-    (!f.personId || c.personId === f.personId) &&
+    (!f.personId || c.people.includes(f.personId)) &&
     (!f.categoryId || c.categoryId === f.categoryId) &&
     (!f.taskId || c.taskId === f.taskId)
   )
@@ -161,9 +167,11 @@ export function computeTaskStats(
   const completions = all.filter((c) => matches(c, filters))
 
   const completedByPerson: PersonCount = Object.fromEntries(memberIds.map((id) => [id, 0]))
-  for (const c of completions) inc(completedByPerson, c.personId)
+  for (const c of completions) for (const p of c.people) inc(completedByPerson, p)
   const total = completions.length
-  const completedShare = Object.fromEntries(Object.entries(completedByPerson).map(([k, v]) => [k, pct(v, total)]))
+  // Shares are of points, so a task done together is split between both.
+  const points = Object.values(completedByPerson).reduce((a, b) => a + b, 0)
+  const completedShare = Object.fromEntries(Object.entries(completedByPerson).map(([k, v]) => [k, pct(v, points)]))
 
   const dated = completions.filter((c) => c.dueDate)
   const onTime = dated.filter((c) => c.day <= c.dueDate!).length
@@ -179,7 +187,7 @@ export function computeTaskStats(
     return hours.length ? Math.round((hours.reduce((a, b) => a + b, 0) / hours.length) * 10) / 10 : null
   }
   const avgHoursByPerson = Object.fromEntries(
-    memberIds.map((id) => [id, durations(completions.filter((c) => c.personId === id))]),
+    memberIds.map((id) => [id, durations(completions.filter((c) => c.people.includes(id)))]),
   )
 
   const categories = new Map<string, TaskStats['byCategory'][number]>()
@@ -187,7 +195,7 @@ export function computeTaskStats(
     const key = c.categoryId ?? 'none'
     const row = categories.get(key) ?? { key, name: c.categoryName ?? 'Uncategorised', total: 0, byPerson: {} }
     row.total++
-    inc(row.byPerson, c.personId)
+    for (const p of c.people) inc(row.byPerson, p)
     categories.set(key, row)
   }
 
@@ -203,7 +211,7 @@ export function computeTaskStats(
       lastCompletedBy: c.personId,
     }
     row.total++
-    inc(row.byPerson, c.personId)
+    for (const p of c.people) inc(row.byPerson, p)
     if (c.completedAt >= row.lastCompletedAt) {
       row.lastCompletedAt = c.completedAt
       row.lastCompletedBy = c.personId
@@ -230,12 +238,12 @@ export function computeTaskStats(
     const w = weekly[weekIndex.get(toISODate(startOfISOWeek(parseISO(c.day))))!]
     if (w) {
       w.total++
-      inc(w.byPerson, c.personId)
+      for (const p of c.people) inc(w.byPerson, p)
     }
     const m = monthly[monthIndex.get(c.day.slice(0, 7))!]
     if (m) {
       m.total++
-      inc(m.byPerson, c.personId)
+      for (const p of c.people) inc(m.byPerson, p)
     }
   }
 
@@ -260,8 +268,10 @@ export function computeTaskStats(
   const coveredForOther: PersonCount = {}
   for (const c of completions) {
     if (!c.assigneeId) continue
-    if (c.assigneeId === c.personId) inc(completedOwn, c.personId)
-    else inc(coveredForOther, c.personId)
+    for (const p of c.people) {
+      if (c.assigneeId === p) inc(completedOwn, p)
+      else inc(coveredForOther, p)
+    }
   }
 
   const overdueByAssignee: PersonCount = {}
@@ -279,7 +289,7 @@ export function computeTaskStats(
     (c) => (!filters.categoryId || c.categoryId === filters.categoryId) && (!filters.taskId || c.taskId === filters.taskId),
   )
   const streaks = Object.fromEntries(
-    memberIds.map((id) => [id, streaksFor(streakBase.filter((c) => c.personId === id).map((c) => c.day), today)]),
+    memberIds.map((id) => [id, streaksFor(streakBase.filter((c) => c.people.includes(id)).map((c) => c.day), today)]),
   )
 
   return {

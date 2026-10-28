@@ -177,10 +177,14 @@ export async function reopenOccurrence(occurrenceId: string) {
   return unwrap(await supabase.rpc('reopen_task_occurrence', { p_occurrence_id: occurrenceId }))
 }
 
-/** Credits a completed occurrence to someone else (recorded as a new history event). */
-export async function setCompletedBy(occurrenceId: string, personId: string) {
+/** Credits a completed occurrence to someone else, or to two people (recorded as a new history event). */
+export async function setCompletedBy(occurrenceId: string, personId: string, alsoPersonId: string | null) {
   return unwrap(
-    await supabase.rpc('set_task_occurrence_completed_by', { p_occurrence_id: occurrenceId, p_completed_by: personId }),
+    await supabase.rpc('set_task_occurrence_completed_by', {
+      p_occurrence_id: occurrenceId,
+      p_completed_by: personId,
+      p_also_completed_by: alsoPersonId ?? undefined,
+    }),
   )
 }
 

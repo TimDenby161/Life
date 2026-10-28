@@ -2,7 +2,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(13);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -53,6 +53,25 @@ select is((select actor_id::text from feed_events where event_type = 'task.compl
 select throws_ok(
   format('select set_task_occurrence_completed_by(%L, %L)', current_setting('t.occ'), current_setting('t.out')),
   '22023', null, 'only a household member can be credited');
+
+-- We both did it ---------------------------------------------------------------------
+select set_task_occurrence_completed_by(current_setting('t.occ')::uuid, current_setting('t.sophie')::uuid, current_setting('t.tim')::uuid);
+select is((select also_completed_by::text from task_occurrences where id = current_setting('t.occ')::uuid),
+  current_setting('t.tim'), 'a second person can be credited');
+select ok(exists (
+  select 1 from task_completion_events
+  where occurrence_id = current_setting('t.occ')::uuid and completed_by = current_setting('t.sophie')::uuid
+    and also_completed_by = current_setting('t.tim')::uuid
+), 'the new event carries both people');
+select is((select summary from feed_events where event_type = 'task.completed' and entity_id = current_setting('t.task')::uuid),
+  'Sophie and Tim completed “Descale the kettle”', 'the feed names both');
+select throws_ok(
+  format('select set_task_occurrence_completed_by(%L, %L, %L)', current_setting('t.occ'), current_setting('t.tim'), current_setting('t.tim')),
+  '22023', null, 'the two people must differ');
+
+select reopen_task_occurrence(current_setting('t.occ')::uuid);
+select is((select also_completed_by from task_occurrences where id = current_setting('t.occ')::uuid),
+  null, 'reopening clears the second person');
 
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select throws_ok(
