@@ -18,7 +18,7 @@ import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/a
 import { bucketByDay, formatEventTime } from '@/modules/calendar/lib/grid'
 import { ActivityRow, Composer } from '@/modules/feed/components/FeedItems'
 import { useFeedEvents, useMyReads, usePosts } from '@/modules/feed/hooks'
-import { groupActivity } from '@/modules/feed/lib/activity'
+import { type ActivityGroup, groupActivity } from '@/modules/feed/lib/activity'
 import { useAccountCurrency, useBalances, useAccounts, useBudgets, useGoals, useTransactions } from '@/modules/finances/hooks'
 import { activeBudgets, goalProgress, netWorth, spendingByCategory } from '@/modules/finances/lib/calc'
 import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/modules/health/api'
@@ -107,9 +107,8 @@ export default function DashboardPage() {
           }
         />
         <UpcomingCard />
-        <MessagesCard />
+        <FeedCard />
         <FinanceCard />
-        <ActivityCard />
         <HealthCard />
       </div>
 
@@ -422,36 +421,47 @@ function UpcomingCard() {
   )
 }
 
-function MessagesCard() {
+/** Messages and activity together, newest first, as on the Feed page. */
+function FeedCard() {
   const { member, me } = useHousehold()
   const posts = usePosts()
   const reads = useMyReads()
-  const latest = (posts.data ?? []).slice(0, 3)
+  const events = useFeedEvents(30)
+  type Entry = { at: string } & ({ kind: 'post'; post: NonNullable<typeof posts.data>[number] } | { kind: 'activity'; group: ActivityGroup })
+  const entries: Entry[] = [
+    ...(posts.data ?? []).slice(0, 6).map((post) => ({ kind: 'post' as const, at: post.created_at, post })),
+    ...groupActivity(events.data ?? []).slice(0, 6).map((group) => ({ kind: 'activity' as const, at: group.latestAt, group })),
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 6)
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Messages</CardTitle>
-        <CardLink to="/feed" label="Feed" />
+        <CardTitle>Feed</CardTitle>
+        <CardLink to="/feed" label="Open feed" />
       </CardHeader>
-      <CardContent>
-        {posts.isPending ? (
-          <ListSkeleton rows={2} />
-        ) : !latest.length ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground"><MessagesSquare className="size-4" /> No messages yet.</p>
+      <CardContent className="pt-0">
+        {posts.isPending || events.isPending ? (
+          <ListSkeleton rows={3} />
+        ) : !entries.length ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground"><MessagesSquare className="size-4" /> Nothing yet.</p>
         ) : (
-          <ul className="grid gap-3">
-            {latest.map((p) => {
+          <ul className="divide-y">
+            {entries.map((e) => {
+              if (e.kind === 'activity') return <ActivityRow key={e.group.key} group={e.group} />
+              const p = e.post
               const a = member(p.author_id)
               const unread = p.author_id !== me.id && reads.data && !reads.data.has(p.id)
               return (
-                <li key={p.id} className="flex gap-2.5">
-                  <Avatar name={a?.display_name} color={a?.avatar_color} size="sm" />
+                <li key={p.id} className="flex gap-3 px-1 py-2">
+                  <Avatar name={a?.display_name} color={a?.avatar_color} size="sm" className="mt-0.5 size-7" />
                   <div className="min-w-0 text-sm">
+                    <p className="line-clamp-2 break-words">{p.body}</p>
                     <p className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">{a?.display_name}</span> · {formatDistanceToNow(new Date(p.created_at), { addSuffix: true })}
                       {unread ? <span className="ml-1.5 inline-block size-1.5 rounded-full bg-rose-500 align-middle" aria-label="Unread" /> : null}
                     </p>
-                    <p className="line-clamp-2 break-words">{p.body}</p>
                   </div>
                 </li>
               )
@@ -532,22 +542,6 @@ function FinanceCard() {
             ) : null}
           </div>
         )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function ActivityCard() {
-  const events = useFeedEvents(30)
-  const groups = groupActivity(events.data ?? []).slice(0, 5)
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent activity</CardTitle>
-        <CardLink to="/feed" label="Feed" />
-      </CardHeader>
-      <CardContent className="pt-0">
-        {events.isPending ? <ListSkeleton rows={3} /> : !groups.length ? <p className="text-sm text-muted-foreground">Nothing yet.</p> : <ul className="divide-y">{groups.map((g) => <ActivityRow key={g.key} group={g} />)}</ul>}
       </CardContent>
     </Card>
   )
