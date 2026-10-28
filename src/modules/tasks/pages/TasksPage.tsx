@@ -47,6 +47,8 @@ type Group = {
   dot?: string
   danger?: boolean
   items: OccurrenceWithTask[]
+  // Date mode: the day's tasks split by category, when any of them has one.
+  subgroups?: Group[]
 }
 
 /** Every category in name order (empty ones too), then anything without a category. */
@@ -63,6 +65,12 @@ function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]
   const rest = items.filter((o) => !o.task.category_id || !known.has(o.task.category_id))
   if (rest.length) groups.push({ key: 'none', label: 'No category', items: rest })
   return groups
+}
+
+/** A date section's tasks by category (non-empty ones only), or nothing if none has a category. */
+function categorySubgroups(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] | undefined {
+  const subgroups = groupByCategory(items, categories).filter((g) => g.items.length)
+  return subgroups.some((g) => g.key !== 'none') ? subgroups : undefined
 }
 
 function TaskListView() {
@@ -127,7 +135,25 @@ function TaskListView() {
           label: SECTION_LABELS[s],
           danger: s === 'overdue',
           items: sections[s],
+          subgroups: categorySubgroups(sections[s], allCategories),
         }))
+
+  const renderRows = (items: OccurrenceWithTask[], showCategory: boolean) => (
+    <ul>
+      {items.map((o) => (
+        <TaskRow
+          key={o.id}
+          occurrence={o}
+          lists={allLists}
+          categories={allCategories}
+          showList
+          showCategory={showCategory}
+          onOpen={() => setParam('task', o.task_id)}
+          onToggle={() => complete.mutate({ occurrenceId: o.id })}
+        />
+      ))}
+    </ul>
+  )
 
   return (
     <>
@@ -211,21 +237,18 @@ function TaskListView() {
                 </h2>
                 {isCollapsed ? null : !group.items.length ? (
                   <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
+                ) : group.subgroups ? (
+                  group.subgroups.map((sub) => (
+                    <div key={sub.key}>
+                      <h3 className="flex items-center gap-1.5 px-3 pb-0.5 pl-8 pt-2 text-xs font-medium text-muted-foreground">
+                        {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
+                        {sub.label} <span className="font-normal">· {sub.items.length}</span>
+                      </h3>
+                      {renderRows(sub.items, false)}
+                    </div>
+                  ))
                 ) : (
-                  <ul>
-                    {group.items.map((o) => (
-                      <TaskRow
-                        key={o.id}
-                        occurrence={o}
-                        lists={allLists}
-                        categories={allCategories}
-                        showList
-                        showCategory={groupMode !== 'category'}
-                        onOpen={() => setParam('task', o.task_id)}
-                        onToggle={() => complete.mutate({ occurrenceId: o.id })}
-                      />
-                    ))}
-                  </ul>
+                  renderRows(group.items, groupMode !== 'category')
                 )}
               </section>
             )
