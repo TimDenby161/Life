@@ -30,8 +30,8 @@ export default function TaskStatsPage() {
   const series = usePersonSeries()
   const [preset, setPreset] = useState<RangePreset>('3m')
   const [range, setRange] = useState(() => rangeFromPreset('3m'))
-  // Whose tasks: 'all', 'joint', or a member's id (same rule as the Tasks page).
-  const [owner, setOwner] = useState('all')
+  // Whose tasks: 'joint' or a member's id (same rule as the Tasks page).
+  const [owner, setOwner] = useState('joint')
   const [personId, setPersonId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [taskId, setTaskId] = useState('')
@@ -45,7 +45,7 @@ export default function TaskStatsPage() {
   const stats = useMemo(() => {
     if (!events.data || !occurrences.data) return null
     const isOwners = (task: { category_id: string | null; list_id: string | null }) =>
-      owner === 'all' || (ownerOf(task, categories.data ?? [], lists.data ?? []) ?? 'joint') === owner
+      (ownerOf(task, categories.data ?? [], lists.data ?? []) ?? 'joint') === owner
     return computeTaskStats(
       events.data.filter(isOwners),
       occurrences.data.filter((o) => o.task && isOwners(o.task)),
@@ -87,7 +87,6 @@ export default function TaskStatsPage() {
         value={owner}
         onChange={setOwner}
         options={[
-          { value: 'all', label: 'All' },
           { value: 'joint', label: 'Joint' },
           ...members.map((m) => ({ value: m.id, label: m.display_name })),
         ]}
