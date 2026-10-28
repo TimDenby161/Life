@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Plus, RotateCw } from 'lucide-react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
@@ -35,30 +35,39 @@ export default function JobsPage() {
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
   const sorted = (jobs.data ?? []).toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
-  // Every room in order (empty ones too), then jobs without a room by category
-  // (Health first), then whatever is left.
+  // Cleaning holds every room in order (empty ones too, plus a Cleaning-category
+  // job without a room); then jobs without a room by category (Health first),
+  // then whatever is left.
   const byRoom = groupBy(sorted, (j) => j.room_id ?? '')
   const known = new Set(rooms.map((r) => r.id))
   const roomless = sorted.filter((j) => !j.room_id || !known.has(j.room_id))
   const byCategory = groupBy(roomless, (j) => j.category_id ?? '')
+  const cleaningCategory = categories.find((c) => c.name.toLowerCase() === 'cleaning')
+  const roomlessCleaning = cleaningCategory ? (byCategory[cleaningCategory.id] ?? []) : []
   const jobCategories = categories
-    .filter((c) => byCategory[c.id]?.length)
+    .filter((c) => c !== cleaningCategory && byCategory[c.id]?.length)
     .toSorted((a, b) => Number(b.name === 'Health') - Number(a.name === 'Health'))
   const shownCategoryIds = new Set(jobCategories.map((c) => c.id))
-  const groups: { key: string; label: string; dot?: string; items: Job[] }[] = [
+  const cleaningRooms: SubGroup[] = [
     ...rooms.map((r) => ({ key: r.id, label: r.name, items: byRoom[r.id] ?? [] })),
+    ...(roomlessCleaning.length ? [{ key: 'cleaning-other', label: 'Other cleaning', items: roomlessCleaning }] : []),
+  ]
+  const groups: Group[] = [
+    ...(cleaningRooms.length
+      ? [{ key: 'cleaning', label: 'Cleaning', dot: cleaningCategory && colorOf(cleaningCategory.color).dot, items: cleaningRooms.flatMap((r) => r.items), subgroups: cleaningRooms }]
+      : []),
     ...jobCategories.map((c) => ({ key: `category-${c.id}`, label: c.name, dot: colorOf(c.color).dot, items: byCategory[c.id] })),
     {
       key: 'none',
-      label: rooms.length || jobCategories.length ? 'Other jobs' : 'Jobs',
-      items: roomless.filter((j) => !j.category_id || !shownCategoryIds.has(j.category_id)),
+      label: cleaningRooms.length || jobCategories.length ? 'Other jobs' : 'Jobs',
+      items: roomless.filter((j) => !j.category_id || (j.category_id !== cleaningCategory?.id && !shownCategoryIds.has(j.category_id))),
     },
   ].filter((g) => g.key !== 'none' || g.items.length)
 
   return (
     <>
       <PageHeader
-        title="Jobs"
+        title="Regular Jobs"
         description="Regular jobs come back a set time after they were last done."
         actions={
           <Button onClick={() => setEditing('new')}>
@@ -107,7 +116,18 @@ export default function JobsPage() {
                   {group.label} <span className="font-normal">· {group.items.length}</span>
                 </button>
               </h2>
-              {collapsed.has(group.key) ? null : group.items.length ? (
+              {collapsed.has(group.key) ? null : group.subgroups ? (
+                group.subgroups.map((sub) => (
+                  <div key={sub.key} className="pl-4">
+                    <SubToggle id={sub.key} label={sub.label} count={sub.items.length} collapsed={collapsed} toggle={toggle} />
+                    {collapsed.has(sub.key) ? null : sub.items.length ? (
+                      <JobList groupKey={sub.key} jobs={sub.items} collapsed={collapsed} toggle={toggle} onOpen={(job) => setEditing(job)} />
+                    ) : (
+                      <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No jobs</p>
+                    )}
+                  </div>
+                ))
+              ) : group.items.length ? (
                 <JobList
                   groupKey={group.key}
                   jobs={group.items}
@@ -125,6 +145,39 @@ export default function JobsPage() {
 
       <JobDialog value={editing} onClose={() => setEditing(null)} />
     </>
+  )
+}
+
+type SubGroup = { key: string; label: string; items: Job[] }
+type Group = SubGroup & { dot?: string; subgroups?: SubGroup[] }
+
+/** Header for a collapsible section inside a group. */
+function SubToggle({
+  id,
+  label,
+  count,
+  icon,
+  collapsed,
+  toggle,
+}: {
+  id: string
+  label: string
+  count: number
+  icon?: ReactNode
+  collapsed: Set<string>
+  toggle: (key: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => toggle(id)}
+      aria-expanded={!collapsed.has(id)}
+      className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+    >
+      <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(id) && '-rotate-90')} />
+      {icon}
+      {label} <span className="font-normal">· {count}</span>
+    </button>
   )
 }
 
@@ -165,16 +218,14 @@ function JobList({
     const key = `${groupKey}/${id || 'none'}`
     return (
       <div key={key} className="pl-4">
-        <button
-          type="button"
-          onClick={() => toggle(key)}
-          aria-expanded={!collapsed.has(key)}
-          className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
-        >
-          <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(key) && '-rotate-90')} />
-          {member ? <Avatar name={member.display_name} color={member.avatar_color} size="xs" /> : null}
-          {label} <span className="font-normal">· {byPerson[id].length}</span>
-        </button>
+        <SubToggle
+          id={key}
+          label={label}
+          count={byPerson[id].length}
+          icon={member ? <Avatar name={member.display_name} color={member.avatar_color} size="xs" /> : null}
+          collapsed={collapsed}
+          toggle={toggle}
+        />
         {collapsed.has(key) ? null : rows(byPerson[id])}
       </div>
     )
