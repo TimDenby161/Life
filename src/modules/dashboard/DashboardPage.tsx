@@ -10,7 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
-import { addDaysISO, formatDay, greeting, parseISODate, todayISO } from '@/lib/dates'
+import { addDaysISO, greeting, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -361,18 +361,26 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   )
 }
 
+/** Calendar events for today and the next six days, one collapsible list per day like the Tasks card; only Today starts open. */
 function UpcomingCard() {
   const integrations = useCalendarIntegrations()
   const connected = Boolean(integrations.data?.some((i) => i.enabled && i.mode === 'service_account'))
   const today = todayISO()
   const end = addDaysISO(today, 6)
   const events = useCalendarEvents(today, end, connected)
-  const open = useOpenOccurrences()
   const result = events.data
   const byDay = useMemo(() => bucketByDay(result?.status === 'ok' ? result.events : []), [result])
-  const days = Array.from({ length: 7 }, (_, i) => addDaysISO(today, i))
-  const tasksAhead = (open.data ?? []).filter((o) => o.due_date && o.due_date > today && o.due_date <= end)
-  const hasEvents = days.some((d) => byDay.get(d)?.length)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
+  const toggle = (day: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(day)) next.add(day)
+      return next
+    })
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const day = addDaysISO(today, i)
+    return { day, label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'), events: byDay.get(day) ?? [] }
+  })
 
   return (
     <Card>
@@ -380,38 +388,37 @@ function UpcomingCard() {
         <CardTitle>Next 7 days</CardTitle>
         <CardLink to="/calendar" label="Calendar" />
       </CardHeader>
-      <CardContent className="grid gap-2">
+      <CardContent className="px-2 sm:px-3">
         {!connected && !integrations.isPending ? (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <p className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
             <CalendarDays className="size-3.5" /> Google Calendar not connected. <Link to="/settings#calendar" className="text-primary">Set up</Link>
           </p>
-        ) : events.isPending && connected ? (
-          <ListSkeleton rows={3} />
+        ) : integrations.isPending || events.isPending ? (
+          <ListSkeleton rows={3} className="px-2" />
         ) : result && result.status !== 'ok' ? (
-          <p className="text-xs text-muted-foreground">Calendar unavailable: {result.message}</p>
-        ) : null}
-        {hasEvents ? (
-          <ul className="grid gap-1.5">
-            {days.flatMap((d) =>
-              (byDay.get(d) ?? []).slice(0, 3).map((e) => (
-                <li key={`${d}-${e.id}`} className="flex items-center gap-2.5 text-sm">
-                  <span className={cn('h-7 w-1 shrink-0 rounded-full', colorOf(e.color).dot)} />
-                  <span className="min-w-0">
-                    <span className="block truncate">{e.title}</span>
-                    <span className="block text-xs text-muted-foreground">{formatDay(d)} · {formatEventTime(e, d)}</span>
-                  </span>
-                </li>
-              )),
-            ).slice(0, 6)}
-          </ul>
-        ) : connected && result?.status === 'ok' ? (
-          <p className="text-sm text-muted-foreground">No events this week.</p>
-        ) : null}
-        {tasksAhead.length ? (
-          <p className="text-xs text-muted-foreground">
-            {tasksAhead.length} {tasksAhead.length === 1 ? 'task' : 'tasks'} due later this week
-          </p>
-        ) : null}
+          <p className="px-2 text-xs text-muted-foreground">Calendar unavailable: {result.message}</p>
+        ) : (
+          days.map(({ day, label, events: dayEvents }) => (
+            <TaskGroup key={day} id={`cal-${day}`} level={1} label={label} count={dayEvents.length} open={expanded.has(day)} onToggle={() => toggle(day)}>
+              {!dayEvents.length ? (
+                <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">Nothing on</p>
+              ) : (
+                <ul>
+                  {dayEvents.map((e) => (
+                    <li key={e.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
+                      <span className="w-20 shrink-0 whitespace-nowrap text-xs tabular text-muted-foreground">{formatEventTime(e, day)}</span>
+                      <span className={cn('h-8 w-1 shrink-0 rounded-full', colorOf(e.color).dot)} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[15px] leading-snug">{e.title}</span>
+                        {e.location ? <span className="block truncate text-xs text-muted-foreground">{e.location}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </TaskGroup>
+          ))
+        )}
       </CardContent>
     </Card>
   )
