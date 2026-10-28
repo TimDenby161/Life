@@ -7,7 +7,7 @@ import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/misc'
+import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { addDaysISO, formatDay, greeting, monthStart, todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
@@ -25,14 +25,27 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
+import { ownerOf } from '@/modules/tasks/lib/owner'
 import { QuickAdd } from '@/modules/tasks/pages/TasksPage'
+
+/** Open occurrences that are this person's own or joint (Tasks page ownership rule). */
+function useOccurrencesFor(personId: string) {
+  const open = useOpenOccurrences()
+  const lists = useTaskLists().data ?? []
+  const categories = useTaskCategories().data ?? []
+  const items = open.data?.filter((o) => {
+    const owner = ownerOf(o.task, categories, lists)
+    return owner === null || owner === personId
+  })
+  return { open, items }
+}
 
 export default function DashboardPage() {
   const { me } = useHousehold()
-  const open = useOpenOccurrences()
+  const { open, items: mine } = useOccurrencesFor(me.id)
   const today = todayISO()
-  const dueToday = (open.data ?? []).filter((o) => o.due_date === today)
-  const overdue = (open.data ?? []).filter((o) => o.due_date && o.due_date < today)
+  const dueToday = (mine ?? []).filter((o) => o.due_date === today)
+  const overdue = (mine ?? []).filter((o) => o.due_date && o.due_date < today)
   const lists = useTaskLists().data ?? []
   const [composing, setComposing] = useState(false)
 
@@ -89,13 +102,16 @@ function CardLink({ to, label }: { to: string; label: string }) {
 }
 
 function TodayCard() {
-  const open = useOpenOccurrences()
+  const { me, partner } = useHousehold()
+  // Whose day: mine by default; each view includes joint tasks.
+  const [who, setWho] = useState(me.id)
+  const { open, items: theirs } = useOccurrencesFor(who)
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
   const navigate = useNavigate()
   const today = todayISO()
-  const items = (open.data ?? []).filter((o) => o.due_date && o.due_date <= today).toSorted(compareOccurrences)
+  const items = (theirs ?? []).filter((o) => o.due_date && o.due_date <= today).toSorted(compareOccurrences)
   return (
     <Card className="md:row-span-2">
       <CardHeader>
@@ -103,6 +119,19 @@ function TodayCard() {
         <CardLink to="/tasks" label="All tasks" />
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
+        {partner ? (
+          <Segmented
+            aria-label="Whose tasks"
+            size="sm"
+            className="mx-1 mb-2 sm:mx-2"
+            value={who}
+            onChange={setWho}
+            options={[
+              { value: me.id, label: 'Me + joint' },
+              { value: partner.id, label: `${partner.display_name} + joint` },
+            ]}
+          />
+        ) : null}
         {open.isPending ? (
           <ListSkeleton rows={4} className="px-2" />
         ) : open.error ? (
