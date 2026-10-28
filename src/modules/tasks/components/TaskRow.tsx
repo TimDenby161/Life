@@ -1,5 +1,4 @@
 import { Check, Flag, ListChecks, Repeat } from 'lucide-react'
-import { Avatar } from '@/components/Avatar'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -131,7 +130,6 @@ export function TaskRow({
 }) {
   const { member } = useHousehold()
   const task = occurrence.task
-  const assignee = member(occurrence.assignee_id)
   const completer = member(occurrence.completed_by)
   const alsoCompleter = member(occurrence.also_completed_by)
   const list = lists.find((l) => l.id === task.list_id)
@@ -197,12 +195,6 @@ export function TaskRow({
           ) : null}
         </div>
       </div>
-      {assignee ? (
-        <span className="flex items-center" title={`Assigned to ${assignee.display_name}`}>
-          <Avatar name={assignee.display_name} color={assignee.avatar_color} size="sm" />
-          <span className="sr-only">Assigned to {assignee.display_name}</span>
-        </span>
-      ) : null}
       {done ? null : (
         <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
       )}
