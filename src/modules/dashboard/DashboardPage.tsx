@@ -472,6 +472,8 @@ function FeedCard() {
   )
 }
 
+const HIDDEN_POTS = /service charge/i
+
 /** Each savings pot's next target (the first item not yet funded) and how far along it is. */
 function FinanceCard() {
   const pots = usePots()
@@ -479,7 +481,8 @@ function FinanceCard() {
 
   const rows = useMemo(() => {
     if (!pots.data || !balances.data) return null
-    return pots.data.pots.map((pot) => {
+    // Service charge is a bill being saved for, not a goal; it stays on the Finances page.
+    return pots.data.pots.filter((pot) => !HIDDEN_POTS.test(pot.name)).map((pot) => {
       const balance = pot.account_id ? (balances.data.get(pot.account_id) ?? 0) : 0
       const items = pots.data.items.filter((i) => i.pot_id === pot.id)
       const { item, pct } = nextTarget(balance, items)
