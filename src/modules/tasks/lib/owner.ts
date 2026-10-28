@@ -6,7 +6,7 @@ import type { TaskCategory, TaskList } from '../api'
  * assigned to someone.
  */
 export function ownerOf(
-  task: { category_id: string | null; list_id: string },
+  task: { category_id: string | null; list_id: string | null },
   categories: Pick<TaskCategory, 'id' | 'owner_id'>[],
   lists: Pick<TaskList, 'id' | 'kind' | 'owner_id'>[],
 ): string | null {

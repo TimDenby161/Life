@@ -10,11 +10,12 @@ import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { NativeSelect } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/misc'
+import { Segmented, Skeleton } from '@/components/ui/misc'
 import { formatDateTime, todayISO } from '@/lib/dates'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { usePersonSeries } from '@/modules/household/series'
-import { useCompletionEvents, useStatsOccurrences, useTaskCategories } from '../hooks'
+import { useCompletionEvents, useStatsOccurrences, useTaskCategories, useTaskLists } from '../hooks'
+import { ownerOf } from '../lib/owner'
 import { computeTaskStats } from '../lib/stats'
 
 function formatHours(h: number | null) {
@@ -29,6 +30,8 @@ export default function TaskStatsPage() {
   const series = usePersonSeries()
   const [preset, setPreset] = useState<RangePreset>('3m')
   const [range, setRange] = useState(() => rangeFromPreset('3m'))
+  // Whose tasks: 'all', 'joint', or a member's id (same rule as the Tasks page).
+  const [owner, setOwner] = useState('all')
   const [personId, setPersonId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [taskId, setTaskId] = useState('')
@@ -36,18 +39,21 @@ export default function TaskStatsPage() {
   const events = useCompletionEvents()
   const occurrences = useStatsOccurrences(range.from)
   const categories = useTaskCategories()
+  const lists = useTaskLists()
 
   const memberIds = useMemo(() => members.map((m) => m.id), [members])
   const stats = useMemo(() => {
     if (!events.data || !occurrences.data) return null
+    const isOwners = (task: { category_id: string | null; list_id: string | null }) =>
+      owner === 'all' || (ownerOf(task, categories.data ?? [], lists.data ?? []) ?? 'joint') === owner
     return computeTaskStats(
-      events.data,
-      occurrences.data,
+      events.data.filter(isOwners),
+      occurrences.data.filter((o) => o.task && isOwners(o.task)),
       memberIds,
       { ...range, personId: personId || null, categoryId: categoryId || null, taskId: taskId || null },
       todayISO(),
     )
-  }, [events.data, occurrences.data, memberIds, range, personId, categoryId, taskId])
+  }, [events.data, occurrences.data, categories.data, lists.data, owner, memberIds, range, personId, categoryId, taskId])
 
   const recurringTasks = useMemo(() => {
     const map = new Map<string, string>()
@@ -75,12 +81,24 @@ export default function TaskStatsPage() {
         }
       />
 
+      <Segmented
+        aria-label="Whose tasks"
+        className="mb-3"
+        value={owner}
+        onChange={setOwner}
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'joint', label: 'Joint' },
+          ...members.map((m) => ({ value: m.id, label: m.display_name })),
+        ]}
+      />
+
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <RangePicker preset={preset} range={range} onChange={(p, r) => { setPreset(p); setRange(r) }} />
         <NativeSelect aria-label="Person" className="h-8 w-auto rounded-full text-sm" value={personId} onChange={(e) => setPersonId(e.target.value)}>
-          <option value="">Everyone</option>
+          <option value="">Done by anyone</option>
           {members.map((m) => (
-            <option key={m.id} value={m.id}>{m.display_name}</option>
+            <option key={m.id} value={m.id}>Done by {m.display_name}</option>
           ))}
         </NativeSelect>
         <NativeSelect aria-label="Category" className="h-8 w-auto rounded-full text-sm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>

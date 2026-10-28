@@ -102,7 +102,7 @@ export type StatsOccurrence = Awaited<ReturnType<typeof fetchStatsOccurrences>>[
 /** Occurrences relevant to statistics: everything due since `from`, plus all open work. */
 export async function fetchStatsOccurrences(from: ISODate) {
   const select =
-    'id, task_id, due_date, status, assignee_id, completed_by, completed_at, created_at, task:tasks!inner(title, category_id, recurrence, archived_at)'
+    'id, task_id, due_date, status, assignee_id, completed_by, completed_at, created_at, task:tasks!inner(title, category_id, list_id, recurrence, archived_at)'
   return fetchAllPages((a, b) =>
     supabase.from('task_occurrences').select(select).or(`due_date.gte.${from},status.eq.open`).order('id').range(a, b),
   )
