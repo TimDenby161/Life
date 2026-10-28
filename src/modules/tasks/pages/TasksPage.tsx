@@ -1,6 +1,6 @@
 import { BarChart3, CheckCircle2, ChevronDown, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, Route, Routes, useSearchParams } from 'react-router'
+import { Link, Route, Routes, useNavigate, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { studyLinkFor, useStudy } from '@/modules/languages/api'
 import type { OccurrenceWithTask, TaskCategory } from '../api'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
@@ -91,6 +92,9 @@ function TaskListView() {
   const [creating, setCreating] = useState(false)
   const [showDone, setShowDone] = useState(false)
   const { collapsed, toggle: toggleGroup } = useCollapsedGroups('life.tasks.collapsed')
+  // Language tasks open their study on the Languages page instead of the task.
+  const study = useStudy().data ?? []
+  const navigate = useNavigate()
 
   const setParam = (key: string, value: string | null) =>
     setParams(
@@ -148,7 +152,11 @@ function TaskListView() {
           categories={allCategories}
           showList
           showCategory={showCategory}
-          onOpen={() => setParam('task', o.task_id)}
+          onOpen={() => {
+            const link = studyLinkFor({ ...o.task, id: o.task_id }, o.assignee_id, study, allCategories)
+            if (link) navigate(link)
+            else setParam('task', o.task_id)
+          }}
           onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />
       ))}

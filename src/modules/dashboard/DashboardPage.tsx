@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import { useAccountCurrency, useBalances, useAccounts, useBudgets, useGoals, use
 import { activeBudgets, goalProgress, netWorth, spendingByCategory } from '@/modules/finances/lib/calc'
 import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/modules/health/api'
 import { formatValue } from '@/modules/health/lib/metrics'
+import { studyLinkFor, useStudy } from '@/modules/languages/api'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
@@ -135,8 +136,10 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
-  // Tasks open in place, so editing one doesn't leave Home.
+  // Tasks open in place, so editing one doesn't leave Home; language tasks go to their study.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  const study = useStudy().data ?? []
+  const navigate = useNavigate()
   const today = todayISO()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
   // Category groups start open; collapsing one is remembered (per day slot: today / tomorrow / day after).
@@ -157,7 +160,11 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
           categories={categories}
           showList
           showCategory={showCategory}
-          onOpen={() => setOpenTaskId(o.task_id)}
+          onOpen={() => {
+            const link = studyLinkFor({ ...o.task, id: o.task_id }, o.assignee_id, study, categories)
+            if (link) navigate(link)
+            else setOpenTaskId(o.task_id)
+          }}
           onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />
       ))}

@@ -1,5 +1,5 @@
 // The languages the app teaches. Word lists load on demand (a few hundred KB each).
-import { parseVocab, type RawVocab, type Vocab } from './vocab'
+import { type Kind, parseVocab, type RawVocab, type Vocab } from './vocab'
 
 export type Language = 'zh' | 'es'
 
@@ -55,6 +55,22 @@ export const LANGUAGES: Record<Language, LanguageConfig> = {
 }
 
 export const LANGUAGE_IDS = Object.keys(LANGUAGES) as Language[]
+
+/** The part of a day's study a task stands for: new words, new characters or the review. */
+export type StudyPart = Kind | 'review'
+
+/**
+ * Which language and part a task is for, judged by its title and category name
+ * ("Learn two Spanish words", "Mandarin review"). Null for anything else.
+ */
+export function studyPartOf(title: string, category = ''): { language: Language; part: StudyPart } | null {
+  const language = LANGUAGE_IDS.find((l) => LANGUAGES[l].jobPattern.test(`${title} ${category}`))
+  if (!language) return null
+  if (/review/i.test(title)) return { language, part: 'review' }
+  if (LANGUAGES[language].hasCharacters && /characters?/i.test(title)) return { language, part: 'character' }
+  if (/words?/i.test(title)) return { language, part: 'word' }
+  return null
+}
 
 export function isLanguage(value: string | null): value is Language {
   return !!value && value in LANGUAGES

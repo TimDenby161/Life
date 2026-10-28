@@ -1,5 +1,5 @@
 import { Check, GraduationCap, Plus, Repeat, Settings2, Volume2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
@@ -12,12 +12,14 @@ import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import type { Job, TaskCategory } from '@/modules/tasks/api'
-import { useJobs, useTaskCategories } from '@/modules/tasks/hooks'
+import type { TaskCategory } from '@/modules/tasks/api'
+import { useOpenOccurrences, useTaskCategories } from '@/modules/tasks/hooks'
 import {
   type Progress,
   type Study,
   type StudySettings,
+  type StudyTask,
+  studyTasks,
   useLearnItem,
   useProgress,
   useReviewItem,
@@ -27,7 +29,7 @@ import {
   useTickOffJob,
   useVocab,
 } from './api'
-import { isLanguage, type Language, LANGUAGE_IDS, LANGUAGES, type LanguageConfig } from './lib/languages'
+import { isLanguage, type Language, LANGUAGE_IDS, LANGUAGES, type LanguageConfig, studyPartOf } from './lib/languages'
 import { canSpeak, speak } from './lib/speech'
 import { dueForReview, type Kind, levelProgress, nextToLearn, remainingToday, type Vocab, type VocabItem } from './lib/vocab'
 
@@ -39,20 +41,22 @@ const KIND: Record<Kind, { plural: string; job: 'words_task_id' | 'characters_ta
 export default function LanguagesPage() {
   const { me, partner, member } = useHousehold()
   const [params, setParams] = useSearchParams()
-  const [personId, setPersonId] = useState(me.id)
+  // Arriving from a task (?person=…&part=…) opens that person's study at that part.
+  const [personId, setPersonId] = useState(() => member(params.get('person'))?.id ?? me.id)
   const person = member(personId) ?? me
   const own = personId === me.id
   const study = useStudy()
   const progress = useProgress()
-  const jobs = useJobs()
+  const openOccurrences = useOpenOccurrences()
+  const tasks = useMemo(() => studyTasks(openOccurrences.data ?? []), [openOccurrences.data])
   const categories = useTaskCategories()
   const setStudying = useSetStudying()
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState(false)
 
   // Each person sees only the languages they learn (Tim: both; Sophie: Spanish).
-  const learning = languagesOf(personId, study.data ?? [], jobs.data ?? [])
-  const myLanguages = languagesOf(me.id, study.data ?? [], jobs.data ?? [])
+  const learning = languagesOf(personId, study.data ?? [], tasks)
+  const myLanguages = languagesOf(me.id, study.data ?? [], tasks)
   const fromUrl = params.get('lang')
   const language: Language = isLanguage(fromUrl) && learning.includes(fromUrl) ? fromUrl : (learning[0] ?? 'zh')
   const config = LANGUAGES[language]
@@ -72,9 +76,9 @@ export default function LanguagesPage() {
     [rows],
   )
   const row = study.data?.find((s) => s.user_id === personId && s.language === language)
-  const settings = row ?? defaultSettings(config, jobs.data ?? [], categories.data ?? [], personId)
+  const settings = withDefaultTasks(row, defaultSettings(config, tasks, categories.data ?? [], personId))
   const settingsFor = (l: Language) =>
-    study.data?.find((s) => s.user_id === me.id && s.language === l) ?? defaultSettings(LANGUAGES[l], jobs.data ?? [], categories.data ?? [], me.id)
+    withDefaultTasks(study.data?.find((s) => s.user_id === me.id && s.language === l), defaultSettings(LANGUAGES[l], tasks, categories.data ?? [], me.id))
 
   // Saving every language the person learns makes the choice explicit, so a
   // guessed list (no rows yet) doesn't change when one is added or stopped.
@@ -94,9 +98,19 @@ export default function LanguagesPage() {
   }
   const addable = LANGUAGE_IDS.filter((l) => !myLanguages.includes(l))
   const due = dueForReview(rows, today)
-  const jobById = (id: string | null) => (id ? jobs.data?.find((j) => j.id === id) : undefined)
+  const jobById = (id: string | null) => (id ? tasks.find((t) => t.id === id) : undefined)
   const error = vocab.error ?? study.error ?? progress.error
   const kinds: Kind[] = config.hasCharacters ? ['word', 'character'] : ['word']
+
+  // Straight to the part the task was for: the review starts, words scroll into view.
+  const part = params.get('part')
+  const ready = Boolean(vocab.data && study.data && progress.data)
+  useEffect(() => {
+    if (!part || !ready) return
+    if (part === 'review' && own && due.length) setReviewing(true)
+    else document.getElementById(`study-${part}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setParams((p) => { p.delete('part'); return p }, { replace: true })
+  }, [part, ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -196,7 +210,7 @@ export default function LanguagesPage() {
           language={language}
           exists={!!row}
           initial={settings}
-          jobs={(jobs.data ?? []).filter((j) => !j.assignee_id || j.assignee_id === me.id)}
+          jobs={tasks.filter((t) => !t.assignee_id || t.assignee_id === me.id)}
           stopping={setStudying.isPending}
           onStop={() => changeLanguage(language, false)}
           onClose={() => setEditing(false)}
@@ -210,7 +224,7 @@ export default function LanguagesPage() {
  * The languages someone learns: their active settings rows. Before they have
  * any, the languages their jobs mention, or all of them to choose from.
  */
-function languagesOf(personId: string, study: Study[], jobs: Job[]): Language[] {
+function languagesOf(personId: string, study: Study[], jobs: StudyTask[]): Language[] {
   const rows = study.filter((s) => s.user_id === personId)
   if (rows.length) return LANGUAGE_IDS.filter((l) => rows.some((s) => s.language === l && s.active))
   const mine = jobs.filter((j) => j.assignee_id === personId)
@@ -218,17 +232,34 @@ function languagesOf(personId: string, study: Study[], jobs: Job[]): Language[] 
   return guessed.length ? guessed : LANGUAGE_IDS
 }
 
-/** Before anyone saves settings: the language's daily amounts from the start, linked to their jobs by name. */
-function defaultSettings(config: LanguageConfig, jobs: Job[], categories: TaskCategory[], personId: string): StudySettings {
+/** Before anyone saves settings: the language's daily amounts from the start, linked to their tasks by name. */
+function defaultSettings(config: LanguageConfig, tasks: StudyTask[], categories: TaskCategory[], personId: string): StudySettings {
   const category = (id: string | null) => categories.find((c) => c.id === id)?.name ?? ''
-  const matching = jobs.filter((j) => (!j.assignee_id || j.assignee_id === personId) && config.jobPattern.test(`${j.title} ${category(j.category_id)}`))
-  const find = (pattern: RegExp) => matching.find((j) => pattern.test(j.title))?.id ?? null
+  const mine = tasks.filter((t) => !t.assignee_id || t.assignee_id === personId)
+  // Someone's own task beats a shared one.
+  mine.sort((a, b) => Number(!a.assignee_id) - Number(!b.assignee_id))
+  const find = (part: string) =>
+    mine.find((t) => {
+      const found = studyPartOf(t.title, category(t.category_id))
+      return found?.part === part && LANGUAGES[found.language] === config
+    })?.id ?? null
   return {
     ...config.defaults,
     start_level: 1,
-    words_task_id: find(/new .*words?/i),
-    characters_task_id: config.hasCharacters ? find(/characters?/i) : null,
-    review_task_id: find(/review/i),
+    words_task_id: find('word'),
+    characters_task_id: config.hasCharacters ? find('character') : null,
+    review_task_id: find('review'),
+  }
+}
+
+/** Saved settings, with any part left unlinked linked to the task its name matches. */
+function withDefaultTasks(row: Study | undefined, defaults: StudySettings): StudySettings | Study {
+  if (!row) return defaults
+  return {
+    ...row,
+    words_task_id: row.words_task_id ?? defaults.words_task_id,
+    characters_task_id: row.characters_task_id ?? defaults.characters_task_id,
+    review_task_id: row.review_task_id ?? defaults.review_task_id,
   }
 }
 
@@ -242,11 +273,11 @@ function Tile({ label, value, of }: { label: string; value: number; of?: number 
   )
 }
 
-function ReviewSection({ due, hasLearned, reviewJob, onStart }: { due: number; hasLearned: boolean; reviewJob?: Job; onStart: () => void }) {
+function ReviewSection({ due, hasLearned, reviewJob, onStart }: { due: number; hasLearned: boolean; reviewJob?: StudyTask; onStart: () => void }) {
   const tick = useTickOffJob()
   const jobDue = !!reviewJob?.open[0]?.due_date && reviewJob.open[0].due_date <= todayISO()
   return (
-    <>
+    <div id="study-review" className="scroll-mt-20">
       <SectionTitle>Review</SectionTitle>
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
@@ -263,7 +294,7 @@ function ReviewSection({ due, hasLearned, reviewJob, onStart }: { due: number; h
           </Button>
         ) : null}
       </Card>
-    </>
+    </div>
   )
 }
 
@@ -286,7 +317,7 @@ function NewItemsSection({
   learned: ReadonlySet<string>
   perDay: number
   startLevel: number
-  job?: Job
+  job?: StudyTask
 }) {
   const learn = useLearnItem()
   const tick = useTickOffJob()
@@ -315,7 +346,7 @@ function NewItemsSection({
   }
 
   return (
-    <>
+    <div id={`study-${kind}`} className="scroll-mt-20">
       <SectionTitle action={<span className="text-xs text-muted-foreground tabular">{learnedToday.length} / {perDay} today</span>}>
         New {plural}
       </SectionTitle>
@@ -343,7 +374,7 @@ function NewItemsSection({
         </div>
       ) : null}
       {learn.error ? <p className="mt-2 text-sm text-destructive">{getErrorMessage(learn.error)}</p> : null}
-    </>
+    </div>
   )
 }
 
@@ -393,7 +424,7 @@ function SpeakButton({ text, lang }: { text: string; lang: string }) {
   )
 }
 
-function ReviewDialog({ language, rows, vocab, reviewJob, onClose }: { language: Language; rows: Progress[]; vocab: Vocab; reviewJob?: Job; onClose: () => void }) {
+function ReviewDialog({ language, rows, vocab, reviewJob, onClose }: { language: Language; rows: Progress[]; vocab: Vocab; reviewJob?: StudyTask; onClose: () => void }) {
   const review = useReviewItem()
   const tick = useTickOffJob()
   const config = LANGUAGES[language]
@@ -464,7 +495,7 @@ function SettingsDialog({
   language: Language
   exists: boolean
   initial: StudySettings | Study
-  jobs: Job[]
+  jobs: StudyTask[]
   stopping: boolean
   onStop: () => void
   onClose: () => void
