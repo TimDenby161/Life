@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Wallet } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Avatar } from '@/components/Avatar'
@@ -7,9 +7,11 @@ import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { addDaysISO, formatDay, greeting, monthStart, parseISODate, todayISO } from '@/lib/dates'
+import { getErrorMessage } from '@/lib/errors'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -26,12 +28,12 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskGroup } from '@/modules/tasks/components/GroupToggle'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
-import { useCompleteOccurrence, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
+import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
-import { categorySubgroups, QuickAdd } from '@/modules/tasks/pages/TasksPage'
+import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
 
 /**
  * Open occurrences that are this person's own (Tasks page ownership rule),
@@ -56,7 +58,6 @@ export default function DashboardPage() {
   const today = todayISO()
   const dueToday = (items ?? []).filter((o) => o.due_date === today)
   const overdue = (items ?? []).filter((o) => o.due_date && o.due_date < today)
-  const lists = useTaskLists().data ?? []
   const [composing, setComposing] = useState(false)
 
   const summary = open.data
@@ -83,7 +84,7 @@ export default function DashboardPage() {
         </Button>
       </header>
 
-      <QuickAdd listId={lists.find((l) => l.kind === 'joint')?.id} placeholder="Quick add a joint task…" />
+      <AddTask />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <DaysCard
@@ -118,6 +119,130 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * Adding from Home always asks who, which category and when. A person's task
+ * goes on their own list (so it shows as theirs); joint ones on the joint list.
+ */
+function AddTask() {
+  const { members } = useHousehold()
+  const lists = useTaskLists().data ?? []
+  const categories = useTaskCategories().data ?? []
+  const create = useCreateTask()
+  const today = todayISO()
+  const [title, setTitle] = useState('')
+  const [who, setWho] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [dueDate, setDueDate] = useState('')
+
+  // An owned category is always its owner's, so picking one picks the person too.
+  const pickCategory = (id: string) => {
+    setCategoryId(id)
+    const owner = categories.find((c) => c.id === id)?.owner_id
+    if (owner) setWho(owner)
+  }
+  const pickWho = (value: string) => {
+    setWho(value)
+    const owner = categories.find((c) => c.id === categoryId)?.owner_id
+    if (owner && owner !== value) setCategoryId('')
+  }
+  // Before choosing who, every category; after, the shared ones plus that person's own.
+  const choices = categories.filter((c) => !who || !c.owner_id || c.owner_id === who)
+  const list = who === 'joint' ? lists.find((l) => l.kind === 'joint') : lists.find((l) => l.kind === 'personal' && l.owner_id === who)
+  const ready = Boolean(title.trim() && list && categoryId && dueDate)
+
+  return (
+    <Card className="grid gap-2.5 p-3">
+      <form
+        className="grid gap-2.5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!ready || !list) return
+          create.mutate(
+            {
+              title: title.trim(),
+              list_id: list.id,
+              assignee_id: who === 'joint' ? null : who,
+              due_date: dueDate,
+              due_time: null,
+              priority: 'normal',
+              category_id: categoryId,
+              description: null,
+              recurrence: null,
+            },
+            {
+              onSuccess: () => {
+                setTitle('')
+                setWho('')
+                setCategoryId('')
+                setDueDate('')
+              },
+            },
+          )
+        }}
+      >
+        <div className="relative">
+          <Plus className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="New task"
+            placeholder="Add a task…"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="h-11 rounded-full pl-10"
+            maxLength={200}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            aria-label="Who"
+            size="sm"
+            value={who}
+            onChange={pickWho}
+            options={[{ value: 'joint', label: 'Joint' }, ...members.map((m) => ({ value: m.id, label: m.display_name }))]}
+          />
+          <NativeSelect
+            aria-label="Category"
+            className={cn('h-8 w-auto rounded-full text-sm', !categoryId && 'text-muted-foreground')}
+            value={categoryId}
+            onChange={(e) => pickCategory(e.target.value)}
+          >
+            <option value="" disabled>Category</option>
+            {choices.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </NativeSelect>
+          <div className="flex items-center gap-1">
+            {[
+              { label: 'Today', value: today },
+              { label: 'Tomorrow', value: addDaysISO(today, 1) },
+            ].map((d) => (
+              <Button
+                key={d.label}
+                type="button"
+                size="sm"
+                variant={dueDate === d.value ? 'secondary' : 'ghost'}
+                className="h-8 rounded-full"
+                aria-pressed={dueDate === d.value}
+                onClick={() => setDueDate(d.value)}
+              >
+                {d.label}
+              </Button>
+            ))}
+            <Input
+              type="date"
+              aria-label="Due date"
+              className={cn('h-8 w-auto rounded-full text-sm', !dueDate && 'text-muted-foreground')}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <Button type="submit" size="sm" className="ml-auto h-8 rounded-full" disabled={!ready || create.isPending}>
+            Add
+          </Button>
+        </div>
+        {create.error ? <p className="text-sm text-destructive">{getErrorMessage(create.error)}</p> : null}
+      </form>
+    </Card>
   )
 }
 
