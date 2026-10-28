@@ -21,6 +21,7 @@ import { type ActivityGroup, groupActivity } from '@/modules/feed/lib/activity'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useExerciseSessions } from '@/modules/health/api'
+import { LogExerciseDialog } from '@/modules/health/components/LogExerciseDialog'
 import { weeklyExerciseMinutes } from '@/modules/health/lib/metrics'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskGroup } from '@/modules/tasks/components/GroupToggle'
@@ -528,6 +529,7 @@ function HealthCard() {
   const most = Math.max(1, ...week.totals.map((t) => t.minutes))
   const leader = week.totals[0]
   const clearLead = leader && leader.minutes > 0 && leader.minutes > (week.totals[1]?.minutes ?? 0)
+  const [logging, setLogging] = useState(false)
 
   return (
     <Card>
@@ -538,7 +540,12 @@ function HealthCard() {
             {format(parseISODate(week.weekStart), 'EEE d MMM')} – {format(parseISODate(week.weekEnd), 'EEE d MMM')}
           </p>
         </div>
-        <CardLink to="/health" label="Health" />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-xs" onClick={() => setLogging(true)}>
+            <Plus className="size-3.5" /> Add
+          </Button>
+          <CardLink to="/health" label="Health" />
+        </div>
       </CardHeader>
       <CardContent>
         {exercise.isPending ? (
@@ -572,6 +579,7 @@ function HealthCard() {
           <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><HeartPulse className="size-3.5" /> No exercise logged yet this week.</p>
         ) : null}
       </CardContent>
+      <LogExerciseDialog open={logging} onClose={() => setLogging(false)} />
     </Card>
   )
 }

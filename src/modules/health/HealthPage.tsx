@@ -8,7 +8,7 @@ import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Field, Input, Textarea } from '@/components/ui/input'
+import { Field, Input } from '@/components/ui/input'
 import { Badge, Segmented, Skeleton } from '@/components/ui/misc'
 import { addDaysISO, daysBetween, formatDay, parseISODate, todayISO } from '@/lib/dates'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -16,7 +16,6 @@ import {
   type ExerciseSession,
   type MetricDefinition,
   type Period,
-  useAddExercise,
   useAddMeasurement,
   useAddPeriod,
   useDeleteExercise,
@@ -28,6 +27,7 @@ import {
   usePeriods,
   useUpdatePeriod,
 } from './api'
+import { LogExerciseDialog } from './components/LogExerciseDialog'
 import { type Aggregation, cycleSummary, dailySeries, formatValue, latestWithChange, movingAverage } from './lib/metrics'
 
 export default function HealthPage() {
@@ -300,21 +300,15 @@ function formatMinutes(mins: number) {
 }
 
 function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSession[] }) {
-  const add = useAddExercise()
   const del = useDeleteExercise()
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
-  const [description, setDescription] = useState('')
-  const [when, setWhen] = useState(nowLocalInput)
-  const [duration, setDuration] = useState('')
-  const [error, setError] = useState<string | null>(null)
   if (!own && !sessions.length) return null
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
   const thisWeek = sessions.filter((s) => parseISO(s.started_at) >= weekStart)
-  const close = () => { setOpen(false); setDescription(''); setDuration(''); setError(null) }
   return (
     <section className="mt-2">
-      <SectionTitle action={own ? <Button variant="ghost" size="sm" onClick={() => { setWhen(nowLocalInput()); setOpen(true) }}><Plus /> Add</Button> : null}>Exercise</SectionTitle>
+      <SectionTitle action={own ? <Button variant="ghost" size="sm" onClick={() => setOpen(true)}><Plus /> Add</Button> : null}>Exercise</SectionTitle>
       <Card className="p-2">
         {sessions.length ? (
           <>
@@ -341,32 +335,7 @@ function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSe
           <p className="p-4 text-sm text-muted-foreground">No exercise logged yet.</p>
         )}
       </Card>
-      <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
-        <DialogContent title="Log exercise">
-          <form
-            className="grid gap-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const mins = Number.parseInt(duration, 10)
-              if (!description.trim()) return setError('Say what you did')
-              if (!Number.isFinite(mins) || mins <= 0 || mins > 1440) return setError('Enter how many minutes')
-              add.mutate({ description: description.trim(), started_at: new Date(when).toISOString(), duration_minutes: mins }, { onSuccess: close })
-            }}
-          >
-            <Field label="What did you do?" htmlFor="ex-desc" error={error}>
-              <Textarea id="ex-desc" autoFocus rows={2} value={description} maxLength={500} placeholder="e.g. 5k run around the park, or legs day at the gym" onChange={(e) => { setDescription(e.target.value); setError(null) }} />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Minutes" htmlFor="ex-min"><Input id="ex-min" inputMode="numeric" value={duration} onChange={(e) => { setDuration(e.target.value); setError(null) }} /></Field>
-              <Field label="When" htmlFor="ex-when"><Input id="ex-when" type="datetime-local" value={when} max={nowLocalInput()} onChange={(e) => setWhen(e.target.value)} /></Field>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={close}>Cancel</Button>
-              <Button type="submit" disabled={add.isPending}>Save</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <LogExerciseDialog open={open} onClose={() => setOpen(false)} />
     </section>
   )
 }
