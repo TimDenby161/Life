@@ -28,14 +28,17 @@ import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
 import { QuickAdd } from '@/modules/tasks/pages/TasksPage'
 
-/** Open occurrences that are this person's own or joint (Tasks page ownership rule). */
-function useOccurrencesFor(personId: string) {
+/**
+ * Open occurrences that are this person's own (Tasks page ownership rule),
+ * plus the joint ones when `withJoint` is set.
+ */
+function useOccurrencesFor(personId: string, withJoint = true) {
   const open = useOpenOccurrences()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const items = open.data?.filter((o) => {
     const owner = ownerOf(o.task, categories, lists)
-    return owner === null || owner === personId
+    return owner === personId || (withJoint && owner === null)
   })
   return { open, items }
 }
@@ -103,9 +106,9 @@ function CardLink({ to, label }: { to: string; label: string }) {
 
 function TodayCard() {
   const { me, partner } = useHousehold()
-  // Whose day: mine by default; each view includes joint tasks.
+  // Mine + joint by default; the partner view is only their own tasks.
   const [who, setWho] = useState(me.id)
-  const { open, items: theirs } = useOccurrencesFor(who)
+  const { open, items: theirs } = useOccurrencesFor(who, who === me.id)
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
@@ -127,8 +130,8 @@ function TodayCard() {
             value={who}
             onChange={setWho}
             options={[
-              { value: me.id, label: 'Me + joint' },
-              { value: partner.id, label: `${partner.display_name} + joint` },
+              { value: me.id, label: `${me.display_name} + Joint` },
+              { value: partner.id, label: partner.display_name },
             ]}
           />
         ) : null}
