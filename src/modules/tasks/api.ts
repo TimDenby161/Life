@@ -177,6 +177,13 @@ export async function reopenOccurrence(occurrenceId: string) {
   return unwrap(await supabase.rpc('reopen_task_occurrence', { p_occurrence_id: occurrenceId }))
 }
 
+/** Credits a completed occurrence to someone else (recorded as a new history event). */
+export async function setCompletedBy(occurrenceId: string, personId: string) {
+  return unwrap(
+    await supabase.rpc('set_task_occurrence_completed_by', { p_occurrence_id: occurrenceId, p_completed_by: personId }),
+  )
+}
+
 /** Reschedules a single occurrence (e.g. bins moved for a bank holiday). */
 export async function moveOccurrence(id: string, dueDate: string) {
   unwrap(await supabase.from('task_occurrences').update({ due_date: dueDate }).eq('id', id))

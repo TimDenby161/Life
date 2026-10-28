@@ -2336,6 +2336,30 @@ export type Database = {
         Args: { p_household_id: string; p_links: Json }
         Returns: undefined
       }
+      set_task_occurrence_completed_by: {
+        Args: { p_completed_by: string; p_occurrence_id: string }
+        Returns: {
+          assignee_id: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          due_date: string | null
+          due_time: string | null
+          generated_from: string | null
+          household_id: string
+          id: string
+          sequence: number
+          status: string
+          task_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "task_occurrences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       shares_household_with: { Args: { p_user_id: string }; Returns: boolean }
       skip_task_occurrence: {
         Args: { p_note?: string; p_occurrence_id: string }

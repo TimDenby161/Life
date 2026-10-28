@@ -27,6 +27,7 @@ import {
   useDeleteTask,
   useMoveOccurrence,
   useReopenOccurrence,
+  useSetCompletedBy,
   useSkipOccurrence,
   useSubtaskMutations,
   useTaskCategories,
@@ -363,14 +364,26 @@ function Comments({ taskId, comments }: { taskId: string; comments: DetailData['
 }
 
 function History({ events }: { events: CompletionEvent[] }) {
-  const { member } = useHousehold()
+  const { member, members } = useHousehold()
+  const setCompletedBy = useSetCompletedBy()
   if (!events.length) return null
   const verb = { completed: 'completed', skipped: 'Skipped', reopened: 'Reopened' } as const
+  // Events come newest first. The first one per occurrence is its current state;
+  // a completion followed by another completion was corrected (who did it), so
+  // only the newer one is shown.
+  const newer = new Map<string, string>()
+  const shown: { event: CompletionEvent; current: boolean }[] = []
+  for (const e of events) {
+    const after = newer.get(e.occurrence_id)
+    newer.set(e.occurrence_id, e.event_type)
+    if (e.event_type === 'completed' && after === 'completed') continue
+    shown.push({ event: e, current: after === undefined })
+  }
   return (
     <section aria-label="History" className="grid gap-1.5">
       <h3 className="text-sm font-semibold">History</h3>
       <ol className="grid gap-1 text-sm">
-        {events.slice(0, 12).map((e) => {
+        {shown.slice(0, 12).map(({ event: e, current }) => {
           const who = member(e.completed_by)
           const recorder = member(e.recorded_by)
           return (
@@ -379,7 +392,22 @@ function History({ events }: { events: CompletionEvent[] }) {
               <span>
                 {e.event_type === 'completed' ? (
                   <>
-                    <span className="font-medium text-foreground">{who?.display_name ?? 'Someone'}</span> completed
+                    {current ? (
+                      <NativeSelect
+                        aria-label="Who did it"
+                        value={e.completed_by ?? ''}
+                        disabled={setCompletedBy.isPending}
+                        onChange={(ev) => setCompletedBy.mutate({ occurrenceId: e.occurrence_id, personId: ev.target.value })}
+                        className="mr-1 inline-flex h-7 w-auto py-0 pl-2 pr-7 text-sm font-medium text-foreground"
+                      >
+                        {members.map((m) => (
+                          <option key={m.id} value={m.id}>{m.display_name}</option>
+                        ))}
+                      </NativeSelect>
+                    ) : (
+                      <span className="font-medium text-foreground">{who?.display_name ?? 'Someone'}</span>
+                    )}{' '}
+                    completed
                     {e.due_date ? <> · due {format(parseISODate(e.due_date), 'EEE d MMM')}</> : null}
                     {recorder && recorder.id !== who?.id ? <> (recorded by {recorder.display_name})</> : null}
                   </>

@@ -118,6 +118,15 @@ export function useReopenOccurrence() {
   return useMutation({ mutationFn: api.reopenOccurrence, onSuccess: invalidate })
 }
 
+export function useSetCompletedBy() {
+  const invalidate = useInvalidateTasks()
+  return useMutation({
+    mutationFn: ({ occurrenceId, personId }: { occurrenceId: string; personId: string }) =>
+      api.setCompletedBy(occurrenceId, personId),
+    onSuccess: invalidate,
+  })
+}
+
 export function useMoveOccurrence() {
   const invalidate = useInvalidateTasks()
   return useMutation({
