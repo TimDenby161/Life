@@ -254,7 +254,7 @@ function CardLink({ to, label }: { to: string; label: string }) {
 }
 
 /**
- * Today (including overdue), tomorrow and the day after, each collapsible and
+ * Today (including overdue) and the next four days, each collapsible and
  * split into collapsible categories; only Today starts open.
  */
 function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> & { filter: ReactNode }) {
@@ -266,7 +266,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
   const today = todayISO()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
-  // Category groups start open; collapsing one is remembered (per day slot: today / tomorrow / day after).
+  // Category groups start open; collapsing one is remembered (per day slot: today, tomorrow, then days 2–4 ahead).
   const { collapsed, toggle: toggleCategory } = useCollapsedGroups('life.home.collapsed')
   const toggle = (day: string) =>
     setExpanded((prev) => {
@@ -290,11 +290,11 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
       ))}
     </ul>
   )
-  const days = [0, 1, 2].map((i) => {
+  const days = [0, 1, 2, 3, 4].map((i) => {
     const day = addDaysISO(today, i)
     return {
       day,
-      slot: ['today', 'tomorrow', 'later'][i],
+      slot: i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day${i}`,
       label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
       items: (items ?? [])
         .filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day))
