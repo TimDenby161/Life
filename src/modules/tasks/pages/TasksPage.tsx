@@ -12,7 +12,7 @@ import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import type { OccurrenceWithTask, TaskCategory } from '../api'
+import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
@@ -67,8 +67,9 @@ function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]
 function TaskListView() {
   const { members } = useHousehold()
   const [params, setParams] = useSearchParams()
-  // 'all', a member's id, or 'none' for unassigned.
-  const who = params.get('who') ?? 'all'
+  // 'joint', or a member's id for the tasks that are only ever theirs.
+  const whoParam = params.get('who')
+  const who = members.some((m) => m.id === whoParam) ? whoParam! : 'joint'
   const groupMode = params.get('group') === 'date' ? 'date' : 'category'
   const openTaskId = params.get('task')
 
@@ -92,13 +93,16 @@ function TaskListView() {
       { replace: key !== 'task' },
     )
 
-  const filter = (o: OccurrenceWithTask) =>
-    who === 'all' || (who === 'none' ? !o.assignee_id : o.assignee_id === who)
+  const allLists = lists.data ?? []
+  const allCategories = categories.data ?? []
+  // Joint tasks can still be assigned to someone; a person's own are the ones
+  // in a category they own or on their personal list.
+  const filter = (o: OccurrenceWithTask) => (ownerOf(o.task, allCategories, allLists) ?? 'joint') === who
 
   const today = todayISO()
   const visible = useMemo(
     () => (open.data ?? []).filter(filter).toSorted(compareOccurrences),
-    [open.data, who],
+    [open.data, who, allCategories, allLists],
   )
   const sections = useMemo(() => groupBy(visible, (o) => sectionOf(o.due_date, today)), [visible, today])
   const recentDone = (done.data ?? []).filter(filter)
@@ -107,13 +111,13 @@ function TaskListView() {
     today: sections.today?.length ?? 0,
     overdue: sections.overdue?.length ?? 0,
   }
-  const allLists = lists.data ?? []
   // New tasks land where the filter will show them: a person's own list, otherwise the joint one.
   const addList = allLists.find((l) => l.kind === 'personal' && l.owner_id === who) ?? allLists.find((l) => l.kind === 'joint')
-  const allCategories = categories.data ?? []
-  // A category that belongs to someone else (or to anyone, for Unassigned) has nothing for this view.
+  // Joint shows the shared categories; a person sees their own plus any shared one holding their personal tasks.
   const shownCategories =
-    who === 'all' ? allCategories : allCategories.filter((c) => !c.owner_id || c.owner_id === who)
+    who === 'joint'
+      ? allCategories.filter((c) => !c.owner_id)
+      : allCategories.filter((c) => c.owner_id === who || (!c.owner_id && visible.some((o) => o.task.category_id === c.id)))
   const groups: Group[] =
     groupMode === 'category'
       ? groupByCategory(visible, shownCategories)
@@ -151,13 +155,12 @@ function TaskListView() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Segmented
-          aria-label="Assigned to"
+          aria-label="Whose tasks"
           value={who}
-          onChange={(v) => setParam('who', v === 'all' ? null : v)}
+          onChange={(v) => setParam('who', v === 'joint' ? null : v)}
           options={[
-            { value: 'all', label: 'All' },
+            { value: 'joint', label: 'Joint' },
             ...members.map((m) => ({ value: m.id, label: m.display_name })),
-            { value: 'none', label: 'Unassigned' },
           ]}
         />
         <Segmented
@@ -265,6 +268,18 @@ function TaskListView() {
       <TaskDetailDialog taskId={openTaskId} onClose={() => setParam('task', null)} />
     </>
   )
+}
+
+/** The one person a task belongs to (owned category, then personal list), or null for joint. */
+function ownerOf(
+  task: Pick<OccurrenceWithTask['task'], 'category_id' | 'list_id'>,
+  categories: TaskCategory[],
+  lists: TaskList[],
+): string | null {
+  const category = categories.find((c) => c.id === task.category_id)
+  if (category?.owner_id) return category.owner_id
+  const list = lists.find((l) => l.id === task.list_id)
+  return list?.kind === 'personal' ? list.owner_id : null
 }
 
 export function NewTaskDialog({
