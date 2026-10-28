@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import { activeBudgets, goalProgress, netWorth, spendingByCategory } from '@/mod
 import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/modules/health/api'
 import { formatValue } from '@/modules/health/lib/metrics'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
@@ -134,7 +135,8 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
-  const navigate = useNavigate()
+  // Tasks open in place, so editing one doesn't leave Home.
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const today = todayISO()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
   // Category groups start open; collapsing one is remembered (per day slot: today / tomorrow / day after).
@@ -155,7 +157,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
           categories={categories}
           showList
           showCategory={showCategory}
-          onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
+          onOpen={() => setOpenTaskId(o.task_id)}
           onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />
       ))}
@@ -236,6 +238,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
           })
         )}
       </CardContent>
+      <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
     </Card>
   )
 }
