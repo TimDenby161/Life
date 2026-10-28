@@ -20,7 +20,7 @@ import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/h
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
-import { useCreateCategory, useCreateRoom, useSetCategoryOwner, useTaskCategories, useTaskRooms } from '@/modules/tasks/hooks'
+import { useCreateCategory, useCreateRoom, useDeleteCategory, useDeleteRoom, useSetCategoryOwner, useTaskCategories, useTaskRooms } from '@/modules/tasks/hooks'
 
 export default function SettingsPage() {
   const { hash } = useLocation()
@@ -322,13 +322,14 @@ function CategoriesSection() {
   const categories = useTaskCategories()
   const create = useCreateCategory()
   const setOwner = useSetCategoryOwner()
+  const remove = useDeleteCategory()
   const { members } = useHousehold()
   const [name, setName] = useState('')
   return (
     <section>
       <SectionTitle>Task categories</SectionTitle>
       <Card className="grid gap-3 p-4">
-        <p className="text-xs text-muted-foreground">Give a category to one person and every task in it is assigned to them.</p>
+        <p className="text-xs text-muted-foreground">Give a category to one person and every task in it is assigned to them. Removing a category keeps its tasks.</p>
         <ul className="grid gap-1">
           {(categories.data ?? []).map((c) => (
             <li key={c.id} className="flex items-center gap-2">
@@ -345,6 +346,7 @@ function CategoriesSection() {
                   <option key={m.id} value={m.id}>{m.display_name}</option>
                 ))}
               </NativeSelect>
+              <Button variant="ghost" size="icon-sm" aria-label={`Remove ${c.name}`} disabled={remove.isPending} onClick={() => remove.mutate(c.id)}><Trash2 /></Button>
             </li>
           ))}
         </ul>
@@ -360,18 +362,22 @@ function CategoriesSection() {
 function RoomsSection() {
   const rooms = useTaskRooms()
   const create = useCreateRoom()
+  const remove = useDeleteRoom()
   const [name, setName] = useState('')
   const all = rooms.data ?? []
   return (
     <section>
       <SectionTitle>Rooms</SectionTitle>
       <Card className="grid gap-3 p-4">
-        <p className="text-xs text-muted-foreground">The Jobs page groups regular jobs by room.</p>
-        <div className="flex flex-wrap gap-1.5">
+        <p className="text-xs text-muted-foreground">The Jobs page groups regular jobs by room. Removing a room keeps its jobs.</p>
+        <ul className="grid gap-1">
           {all.map((r) => (
-            <Badge key={r.id} tone="neutral">{r.name}</Badge>
+            <li key={r.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm">{r.name}</span>
+              <Button variant="ghost" size="icon-sm" aria-label={`Remove ${r.name}`} disabled={remove.isPending} onClick={() => remove.mutate(r.id)}><Trash2 /></Button>
+            </li>
           ))}
-        </div>
+        </ul>
         <form
           className="flex gap-2"
           onSubmit={(e) => {

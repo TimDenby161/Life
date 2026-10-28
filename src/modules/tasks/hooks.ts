@@ -163,6 +163,24 @@ export function useCreateCategory() {
   })
 }
 
+export function useDeleteCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteCategory,
+    // Its tasks lose the category.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+}
+
+export function useDeleteRoom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteRoom,
+    // Its jobs lose the room.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+}
+
 export function useSetCategoryOwner() {
   const qc = useQueryClient()
   return useMutation({

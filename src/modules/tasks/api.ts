@@ -206,6 +206,16 @@ export async function createCategory(householdId: string, name: string, color: s
   return unwrap(await supabase.from('task_categories').insert({ household_id: householdId, name, color }).select('*').single())
 }
 
+/** Its tasks stay, without a category. */
+export async function deleteCategory(id: string) {
+  unwrap(await supabase.from('task_categories').delete().eq('id', id))
+}
+
+/** Its jobs stay, without a room. */
+export async function deleteRoom(id: string) {
+  unwrap(await supabase.from('task_rooms').delete().eq('id', id))
+}
+
 /** The database reassigns the category's tasks to a new owner. */
 export async function setCategoryOwner(id: string, ownerId: string | null) {
   unwrap(await supabase.from('task_categories').update({ owner_id: ownerId }).eq('id', id))
