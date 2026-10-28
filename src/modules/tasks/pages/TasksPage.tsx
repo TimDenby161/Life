@@ -238,15 +238,26 @@ function TaskListView() {
                 {isCollapsed ? null : !group.items.length ? (
                   <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
                 ) : group.subgroups ? (
-                  group.subgroups.map((sub) => (
-                    <div key={sub.key}>
-                      <h3 className="flex items-center gap-1.5 px-3 pb-0.5 pl-8 pt-2 text-xs font-medium text-muted-foreground">
-                        {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
-                        {sub.label} <span className="font-normal">· {sub.items.length}</span>
-                      </h3>
-                      {renderRows(sub.items, false)}
-                    </div>
-                  ))
+                  group.subgroups.map((sub) => {
+                    const subKey = `${group.key}/${sub.key}`
+                    return (
+                      <div key={sub.key} className="pl-4">
+                        <h3>
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(subKey)}
+                            aria-expanded={!collapsed.has(subKey)}
+                            className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                          >
+                            <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(subKey) && '-rotate-90')} />
+                            {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
+                            {sub.label} <span className="font-normal">· {sub.items.length}</span>
+                          </button>
+                        </h3>
+                        {collapsed.has(subKey) ? null : renderRows(sub.items, false)}
+                      </div>
+                    )
+                  })
                 ) : (
                   renderRows(group.items, groupMode !== 'category')
                 )}
