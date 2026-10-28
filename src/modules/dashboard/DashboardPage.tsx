@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Avatar } from '@/components/Avatar'
@@ -23,6 +23,7 @@ import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/mo
 import { formatValue } from '@/modules/health/lib/metrics'
 import { studyLinkFor, useStudy } from '@/modules/languages/api'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { TaskGroup } from '@/modules/tasks/components/GroupToggle'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
@@ -194,55 +195,45 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
         ) : (
-          days.map(({ day, slot, label, items: dayItems }) => {
-            const isOpen = expanded.has(day)
-            return (
-              <section key={day} aria-labelledby={`day-${day}`} className="mb-1 last:mb-0">
-                <h2 id={`day-${day}`}>
-                  <button
-                    type="button"
-                    onClick={() => toggle(day)}
-                    aria-expanded={isOpen}
-                    className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
-                  >
-                    <ChevronDown className={cn('size-3.5 transition-transform', !isOpen && '-rotate-90')} />
-                    {label} <span className="font-normal">· {dayItems.length}</span>
-                  </button>
-                </h2>
-                {!isOpen ? null : !dayItems.length ? (
-                  day === today ? (
-                    <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
-                      <CheckCircle2 className="size-4 text-success" /> Nothing due today
-                    </p>
-                  ) : (
-                    <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
-                  )
+          days.map(({ day, slot, label, items: dayItems }) => (
+            <TaskGroup
+              key={day}
+              id={`day-${day}`}
+              level={1}
+              label={label}
+              count={dayItems.length}
+              open={expanded.has(day)}
+              onToggle={() => toggle(day)}
+            >
+              {!dayItems.length ? (
+                day === today ? (
+                  <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
+                    <CheckCircle2 className="size-4 text-success" /> Nothing due today
+                  </p>
                 ) : (
-                  (categorySubgroups(dayItems, categories)?.map((sub) => {
-                    const subKey = `${slot}/${sub.key}`
-                    const isCollapsed = collapsed.has(subKey)
-                    return (
-                      <div key={sub.key} className="pl-4">
-                        <h3>
-                          <button
-                            type="button"
-                            onClick={() => toggleCategory(subKey)}
-                            aria-expanded={!isCollapsed}
-                            className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
-                          >
-                            <ChevronDown className={cn('size-3.5 transition-transform', isCollapsed && '-rotate-90')} />
-                            {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
-                            {sub.label} <span className="font-normal">· {sub.items.length}</span>
-                          </button>
-                        </h3>
-                        {isCollapsed ? null : renderRows(sub.items, false)}
-                      </div>
-                    )
-                  }) ?? renderRows(dayItems, true))
-                )}
-              </section>
-            )
-          })
+                  <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
+                )
+              ) : (
+                (categorySubgroups(dayItems, categories)?.map((sub) => {
+                  const subKey = `${slot}/${sub.key}`
+                  return (
+                    <TaskGroup
+                      key={sub.key}
+                      id={`day-${subKey}`}
+                      level={2}
+                      label={sub.label}
+                      count={sub.items.length}
+                      dot={sub.dot}
+                      open={!collapsed.has(subKey)}
+                      onToggle={() => toggleCategory(subKey)}
+                    >
+                      {renderRows(sub.items, false)}
+                    </TaskGroup>
+                  )
+                }) ?? renderRows(dayItems, true))
+              )}
+            </TaskGroup>
+          ))
         )}
       </CardContent>
       <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />

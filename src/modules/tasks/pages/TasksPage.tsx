@@ -14,6 +14,7 @@ import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { studyLinkFor, useStudy } from '@/modules/languages/api'
 import type { OccurrenceWithTask, TaskCategory } from '../api'
+import { TaskGroup } from '../components/GroupToggle'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
@@ -224,54 +225,43 @@ function TaskListView() {
             description="Nothing to do here. Enjoy it."
           />
         ) : (
-          groups.map((group) => {
-            const isCollapsed = collapsed.has(group.key)
-            return (
-              <section key={group.key} aria-labelledby={`sec-${group.key}`} className="mb-2 last:mb-0">
-                <h2 id={`sec-${group.key}`}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.key)}
-                    aria-expanded={!isCollapsed}
-                    className={cn(
-                      'flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground',
-                      group.danger && 'text-destructive hover:text-destructive',
-                    )}
-                  >
-                    <ChevronDown className={cn('size-3.5 transition-transform', isCollapsed && '-rotate-90')} />
-                    {group.dot ? <span className={cn('size-2 rounded-full', group.dot)} /> : null}
-                    {group.label} <span className="font-normal">· {group.items.length}</span>
-                  </button>
-                </h2>
-                {isCollapsed ? null : !group.items.length ? (
-                  <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
-                ) : group.subgroups ? (
-                  group.subgroups.map((sub) => {
-                    const subKey = `${group.key}/${sub.key}`
-                    return (
-                      <div key={sub.key} className="pl-4">
-                        <h3>
-                          <button
-                            type="button"
-                            onClick={() => toggleGroup(subKey)}
-                            aria-expanded={!collapsed.has(subKey)}
-                            className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
-                          >
-                            <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(subKey) && '-rotate-90')} />
-                            {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
-                            {sub.label} <span className="font-normal">· {sub.items.length}</span>
-                          </button>
-                        </h3>
-                        {collapsed.has(subKey) ? null : renderRows(sub.items, false)}
-                      </div>
-                    )
-                  })
-                ) : (
-                  renderRows(group.items, groupMode !== 'category')
-                )}
-              </section>
-            )
-          })
+          groups.map((group) => (
+            <TaskGroup
+              key={group.key}
+              id={`sec-${group.key}`}
+              level={1}
+              label={group.label}
+              count={group.items.length}
+              dot={group.dot}
+              danger={group.danger}
+              open={!collapsed.has(group.key)}
+              onToggle={() => toggleGroup(group.key)}
+            >
+              {!group.items.length ? (
+                <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
+              ) : group.subgroups ? (
+                group.subgroups.map((sub) => {
+                  const subKey = `${group.key}/${sub.key}`
+                  return (
+                    <TaskGroup
+                      key={sub.key}
+                      id={`sec-${subKey}`}
+                      level={2}
+                      label={sub.label}
+                      count={sub.items.length}
+                      dot={sub.dot}
+                      open={!collapsed.has(subKey)}
+                      onToggle={() => toggleGroup(subKey)}
+                    >
+                      {renderRows(sub.items, false)}
+                    </TaskGroup>
+                  )
+                })
+              ) : (
+                renderRows(group.items, groupMode !== 'category')
+              )}
+            </TaskGroup>
+          ))
         )}
       </Card>
 
