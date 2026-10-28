@@ -385,8 +385,8 @@ function UpcomingCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Next 7 days</CardTitle>
-        <CardLink to="/calendar" label="Calendar" />
+        <CardTitle>Calendar</CardTitle>
+        <CardLink to="/calendar" label="Open calendar" />
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
         {!connected && !integrations.isPending ? (
