@@ -12,10 +12,11 @@ import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
+import type { OccurrenceWithTask, TaskCategory } from '../api'
 import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
+import { ownerOf } from '../lib/owner'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import {
   useCompleteOccurrence,
@@ -268,18 +269,6 @@ function TaskListView() {
       <TaskDetailDialog taskId={openTaskId} onClose={() => setParam('task', null)} />
     </>
   )
-}
-
-/** The one person a task belongs to (owned category, then personal list), or null for joint. */
-function ownerOf(
-  task: Pick<OccurrenceWithTask['task'], 'category_id' | 'list_id'>,
-  categories: TaskCategory[],
-  lists: TaskList[],
-): string | null {
-  const category = categories.find((c) => c.id === task.category_id)
-  if (category?.owner_id) return category.owner_id
-  const list = lists.find((l) => l.id === task.list_id)
-  return list?.kind === 'personal' ? list.owner_id : null
 }
 
 export function NewTaskDialog({

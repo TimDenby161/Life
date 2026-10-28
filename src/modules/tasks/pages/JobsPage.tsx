@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Plus, RotateCw } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
@@ -8,12 +9,14 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { colorOf } from '@/lib/colors'
 import { formatDay, todayISO } from '@/lib/dates'
+import { Segmented } from '@/components/ui/misc'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { Job } from '../api'
 import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskCategories, useTaskLists, useTaskRooms, useUpdateTask } from '../hooks'
 import { agoInWords, dueInWords, jobRule, lastDoneOf } from '../lib/jobs'
 import { dueTone } from '../lib/format'
+import { ownerOf } from '../lib/owner'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import { describeInterval } from '../lib/recurrence'
 import { JobForm, type JobValues } from '../components/JobForm'
@@ -31,10 +34,29 @@ export default function JobsPage() {
   const jobs = useJobs()
   const rooms = useTaskRooms().data ?? []
   const categories = useTaskCategories().data ?? []
+  const lists = useTaskLists().data ?? []
+  const { members } = useHousehold()
+  const [params, setParams] = useSearchParams()
   const { collapsed, toggle } = useCollapsedGroups('life.jobs.collapsed')
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
-  const sorted = (jobs.data ?? []).toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
+  // 'joint', or a member's id for the jobs that are only ever theirs (as on Tasks).
+  const whoParam = params.get('who')
+  const who = members.some((m) => m.id === whoParam) ? whoParam! : 'joint'
+  const setWho = (v: string) =>
+    setParams(
+      (p) => {
+        if (v === 'joint') p.delete('who')
+        else p.set('who', v)
+        return p
+      },
+      { replace: true },
+    )
+
+  const all = jobs.data ?? []
+  const sorted = all
+    .filter((j) => (ownerOf(j, categories, lists) ?? 'joint') === who)
+    .toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
   // Cleaning holds every room in order (empty ones too, plus a Cleaning-category
   // job without a room); then jobs without a room by category (Health first),
   // then whatever is left.
@@ -49,7 +71,10 @@ export default function JobsPage() {
     .toSorted((a, b) => Number(b.name === 'Health') - Number(a.name === 'Health'))
   const shownCategoryIds = new Set(jobCategories.map((c) => c.id))
   const cleaningRooms: SubGroup[] = [
-    ...rooms.map((r) => ({ key: r.id, label: r.name, items: byRoom[r.id] ?? [] })),
+    // Empty rooms only show on Joint, where new cleaning jobs usually go.
+    ...rooms
+      .map((r) => ({ key: r.id, label: r.name, items: byRoom[r.id] ?? [] }))
+      .filter((r) => who === 'joint' || r.items.length),
     ...(roomlessCleaning.length ? [{ key: 'cleaning-other', label: 'Other cleaning', items: roomlessCleaning }] : []),
   ]
   const groups: Group[] = [
@@ -76,12 +101,20 @@ export default function JobsPage() {
         }
       />
 
+      <Segmented
+        aria-label="Whose jobs"
+        className="mb-4"
+        value={who}
+        onChange={setWho}
+        options={[{ value: 'joint', label: 'Joint' }, ...members.map((m) => ({ value: m.id, label: m.display_name }))]}
+      />
+
       <Card className="p-2 sm:p-3">
         {jobs.isPending ? (
           <ListSkeleton rows={4} className="p-3" />
         ) : jobs.error ? (
           <ErrorState error={jobs.error} onRetry={() => jobs.refetch()} />
-        ) : !sorted.length ? (
+        ) : !all.length ? (
           <EmptyState
             icon={RotateCw}
             title="No jobs yet"
@@ -101,6 +134,8 @@ export default function JobsPage() {
               </div>
             }
           />
+        ) : !groups.length ? (
+          <EmptyState icon={RotateCw} title="No jobs here" description="Nothing that is only this person's yet." />
         ) : (
           groups.map((group) => (
             <section key={group.key} aria-labelledby={`room-${group.key}`} className="mb-2 last:mb-0">
@@ -143,7 +178,7 @@ export default function JobsPage() {
         )}
       </Card>
 
-      <JobDialog value={editing} onClose={() => setEditing(null)} />
+      <JobDialog value={editing} ownerId={who === 'joint' ? null : who} onClose={() => setEditing(null)} />
     </>
   )
 }
@@ -295,14 +330,23 @@ function JobRow({ job, onOpen }: { job: Job; onOpen: () => void }) {
   )
 }
 
-function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues> | null; onClose: () => void }) {
+/** New jobs land where the filter shows them: the person's own list, otherwise the joint one. */
+function JobDialog({
+  value,
+  ownerId,
+  onClose,
+}: {
+  value: Job | 'new' | Partial<JobValues> | null
+  ownerId: string | null
+  onClose: () => void
+}) {
   const lists = useTaskLists().data ?? []
   const create = useCreateTask()
   const update = useUpdateTask()
   const del = useDeleteTask()
   const job = value && value !== 'new' && 'id' in value ? value : null
-  const preset = value && value !== 'new' && !job ? (value as Partial<JobValues>) : undefined
-  const jointList = lists.find((l) => l.kind === 'joint')
+  const preset = value && value !== 'new' && !job ? (value as Partial<JobValues>) : ownerId ? { assigneeId: ownerId } : undefined
+  const newList = lists.find((l) => l.kind === 'personal' && l.owner_id === ownerId) ?? lists.find((l) => l.kind === 'joint')
 
   const initialLastDone = job ? lastDoneOf(job.last_done_on, job.done[0]?.completed_at) : null
   const initial: Partial<JobValues> | undefined = job
@@ -333,11 +377,11 @@ function JobDialog({ value, onClose }: { value: Job | 'new' | Partial<JobValues>
         },
         { onSuccess: onClose },
       )
-    } else if (jointList) {
+    } else if (newList) {
       create.mutate(
         {
           title: v.title,
-          list_id: jointList.id,
+          list_id: newList.id,
           assignee_id: v.assigneeId,
           due_date: todayISO(),
           due_time: null,
