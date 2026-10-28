@@ -2,7 +2,7 @@ import { format, parseISO, startOfWeek } from 'date-fns'
 import { CalendarHeart, Dumbbell, HeartPulse, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisProps, ChartTooltip, DataTable, gridProps } from '@/components/charts'
+import { axisProps, ChartCard, ChartTooltip, DataTable, gridProps } from '@/components/charts'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, Textarea } from '@/components/ui/input'
 import { Badge, Segmented, Skeleton } from '@/components/ui/misc'
-import { daysBetween, formatDay, todayISO } from '@/lib/dates'
+import { addDaysISO, daysBetween, formatDay, parseISODate, todayISO } from '@/lib/dates'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import {
   type ExerciseSession,
@@ -28,7 +28,7 @@ import {
   usePeriods,
   useUpdatePeriod,
 } from './api'
-import { type Aggregation, cycleSummary, dailySeries, formatValue, latestWithChange } from './lib/metrics'
+import { type Aggregation, cycleSummary, dailySeries, formatValue, latestWithChange, movingAverage } from './lib/metrics'
 
 export default function HealthPage() {
   const { me, partner, member } = useHousehold()
@@ -73,6 +73,7 @@ export default function HealthPage() {
             ) : null}
             {showPeriods ? <PeriodSection own={own} periods={personPeriods} /> : null}
           </div>
+          {weight && weights.length ? <WeightTrendCard def={weight} rows={weights} /> : null}
           <ExerciseSection own={own} sessions={sessions} />
 
         </>
@@ -81,6 +82,84 @@ export default function HealthPage() {
       {weight ? <LogWeightDialog open={logging} def={weight} onClose={() => setLogging(false)} /> : null}
       {weight && detail ? <WeightDetailDialog def={weight} rows={weights} own={own} onClose={() => setDetail(false)} /> : null}
     </>
+  )
+}
+
+type TrendRange = '1m' | '3m' | '6m' | '1y' | 'all'
+const TREND_DAYS: Record<TrendRange, number | null> = { '1m': 30, '3m': 91, '6m': 182, '1y': 365, all: null }
+
+/** Weight over time: each day's reading as a dot, and the 7-day average as the line to read the trend by. */
+function WeightTrendCard({ def, rows }: { def: MetricDefinition; rows: { measured_at: string; value: number }[] }) {
+  const [range, setRange] = useState<TrendRange>('3m')
+  const days = TREND_DAYS[range]
+  // Average over the whole history first, so the first points in range still look back a week.
+  const all = movingAverage(dailySeries(rows, def.aggregation as Aggregation))
+  const from = days === null ? null : addDaysISO(todayISO(), -days)
+  const points = all.filter((p) => !from || p.date >= from).map((p) => ({ ...p, t: parseISODate(p.date).getTime() }))
+  const first = points.at(0)
+  const last = points.at(-1)
+  const change = first && last && points.length > 1 ? last.average - first.average : null
+  const fmt = (v: number) => `${formatValue(v, Math.max(1, def.decimals))} ${def.unit}`
+
+  return (
+    <section className="mt-4">
+      <ChartCard
+        title="Weight trend"
+        description={
+          change === null
+            ? '7-day average'
+            : `7-day average · ${change === 0 ? 'no change' : `${change > 0 ? '+' : '−'}${fmt(Math.abs(change))}`} over this period`
+        }
+        legend={[
+          { key: 'average', label: '7-day average', color: 'var(--chart-1)' },
+          { key: 'value', label: 'Daily reading', color: 'var(--chart-axis)' },
+        ]}
+        table={{ columns: ['Date', 'Reading', '7-day average'], rows: points.toReversed().map((p) => [p.date, fmt(p.value), fmt(p.average)]) }}
+        action={
+          <Segmented
+            aria-label="Range"
+            size="sm"
+            value={range}
+            onChange={setRange}
+            options={[
+              { value: '1m', label: '1M' },
+              { value: '3m', label: '3M' },
+              { value: '6m', label: '6M' },
+              { value: '1y', label: '1Y' },
+              { value: 'all', label: 'All' },
+            ]}
+          />
+        }
+      >
+        {points.length ? (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid {...gridProps} />
+                <XAxis
+                  dataKey="t"
+                  type="number"
+                  scale="time"
+                  domain={['dataMin', 'dataMax']}
+                  {...axisProps}
+                  tickFormatter={(t: number) => format(t, 'd MMM')}
+                  minTickGap={32}
+                />
+                <YAxis {...axisProps} width={44} domain={['auto', 'auto']} tickFormatter={(v: number) => formatValue(v, def.decimals)} />
+                <Tooltip
+                  cursor={{ stroke: 'var(--chart-axis)', strokeWidth: 1 }}
+                  content={<ChartTooltip formatValue={fmt} labelFormatter={(t) => format(Number(t), 'EEE d MMM yyyy')} />}
+                />
+                <Line dataKey="value" name="Reading" stroke="none" dot={{ r: 3, fill: 'var(--chart-axis)', strokeWidth: 0 }} activeDot={{ r: 4, fill: 'var(--chart-axis)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+                <Line dataKey="average" name="7-day average" stroke="var(--chart-1)" strokeWidth={2} dot={false} activeDot={{ r: 5, fill: 'var(--chart-1)', stroke: 'var(--card)', strokeWidth: 2 }} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="py-10 text-center text-sm text-muted-foreground">No weigh-ins in this period</p>
+        )}
+      </ChartCard>
+    </section>
   )
 }
 

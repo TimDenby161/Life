@@ -24,6 +24,21 @@ export function dailySeries(rows: readonly MeasurementLike[], aggregation: Aggre
     })
 }
 
+/**
+ * The trailing average over the last `days` calendar days (that day included),
+ * at each day with a reading. Missed days just leave fewer readings in the
+ * window, so occasional weigh-ins still get a sensible line.
+ */
+export function movingAverage(series: readonly { date: ISODate; value: number }[], days = 7): { date: ISODate; value: number; average: number }[] {
+  let start = 0
+  let sum = 0
+  return series.map((point, i) => {
+    sum += point.value
+    while (daysBetween(series[start].date, point.date) >= days) sum -= series[start++].value
+    return { ...point, average: sum / (i - start + 1) }
+  })
+}
+
 export function latestWithChange(series: readonly { date: ISODate; value: number }[]) {
   const last = series.at(-1)
   const prev = series.at(-2)

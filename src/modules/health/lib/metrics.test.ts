@@ -1,4 +1,4 @@
-import { cycleSummary, dailySeries, isWeighIn, latestWithChange } from './metrics'
+import { cycleSummary, dailySeries, isWeighIn, latestWithChange, movingAverage } from './metrics'
 
 describe('dailySeries', () => {
   const rows = [
@@ -40,5 +40,21 @@ describe('isWeighIn', () => {
   })
   it('ignores other tasks', () => {
     for (const t of ['Weight training', 'Weigh up the options', 'Bins out']) expect(isWeighIn(t)).toBe(false)
+  })
+})
+
+describe('movingAverage', () => {
+  it('averages the readings in the last 7 days, that day included', () => {
+    const out = movingAverage([
+      { date: '2026-10-01', value: 84 },
+      { date: '2026-10-02', value: 82 },
+      { date: '2026-10-07', value: 83 },
+      { date: '2026-10-08', value: 80 },
+    ])
+    expect(out.map((p) => p.average)).toEqual([84, 83, 83, 81.666666666666671])
+  })
+
+  it('copes with gaps longer than the window', () => {
+    expect(movingAverage([{ date: '2026-09-01', value: 90 }, { date: '2026-10-01', value: 85 }]).map((p) => p.average)).toEqual([90, 85])
   })
 })
