@@ -2263,6 +2263,7 @@ export type Database = {
       }
       complete_task_occurrence: {
         Args: {
+          p_also_completed_by?: string
           p_completed_at?: string
           p_completed_by?: string
           p_note?: string

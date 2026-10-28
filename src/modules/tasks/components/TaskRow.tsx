@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
 import { dueLabel, dueTone } from '../lib/format'
+import { ownerOf } from '../lib/owner'
 
 export function TaskCheck({
   done,
@@ -49,23 +50,33 @@ export function TaskCheck({
 
 /**
  * One circle per person (their initial) plus B for both of us: tapping one
- * completes the task and records who did it.
+ * completes the task and records who did it. A task that belongs to one
+ * person (ownerId) only offers that person.
  */
 export function WhoDidIt({
   title,
+  ownerId = null,
   onComplete,
   disabled,
 }: {
   title: string
+  ownerId?: string | null
   onComplete: (completedBy: string, alsoCompletedBy: string | null) => void
   disabled?: boolean
 }) {
   const { members, me } = useHousehold()
   // Me first, so my circle is always in the same place.
   const people = members.toSorted((a, b) => Number(b.id === me.id) - Number(a.id === me.id))
+  const owner = people.find((m) => m.id === ownerId)
   const options = [
-    ...people.map((m) => ({ key: m.id, letter: m.display_name.charAt(0).toUpperCase(), label: `${m.display_name} did ${title}`, by: m.id, also: null })),
-    ...(people.length === 2 ? [{ key: 'both', letter: 'B', label: `We both did ${title}`, by: people[0].id, also: people[1].id }] : []),
+    ...(owner ? [owner] : people).map((m) => ({
+      key: m.id,
+      letter: m.display_name.charAt(0).toUpperCase(),
+      label: `${m.display_name} did ${title}`,
+      by: m.id,
+      also: null,
+    })),
+    ...(!owner && people.length === 2 ? [{ key: 'both', letter: 'B', label: `We both did ${title}`, by: people[0].id, also: people[1].id }] : []),
   ]
   return (
     <div className="-my-1 flex shrink-0 items-center gap-1" role="group" aria-label={`Who did ${title}?`}>
@@ -134,11 +145,7 @@ export function TaskRow({
       className="group flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/60 animate-fade-in"
       onClick={onOpen}
     >
-      {done ? (
-        <TaskCheck done onToggle={() => onReopen?.()} label={`Reopen ${task.title}`} />
-      ) : (
-        <WhoDidIt title={task.title} onComplete={(by, also) => onComplete?.(by, also)} />
-      )}
+      {done ? <TaskCheck done onToggle={() => onReopen?.()} label={`Reopen ${task.title}`} /> : null}
       <div className="min-w-0 flex-1">
         <button
           type="button"
@@ -196,6 +203,9 @@ export function TaskRow({
           <span className="sr-only">Assigned to {assignee.display_name}</span>
         </span>
       ) : null}
+      {done ? null : (
+        <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
+      )}
     </li>
   )
 }

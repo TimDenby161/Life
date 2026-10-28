@@ -2,7 +2,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(18);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -72,6 +72,32 @@ select throws_ok(
 select reopen_task_occurrence(current_setting('t.occ')::uuid);
 select is((select also_completed_by from task_occurrences where id = current_setting('t.occ')::uuid),
   null, 'reopening clears the second person');
+
+-- Both of us, straight from completion: one event --------------------------------------
+select pg_temp.as_user(current_setting('t.tim')::uuid);
+with t as (
+  insert into tasks (household_id, list_id, title)
+  values (current_setting('t.hh')::uuid, current_setting('t.joint')::uuid, 'Fold the laundry')
+  returning id
+)
+select set_config('t.task2', id::text, true) from t;
+select set_config('t.occ2', (select id::text from task_occurrences where task_id = current_setting('t.task2')::uuid), true);
+
+select throws_ok(
+  format('select complete_task_occurrence(%L, %L, null, null, %L)', current_setting('t.occ2'), current_setting('t.tim'), current_setting('t.tim')),
+  '22023', null, 'completing together needs two different people');
+select throws_ok(
+  format('select complete_task_occurrence(%L, %L, null, null, %L)', current_setting('t.occ2'), current_setting('t.tim'), current_setting('t.out')),
+  '22023', null, 'the second person must be a household member');
+
+select complete_task_occurrence(current_setting('t.occ2')::uuid, current_setting('t.tim')::uuid, null, null, current_setting('t.sophie')::uuid);
+select is((select also_completed_by::text from task_occurrences where id = current_setting('t.occ2')::uuid),
+  current_setting('t.sophie'), 'completion can credit a second person');
+select ok((select count(*) = 1 and bool_and(also_completed_by = current_setting('t.sophie')::uuid)
+  from task_completion_events where occurrence_id = current_setting('t.occ2')::uuid),
+  'it is a single history event carrying both people');
+select is((select summary from feed_events where event_type = 'task.completed' and entity_id = current_setting('t.task2')::uuid),
+  'Tim and Sophie completed “Fold the laundry”', 'the feed names both');
 
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select throws_ok(

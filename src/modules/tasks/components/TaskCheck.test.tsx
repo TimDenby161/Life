@@ -42,3 +42,10 @@ describe('WhoDidIt', () => {
     expect(onRow).not.toHaveBeenCalled()
   })
 })
+
+describe('WhoDidIt on a one-person task', () => {
+  it('only offers the owner', () => {
+    render(<WhoDidIt title="Table tennis" ownerId="tim" onComplete={vi.fn()} />)
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['T'])
+  })
+})
