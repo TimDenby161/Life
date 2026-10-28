@@ -159,14 +159,17 @@ export async function deleteTask(id: string) {
   unwrap(await supabase.from('tasks').delete().eq('id', id))
 }
 
-export async function completeOccurrence(args: { occurrenceId: string; completedBy?: string; note?: string }) {
-  return unwrap(
+/** Completes an occurrence; with alsoCompletedBy it is then credited to both people. */
+export async function completeOccurrence(args: { occurrenceId: string; completedBy?: string; alsoCompletedBy?: string; note?: string }) {
+  const occ = unwrap(
     await supabase.rpc('complete_task_occurrence', {
       p_occurrence_id: args.occurrenceId,
       p_completed_by: args.completedBy,
       p_note: args.note,
     }),
   )
+  if (!args.alsoCompletedBy || !occ.completed_by) return occ
+  return setCompletedBy(occ.id, occ.completed_by, args.alsoCompletedBy)
 }
 
 export async function skipOccurrence(occurrenceId: string) {

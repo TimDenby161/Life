@@ -194,7 +194,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
                         categories={categories}
                         showList
                         onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
-                        onToggle={() => complete.mutate({ occurrenceId: o.id })}
+                        onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
                       />
                     ))}
                   </ul>

@@ -149,7 +149,7 @@ function TaskListView() {
           showList
           showCategory={showCategory}
           onOpen={() => setParam('task', o.task_id)}
-          onToggle={() => complete.mutate({ occurrenceId: o.id })}
+          onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />
       ))}
     </ul>
@@ -290,7 +290,7 @@ function TaskListView() {
                     categories={allCategories}
                     showList
                     onOpen={() => setParam('task', o.task_id)}
-                    onToggle={() => reopen.mutate(o.id)}
+                    onReopen={() => reopen.mutate(o.id)}
                   />
                 ))}
               </ul>

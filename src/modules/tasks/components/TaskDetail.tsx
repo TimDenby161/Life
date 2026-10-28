@@ -170,6 +170,14 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
                       {m.id === me.id ? 'I did' : `${m.display_name} did`}
                     </DropdownMenuItem>
                   ))}
+                  {members.length === 2 ? (
+                    <DropdownMenuItem
+                      onSelect={() => complete.mutate({ occurrenceId: occ.id, completedBy: me.id, alsoCompletedBy: members.find((m) => m.id !== me.id)!.id })}
+                    >
+                      <span className="grid size-5 place-items-center rounded-full bg-muted text-[10px] font-semibold">B</span>
+                      Both of us
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
