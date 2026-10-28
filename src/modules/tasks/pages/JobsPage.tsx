@@ -6,11 +6,12 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { colorOf } from '@/lib/colors'
 import { formatDay, todayISO } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { Job } from '../api'
-import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskLists, useTaskRooms, useUpdateTask } from '../hooks'
+import { useCompleteOccurrence, useCreateTask, useDeleteTask, useJobs, useTaskCategories, useTaskLists, useTaskRooms, useUpdateTask } from '../hooks'
 import { agoInWords, dueInWords, jobRule, lastDoneOf } from '../lib/jobs'
 import { dueTone } from '../lib/format'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
@@ -29,16 +30,29 @@ const toneClass = { overdue: 'text-destructive font-medium', today: 'text-warnin
 export default function JobsPage() {
   const jobs = useJobs()
   const rooms = useTaskRooms().data ?? []
+  const categories = useTaskCategories().data ?? []
   const { collapsed, toggle } = useCollapsedGroups('life.jobs.collapsed')
   const [editing, setEditing] = useState<Job | 'new' | Partial<JobValues> | null>(null)
 
   const sorted = (jobs.data ?? []).toSorted((a, b) => (a.open[0]?.due_date ?? '9').localeCompare(b.open[0]?.due_date ?? '9'))
-  // Every room in order (empty ones too), then jobs without a room.
+  // Every room in order (empty ones too), then jobs without a room by category
+  // (Health first), then whatever is left.
   const byRoom = groupBy(sorted, (j) => j.room_id ?? '')
   const known = new Set(rooms.map((r) => r.id))
-  const groups = [
+  const roomless = sorted.filter((j) => !j.room_id || !known.has(j.room_id))
+  const byCategory = groupBy(roomless, (j) => j.category_id ?? '')
+  const jobCategories = categories
+    .filter((c) => byCategory[c.id]?.length)
+    .toSorted((a, b) => Number(b.name === 'Health') - Number(a.name === 'Health'))
+  const shownCategoryIds = new Set(jobCategories.map((c) => c.id))
+  const groups: { key: string; label: string; dot?: string; items: Job[] }[] = [
     ...rooms.map((r) => ({ key: r.id, label: r.name, items: byRoom[r.id] ?? [] })),
-    { key: 'none', label: rooms.length ? 'Other jobs' : 'Jobs', items: sorted.filter((j) => !j.room_id || !known.has(j.room_id)) },
+    ...jobCategories.map((c) => ({ key: `category-${c.id}`, label: c.name, dot: colorOf(c.color).dot, items: byCategory[c.id] })),
+    {
+      key: 'none',
+      label: rooms.length || jobCategories.length ? 'Other jobs' : 'Jobs',
+      items: roomless.filter((j) => !j.category_id || !shownCategoryIds.has(j.category_id)),
+    },
   ].filter((g) => g.key !== 'none' || g.items.length)
 
   return (
@@ -89,6 +103,7 @@ export default function JobsPage() {
                   className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
                 >
                   <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(group.key) && '-rotate-90')} />
+                  {group.dot ? <span className={cn('size-2 rounded-full', group.dot)} /> : null}
                   {group.label} <span className="font-normal">· {group.items.length}</span>
                 </button>
               </h2>
