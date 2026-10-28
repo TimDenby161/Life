@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Wallet } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Trophy, Wallet } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
@@ -20,8 +20,8 @@ import { useFeedEvents, useMyReads, usePosts } from '@/modules/feed/hooks'
 import { type ActivityGroup, groupActivity } from '@/modules/feed/lib/activity'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
-import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/modules/health/api'
-import { formatValue } from '@/modules/health/lib/metrics'
+import { useExerciseSessions } from '@/modules/health/api'
+import { weeklyExerciseMinutes } from '@/modules/health/lib/metrics'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskGroup } from '@/modules/tasks/components/GroupToggle'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
@@ -520,51 +520,57 @@ function FinanceCard() {
   )
 }
 
-/** Latest health records from both of you. */
+/** This week's exercise minutes (Monday to Sunday) as a little race: most first. */
 function HealthCard() {
-  const { member, me } = useHousehold()
-  const measurements = useMeasurements()
-  const defs = useMetricDefinitions()
+  const { members, member } = useHousehold()
   const exercise = useExerciseSessions()
-  const defById = new Map((defs.data ?? []).map((d) => [d.id, d]))
-  type Item = { id: string; key: string; at: string; userId: string; text: string }
-  const items: Item[] = [
-    ...(measurements.data ?? []).slice(-40).flatMap((m) => {
-      const d = defById.get(m.metric_id)
-      return d ? [{ id: m.id, key: `${m.user_id}:${m.metric_id}`, at: m.measured_at, userId: m.user_id, text: `${d.name} ${formatValue(Number(m.value), d.decimals)} ${d.unit}` }] : []
-    }),
-    ...(exercise.data ?? []).slice(0, 10).map((s) => ({ id: s.id, key: `${s.user_id}:exercise`, at: s.started_at, userId: s.user_id, text: `Exercise · ${s.duration_minutes} min` })),
-  ]
-    .sort((a, b) => b.at.localeCompare(a.at))
-    // One line per person+metric keeps it a glance, not a log.
-    .filter((item, i, all) => all.findIndex((x) => x.key === item.key) === i)
-    .slice(0, 5)
+  const week = weeklyExerciseMinutes(exercise.data ?? [], members.map((m) => m.id), todayISO())
+  const most = Math.max(1, ...week.totals.map((t) => t.minutes))
+  const leader = week.totals[0]
+  const clearLead = leader && leader.minutes > 0 && leader.minutes > (week.totals[1]?.minutes ?? 0)
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Health</CardTitle>
+        <div>
+          <CardTitle>Exercise this week</CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {format(parseISODate(week.weekStart), 'EEE d MMM')} – {format(parseISODate(week.weekEnd), 'EEE d MMM')}
+          </p>
+        </div>
         <CardLink to="/health" label="Health" />
       </CardHeader>
       <CardContent>
-        {measurements.isPending ? (
-          <ListSkeleton rows={3} />
-        ) : !items.length ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground"><HeartPulse className="size-4" /> Nothing logged recently.</p>
+        {exercise.isPending ? (
+          <ListSkeleton rows={2} />
         ) : (
-          <ul className="grid gap-2.5">
-            {items.map((i) => {
-              const who = member(i.userId)
+          <ul className="grid gap-3">
+            {week.totals.map((t, i) => {
+              const who = member(t.personId)
               return (
-                <li key={i.id} className="flex items-center gap-2.5 text-sm">
-                  <Avatar name={who?.display_name} color={who?.avatar_color} size="xs" />
-                  <span className="min-w-0 flex-1 truncate">{i.text}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{i.userId === me.id ? '' : `${who?.display_name} · `}{formatDistanceToNow(new Date(i.at), { addSuffix: true })}</span>
+                <li key={t.personId} className="grid gap-1.5">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Avatar name={who?.display_name} color={who?.avatar_color} size="xs" />
+                    <span className="font-medium">{who?.display_name}</span>
+                    {i === 0 && clearLead ? <Trophy className="size-3.5 text-amber-500" aria-label="In the lead" /> : null}
+                    <span className="ml-auto tabular text-muted-foreground">
+                      <span className="font-semibold text-foreground">{t.minutes}</span> min
+                    </span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn('h-full rounded-full transition-[width]', colorOf(who?.avatar_color).bg)}
+                      style={{ width: `${(t.minutes / most) * 100}%` }}
+                    />
+                  </div>
                 </li>
               )
             })}
           </ul>
         )}
+        {!exercise.isPending && week.totals.every((t) => !t.minutes) ? (
+          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><HeartPulse className="size-3.5" /> No exercise logged yet this week.</p>
+        ) : null}
       </CardContent>
     </Card>
   )

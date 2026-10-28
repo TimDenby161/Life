@@ -1,4 +1,4 @@
-import { cycleSummary, dailySeries, isWeighIn, latestWithChange, movingAverage } from './metrics'
+import { cycleSummary, dailySeries, isWeighIn, latestWithChange, movingAverage, weeklyExerciseMinutes } from './metrics'
 
 describe('dailySeries', () => {
   const rows = [
@@ -56,5 +56,36 @@ describe('movingAverage', () => {
 
   it('copes with gaps longer than the window', () => {
     expect(movingAverage([{ date: '2026-09-01', value: 90 }, { date: '2026-10-01', value: 85 }]).map((p) => p.average)).toEqual([90, 85])
+  })
+})
+
+describe('weeklyExerciseMinutes', () => {
+  const s = (user_id: string, started_at: string, duration_minutes: number) => ({ user_id, started_at, duration_minutes })
+
+  it('totals Monday to Sunday per person, most first', () => {
+    // Wednesday 28 Oct 2026: the week is Mon 26 Oct to Sun 1 Nov.
+    const out = weeklyExerciseMinutes(
+      [
+        s('tim', '2026-10-25T20:00:00Z', 60), // Sunday before: last week
+        s('tim', '2026-10-26T07:00:00Z', 20),
+        s('sophie', '2026-10-27T18:00:00Z', 45),
+        s('sophie', '2026-11-01T22:30:00Z', 10), // Sunday night (GMT): still this week
+        s('tim', '2026-11-02T07:00:00Z', 30), // next Monday
+      ],
+      ['tim', 'sophie'],
+      '2026-10-28',
+    )
+    expect(out).toEqual({
+      weekStart: '2026-10-26',
+      weekEnd: '2026-11-01',
+      totals: [{ personId: 'sophie', minutes: 55 }, { personId: 'tim', minutes: 20 }],
+    })
+  })
+
+  it('includes people with nothing yet, keeping their order on a tie', () => {
+    expect(weeklyExerciseMinutes([], ['tim', 'sophie'], '2026-10-26').totals).toEqual([
+      { personId: 'tim', minutes: 0 },
+      { personId: 'sophie', minutes: 0 },
+    ])
   })
 })

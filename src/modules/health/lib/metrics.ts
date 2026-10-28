@@ -1,5 +1,5 @@
 // Health helpers. Purely descriptive: no thresholds, scores or advice.
-import { parseISO } from 'date-fns'
+import { parseISO, startOfWeek } from 'date-fns'
 import { addDaysISO, daysBetween, type ISODate, toISODate } from '@/lib/dates'
 
 export type MeasurementLike = { measured_at: string; value: number }
@@ -75,4 +75,24 @@ export function cycleSummary(periods: readonly PeriodLike[]) {
 /** A task that is really "log my weight": "Weigh in", "Weekly weigh-in", "Weigh myself". */
 export function isWeighIn(title: string): boolean {
   return /\bweigh(?:[- ]?in|\s+myself)\b/i.test(title)
+}
+
+/**
+ * Minutes of exercise per person this week (Monday to Sunday, local time),
+ * most first; ties keep the order people were given in.
+ */
+export function weeklyExerciseMinutes(
+  sessions: readonly { user_id: string; started_at: string; duration_minutes: number }[],
+  people: readonly string[],
+  today: ISODate,
+): { weekStart: ISODate; weekEnd: ISODate; totals: { personId: string; minutes: number }[] } {
+  const weekStart = toISODate(startOfWeek(parseISO(today), { weekStartsOn: 1 }))
+  const weekEnd = addDaysISO(weekStart, 6)
+  const minutes = new Map(people.map((id) => [id, 0]))
+  for (const s of sessions) {
+    const day = toISODate(parseISO(s.started_at))
+    if (day >= weekStart && day <= weekEnd && minutes.has(s.user_id)) minutes.set(s.user_id, minutes.get(s.user_id)! + s.duration_minutes)
+  }
+  const totals = people.map((personId) => ({ personId, minutes: minutes.get(personId)! })).sort((a, b) => b.minutes - a.minutes)
+  return { weekStart, weekEnd, totals }
 }
