@@ -76,6 +76,10 @@ Read-only. The `calendar-events` Edge Function signs a JWT for a Google service 
 
 Per-user records: weight (`health_measurements`), exercise (`health_exercise_sessions`: a description and a duration) and periods (`health_periods`). The next-period date is the last start plus the average cycle, labelled as an estimate. Both household members can read every health record (there are no privacy settings, by request); only the owner can write. The app shows numbers and trends only, never interpretations. `source`/`external_id` columns are ready for Apple Health / Health Connect imports.
 
+## Languages
+
+The Mandarin page (`src/modules/languages`) teaches a few HSK words and characters a day and brings them back for review at growing gaps (1, 3, 8, 20, 50, 125, then 180 days; forgetting one restarts it at a day). The lists are the HSK 3.0 levels 1–6 from drkameleon/complete-hsk-vocabulary (MIT, definitions from CC-CEDICT), built into `data/hsk.json` by `node scripts/build-hsk.mjs` and loaded as a separate chunk only on that page. Characters that are words on their own are taught as words; the character list is the rest. Only progress and settings are stored (`language_study`, `language_progress`). Finishing the day's words, characters or reviews ticks off the linked job if it's due. Pronunciation uses the browser's built-in speech, so it needs no key.
+
 ## Charts
 
 Recharts with shared building blocks in `components/charts.tsx`. The categorical palette is the validated dataviz reference palette (`--chart-1…6` in `index.css`, separate light/dark steps). A person always has the same colour. Every chart has a table view, there's a legend whenever there are 2+ series, marks are thin and gridlines recessive, and calculated series are dashed.

@@ -1058,6 +1058,144 @@ export type Database = {
         }
         Relationships: []
       }
+      language_progress: {
+        Row: {
+          created_at: string
+          due_on: string
+          household_id: string
+          id: string
+          interval_days: number
+          item: string
+          kind: string
+          language: string
+          lapses: number
+          last_reviewed_on: string | null
+          learned_on: string
+          reviews: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_on: string
+          household_id: string
+          id?: string
+          interval_days?: number
+          item: string
+          kind: string
+          language: string
+          lapses?: number
+          last_reviewed_on?: string | null
+          learned_on: string
+          reviews?: number
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          due_on?: string
+          household_id?: string
+          id?: string
+          interval_days?: number
+          item?: string
+          kind?: string
+          language?: string
+          lapses?: number
+          last_reviewed_on?: string | null
+          learned_on?: string
+          reviews?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "language_progress_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "language_progress_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      language_study: {
+        Row: {
+          characters_per_day: number
+          characters_task_id: string | null
+          household_id: string
+          language: string
+          review_task_id: string | null
+          start_level: number
+          updated_at: string
+          user_id: string
+          words_per_day: number
+          words_task_id: string | null
+        }
+        Insert: {
+          characters_per_day?: number
+          characters_task_id?: string | null
+          household_id: string
+          language: string
+          review_task_id?: string | null
+          start_level?: number
+          updated_at?: string
+          user_id?: string
+          words_per_day?: number
+          words_task_id?: string | null
+        }
+        Update: {
+          characters_per_day?: number
+          characters_task_id?: string | null
+          household_id?: string
+          language?: string
+          review_task_id?: string | null
+          start_level?: number
+          updated_at?: string
+          user_id?: string
+          words_per_day?: number
+          words_task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "language_study_characters_task_id_household_id_fkey"
+            columns: ["characters_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "language_study_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "language_study_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "language_study_review_task_id_household_id_fkey"
+            columns: ["review_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "language_study_words_task_id_household_id_fkey"
+            columns: ["words_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_color: string
