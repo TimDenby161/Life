@@ -1,5 +1,6 @@
 import { Check, GraduationCap, Repeat, Settings2, Volume2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -25,21 +26,21 @@ import {
   useTickOffJob,
   useVocab,
 } from './api'
+import { isLanguage, type Language, LANGUAGE_IDS, LANGUAGES, type LanguageConfig } from './lib/languages'
 import { canSpeak, speak } from './lib/speech'
 import { dueForReview, type Kind, levelProgress, nextToLearn, remainingToday, type Vocab, type VocabItem } from './lib/vocab'
 
-const LANGUAGE = 'zh'
-const KIND_LABEL: Record<Kind, { plural: string; job: keyof StudySettings; perDay: keyof StudySettings }> = {
+const KIND: Record<Kind, { plural: string; job: 'words_task_id' | 'characters_task_id'; perDay: 'words_per_day' | 'characters_per_day' }> = {
   word: { plural: 'words', job: 'words_task_id', perDay: 'words_per_day' },
   character: { plural: 'characters', job: 'characters_task_id', perDay: 'characters_per_day' },
 }
 
 export default function LanguagesPage() {
   const { me, partner, member } = useHousehold()
+  const [params, setParams] = useSearchParams()
   const [personId, setPersonId] = useState(me.id)
   const person = member(personId) ?? me
   const own = personId === me.id
-  const vocab = useVocab(LANGUAGE)
   const study = useStudy()
   const progress = useProgress()
   const jobs = useJobs()
@@ -47,8 +48,17 @@ export default function LanguagesPage() {
   const [reviewing, setReviewing] = useState(false)
   const [editing, setEditing] = useState(false)
 
+  // Without ?lang=, open the language this person studies (Sophie: Spanish).
+  const fromUrl = params.get('lang')
+  const language: Language = isLanguage(fromUrl) ? fromUrl : guessLanguage(personId, study.data ?? [], progress.data ?? [], jobs.data ?? [])
+  const config = LANGUAGES[language]
+  const vocab = useVocab(language)
+
   const today = todayISO()
-  const rows = useMemo(() => (progress.data ?? []).filter((p) => p.user_id === personId && p.language === LANGUAGE), [progress.data, personId])
+  const rows = useMemo(
+    () => (progress.data ?? []).filter((p) => p.user_id === personId && p.language === language),
+    [progress.data, personId, language],
+  )
   const learned = useMemo(
     () => ({
       word: new Set(rows.filter((r) => r.kind === 'word').map((r) => r.item)),
@@ -56,86 +66,86 @@ export default function LanguagesPage() {
     }),
     [rows],
   )
-  const row = study.data?.find((s) => s.user_id === personId && s.language === LANGUAGE)
-  const settings = row ?? defaultSettings(jobs.data ?? [], categories.data ?? [], personId)
+  const row = study.data?.find((s) => s.user_id === personId && s.language === language)
+  const settings = row ?? defaultSettings(config, jobs.data ?? [], categories.data ?? [], personId)
   const due = dueForReview(rows, today)
   const jobById = (id: string | null) => (id ? jobs.data?.find((j) => j.id === id) : undefined)
   const error = vocab.error ?? study.error ?? progress.error
+  const kinds: Kind[] = config.hasCharacters ? ['word', 'character'] : ['word']
 
   return (
     <>
       <PageHeader
-        title="Mandarin"
-        description="HSK words and characters, a few a day, with reviews spaced out so they stick."
+        title={config.name}
+        description={config.description}
         actions={own ? <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Settings2 /> Settings</Button> : null}
       />
-      {partner ? (
-        <Segmented aria-label="Person" value={personId} onChange={setPersonId} className="mb-4" options={[{ value: me.id, label: 'Me' }, { value: partner.id, label: partner.display_name }]} />
-      ) : null}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Segmented
+          aria-label="Language"
+          value={language}
+          onChange={(l) => setParams({ lang: l }, { replace: true })}
+          options={LANGUAGE_IDS.map((l) => ({ value: l, label: LANGUAGES[l].name }))}
+        />
+        {partner ? (
+          <Segmented aria-label="Person" value={personId} onChange={setPersonId} options={[{ value: me.id, label: 'Me' }, { value: partner.id, label: partner.display_name }]} />
+        ) : null}
+      </div>
 
       {error ? (
         <ErrorState error={error} onRetry={() => { vocab.refetch(); study.refetch(); progress.refetch() }} />
       ) : !vocab.data || study.isPending || progress.isPending ? (
         <div className="grid gap-4 sm:grid-cols-3">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-28" />)}</div>
       ) : !own && !rows.length ? (
-        <Card><EmptyState icon={GraduationCap} title="Not started yet" description={`${person.display_name} hasn't learned any Mandarin here yet.`} /></Card>
+        <Card><EmptyState icon={GraduationCap} title="Not started yet" description={`${person.display_name} hasn't learned any ${config.name} here yet.`} /></Card>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3">
+          <div className={cn('grid gap-3', config.hasCharacters ? 'grid-cols-3' : 'grid-cols-2')}>
             <Tile label="Words" value={learned.word.size} of={vocab.data.words.length} />
-            <Tile label="Characters" value={learned.character.size} of={vocab.data.characters.length} />
+            {config.hasCharacters ? <Tile label="Characters" value={learned.character.size} of={vocab.data.characters.length} /> : null}
             <Tile label="To review" value={due.length} />
           </div>
 
           {own ? (
-            <ReviewSection
-              due={due.length}
-              hasLearned={rows.length > 0}
-              reviewJob={jobById(settings.review_task_id)}
-              onStart={() => setReviewing(true)}
-            />
+            <ReviewSection due={due.length} hasLearned={rows.length > 0} reviewJob={jobById(settings.review_task_id)} onStart={() => setReviewing(true)} />
           ) : null}
 
-          {(['word', 'character'] as const).map((kind) => (
+          {kinds.map((kind) => (
             <NewItemsSection
-              key={kind}
+              key={`${language}-${kind}`}
+              language={language}
               kind={kind}
               own={own}
               vocab={vocab.data!}
               rows={rows}
               learned={learned[kind]}
-              perDay={settings[KIND_LABEL[kind].perDay] as number}
+              perDay={settings[KIND[kind].perDay]}
               startLevel={settings.start_level}
-              job={jobById(settings[KIND_LABEL[kind].job] as string | null)}
+              job={jobById(settings[KIND[kind].job])}
             />
           ))}
 
-          <SectionTitle>HSK levels</SectionTitle>
+          <SectionTitle>{config.levelsTitle}</SectionTitle>
           <Card className="grid gap-3 p-4">
             {levelProgress(vocab.data.words, learned.word).map((l) => (
-              <div key={l.level} className="grid grid-cols-[4rem_1fr_auto] items-center gap-3 text-sm">
-                <span className="font-medium">HSK {l.level}</span>
+              <div key={l.level} className="grid grid-cols-[6rem_1fr_auto] items-center gap-3 text-sm">
+                <span className="font-medium">{config.levelLabel(l.level)}</span>
                 <ProgressBar value={(l.learned / l.total) * 100} />
                 <span className="tabular text-muted-foreground">{l.learned} / {l.total}</span>
               </div>
             ))}
           </Card>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Word lists: HSK 3.0 (2025 syllabus) from complete-hsk-vocabulary. Definitions from CC-CEDICT (CC BY-SA 4.0).
-          </p>
+          <p className="mt-4 text-xs text-muted-foreground">{config.credit}</p>
         </>
       )}
 
       {reviewing && vocab.data ? (
-        <ReviewDialog
-          rows={due}
-          vocab={vocab.data}
-          reviewJob={jobById(settings.review_task_id)}
-          onClose={() => setReviewing(false)}
-        />
+        <ReviewDialog language={language} rows={due} vocab={vocab.data} reviewJob={jobById(settings.review_task_id)} onClose={() => setReviewing(false)} />
       ) : null}
       {editing ? (
         <SettingsDialog
+          key={language}
+          language={language}
           exists={!!row}
           initial={settings}
           jobs={(jobs.data ?? []).filter((j) => !j.assignee_id || j.assignee_id === me.id)}
@@ -146,19 +156,24 @@ export default function LanguagesPage() {
   )
 }
 
-/** Before anyone saves settings: 3 words and 2 characters a day from HSK 1, linked to their Mandarin jobs by name. */
-function defaultSettings(jobs: Job[], categories: TaskCategory[], personId: string): StudySettings {
+/** The language someone has settings or progress in, else one their jobs mention, else Mandarin. */
+function guessLanguage(personId: string, study: Study[], progress: Progress[], jobs: Job[]): Language {
+  const started = LANGUAGE_IDS.find((l) => study.some((s) => s.user_id === personId && s.language === l) || progress.some((p) => p.user_id === personId && p.language === l))
+  if (started) return started
+  const mine = jobs.filter((j) => j.assignee_id === personId)
+  return LANGUAGE_IDS.find((l) => mine.some((j) => LANGUAGES[l].jobPattern.test(j.title))) ?? 'zh'
+}
+
+/** Before anyone saves settings: the language's daily amounts from the start, linked to their jobs by name. */
+function defaultSettings(config: LanguageConfig, jobs: Job[], categories: TaskCategory[], personId: string): StudySettings {
   const category = (id: string | null) => categories.find((c) => c.id === id)?.name ?? ''
-  const mandarin = jobs.filter(
-    (j) => (!j.assignee_id || j.assignee_id === personId) && /mandarin|chinese/i.test(`${j.title} ${category(j.category_id)}`),
-  )
-  const find = (pattern: RegExp) => mandarin.find((j) => pattern.test(j.title))?.id ?? null
+  const matching = jobs.filter((j) => (!j.assignee_id || j.assignee_id === personId) && config.jobPattern.test(`${j.title} ${category(j.category_id)}`))
+  const find = (pattern: RegExp) => matching.find((j) => pattern.test(j.title))?.id ?? null
   return {
-    words_per_day: 3,
-    characters_per_day: 2,
+    ...config.defaults,
     start_level: 1,
     words_task_id: find(/new .*words?/i),
-    characters_task_id: find(/characters?/i),
+    characters_task_id: config.hasCharacters ? find(/characters?/i) : null,
     review_task_id: find(/review/i),
   }
 }
@@ -199,6 +214,7 @@ function ReviewSection({ due, hasLearned, reviewJob, onStart }: { due: number; h
 }
 
 function NewItemsSection({
+  language,
   kind,
   own,
   vocab,
@@ -208,6 +224,7 @@ function NewItemsSection({
   startLevel,
   job,
 }: {
+  language: Language
   kind: Kind
   own: boolean
   vocab: Vocab
@@ -226,13 +243,14 @@ function NewItemsSection({
   const learnedToday = rows.filter((r) => r.kind === kind && r.learned_on === today)
   const remaining = remainingToday(rows, kind, today, perDay) + extra
   const next = own ? nextToLearn(items, learned, startLevel, remaining) : []
-  const { plural } = KIND_LABEL[kind]
+  const { plural } = KIND[kind]
+  const config = LANGUAGES[language]
 
-  if (!perDay && !learnedToday.length) return null
+  if (!perDay && !learnedToday.length && !extra) return null
 
   function gotIt(item: VocabItem) {
     learn.mutate(
-      { language: LANGUAGE, kind, item: item.text },
+      { language, kind, item: item.text },
       {
         onSuccess: () => {
           if (extra) setExtra((e) => e - 1)
@@ -249,11 +267,12 @@ function NewItemsSection({
       </SectionTitle>
       <div className="grid gap-3 lg:grid-cols-2">
         {learnedToday.map((r) => (
-          <ItemCard key={r.id} item={byText.get(r.item)} text={r.item} vocab={vocab} done />
+          <ItemCard key={r.id} language={language} item={byText.get(r.item)} text={r.item} vocab={vocab} done />
         ))}
         {next.map((item) => (
           <ItemCard
             key={item.text}
+            language={language}
             item={item}
             text={item.text}
             vocab={vocab}
@@ -263,7 +282,7 @@ function NewItemsSection({
       </div>
       {own && !next.length ? (
         <div className="mt-2 flex items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>{learnedToday.length ? `Today's ${plural} done.` : `All ${plural} from HSK ${startLevel} up are learned.`}</span>
+          <span>{learnedToday.length ? `Today's ${plural} done.` : `All ${plural} from ${config.levelLabel(startLevel)} up are learned.`}</span>
           {nextToLearn(items, learned, startLevel, 1).length ? (
             <Button variant="ghost" size="sm" onClick={() => setExtra((e) => e + 1)}>Learn one more</Button>
           ) : null}
@@ -274,33 +293,35 @@ function NewItemsSection({
   )
 }
 
-function ItemCard({ item, text, vocab, done, action }: { item?: VocabItem; text: string; vocab: Vocab; done?: boolean; action?: React.ReactNode }) {
+function ItemCard({ language, item, text, vocab, done, action }: { language: Language; item?: VocabItem; text: string; vocab: Vocab; done?: boolean; action?: React.ReactNode }) {
+  const config = LANGUAGES[language]
   return (
     <Card className={cn('flex items-start gap-4 p-4', done && 'opacity-70')}>
-      <span lang="zh-CN" className="min-w-14 text-center text-4xl leading-tight">{text}</span>
+      <span lang={config.speech} className={cn('min-w-14 break-words text-center leading-tight', config.big, !config.hasCharacters && 'max-w-[40%] text-left')}>{text}</span>
       <div className="min-w-0 flex-1">
-        {item ? <ItemDetails item={item} vocab={vocab} /> : <p className="text-sm text-muted-foreground">No longer in the word list</p>}
+        {item ? <ItemDetails language={language} item={item} vocab={vocab} /> : <p className="text-sm text-muted-foreground">No longer in the word list</p>}
       </div>
       {done ? <Check className="mt-1 size-5 shrink-0 text-success" aria-label="Learned today" /> : action}
     </Card>
   )
 }
 
-function ItemDetails({ item, vocab }: { item: VocabItem; vocab: Vocab }) {
+function ItemDetails({ language, item, vocab }: { language: Language; item: VocabItem; vocab: Vocab }) {
+  const config = LANGUAGES[language]
   const words = useMemo(() => new Map(vocab.words.map((w) => [w.text, w])), [vocab])
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium">{item.pinyin}</p>
-        <SpeakButton text={item.text} />
-        <Badge>HSK {item.level}</Badge>
+        <p className="font-medium">{item.reading}</p>
+        <SpeakButton text={item.text} lang={config.speech} />
+        <Badge>{config.levelLabel(item.level)}</Badge>
       </div>
       {item.meaning ? <p className="text-sm text-muted-foreground">{item.meaning}</p> : null}
       {item.examples.length ? (
         <ul className="mt-1 grid gap-0.5 text-xs text-muted-foreground">
           {item.examples.map((w) => (
             <li key={w}>
-              <span lang="zh-CN" className="text-sm text-foreground">{w}</span> {words.get(w)?.pinyin} · {words.get(w)?.meaning}
+              <span lang={config.speech} className="text-sm text-foreground">{w}</span> {words.get(w)?.reading} · {words.get(w)?.meaning}
             </li>
           ))}
         </ul>
@@ -309,18 +330,19 @@ function ItemDetails({ item, vocab }: { item: VocabItem; vocab: Vocab }) {
   )
 }
 
-function SpeakButton({ text }: { text: string }) {
+function SpeakButton({ text, lang }: { text: string; lang: string }) {
   if (!canSpeak()) return null
   return (
-    <Button variant="ghost" size="icon-sm" className="-my-1" aria-label="Listen" onClick={() => speak(text)}>
+    <Button variant="ghost" size="icon-sm" className="-my-1" aria-label="Listen" onClick={() => speak(text, lang)}>
       <Volume2 />
     </Button>
   )
 }
 
-function ReviewDialog({ rows, vocab, reviewJob, onClose }: { rows: Progress[]; vocab: Vocab; reviewJob?: Job; onClose: () => void }) {
+function ReviewDialog({ language, rows, vocab, reviewJob, onClose }: { language: Language; rows: Progress[]; vocab: Vocab; reviewJob?: Job; onClose: () => void }) {
   const review = useReviewItem()
   const tick = useTickOffJob()
+  const config = LANGUAGES[language]
   // The queue is fixed when the session starts; answers update the schedule as you go.
   const [queue] = useState(rows)
   const [index, setIndex] = useState(0)
@@ -349,10 +371,10 @@ function ReviewDialog({ rows, vocab, reviewJob, onClose }: { rows: Progress[]; v
         {current ? (
           <div className="grid gap-4">
             <p className="text-xs text-muted-foreground tabular">{index + 1} of {queue.length} · {current.kind}</p>
-            <p lang="zh-CN" className="py-4 text-center text-6xl">{current.item}</p>
+            <p lang={config.speech} className={cn('break-words py-4 text-center', config.hasCharacters ? 'text-6xl' : 'text-4xl font-medium')}>{current.item}</p>
             {shown ? (
               <>
-                <div className="min-h-16">{item ? <ItemDetails item={item} vocab={vocab} /> : null}</div>
+                <div className="min-h-16">{item ? <ItemDetails language={language} item={item} vocab={vocab} /> : null}</div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => answer(false)}>Forgot</Button>
                   <Button onClick={() => answer(true)}>Knew it</Button>
@@ -376,8 +398,9 @@ function ReviewDialog({ rows, vocab, reviewJob, onClose }: { rows: Progress[]; v
   )
 }
 
-function SettingsDialog({ exists, initial, jobs, onClose }: { exists: boolean; initial: StudySettings | Study; jobs: Job[]; onClose: () => void }) {
+function SettingsDialog({ language, exists, initial, jobs, onClose }: { language: Language; exists: boolean; initial: StudySettings | Study; jobs: Job[]; onClose: () => void }) {
   const save = useSaveStudy()
+  const config = LANGUAGES[language]
   const [values, setValues] = useState<StudySettings>({
     words_per_day: initial.words_per_day,
     characters_per_day: initial.characters_per_day,
@@ -399,30 +422,32 @@ function SettingsDialog({ exists, initial, jobs, onClose }: { exists: boolean; i
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Mandarin settings" className="sm:max-w-lg">
+      <DialogContent title={`${config.name} settings`} className="sm:max-w-lg">
         <form
           className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            save.mutate({ language: LANGUAGE, exists, settings: values }, { onSuccess: onClose })
+            save.mutate({ language, exists, settings: values }, { onSuccess: onClose })
           }}
         >
-          <div className="grid grid-cols-3 gap-3">
+          <div className={cn('grid gap-3', config.hasCharacters ? 'grid-cols-3' : 'grid-cols-2')}>
             <Field label="Words a day" htmlFor="words-per-day">
               <Input id="words-per-day" type="number" inputMode="numeric" min={0} max={50} value={values.words_per_day} onChange={(e) => set('words_per_day', count(e.target.value))} />
             </Field>
-            <Field label="Characters a day" htmlFor="chars-per-day">
-              <Input id="chars-per-day" type="number" inputMode="numeric" min={0} max={50} value={values.characters_per_day} onChange={(e) => set('characters_per_day', count(e.target.value))} />
-            </Field>
+            {config.hasCharacters ? (
+              <Field label="Characters a day" htmlFor="chars-per-day">
+                <Input id="chars-per-day" type="number" inputMode="numeric" min={0} max={50} value={values.characters_per_day} onChange={(e) => set('characters_per_day', count(e.target.value))} />
+              </Field>
+            ) : null}
             <Field label="Start at" htmlFor="start-level">
               <NativeSelect id="start-level" value={values.start_level} onChange={(e) => set('start_level', Number(e.target.value))}>
-                {[1, 2, 3, 4, 5, 6].map((l) => <option key={l} value={l}>HSK {l}</option>)}
+                {config.levels.map((l) => <option key={l} value={l}>{config.levelLabel(l)}</option>)}
               </NativeSelect>
             </Field>
           </div>
           <p className="text-sm text-muted-foreground">Finishing each part ticks off the job linked to it.</p>
           {jobSelect('words_task_id', 'New words job')}
-          {jobSelect('characters_task_id', 'New characters job')}
+          {config.hasCharacters ? jobSelect('characters_task_id', 'New characters job') : null}
           {jobSelect('review_task_id', 'Review job')}
           {save.error ? <p className="text-sm text-destructive">{getErrorMessage(save.error)}</p> : null}
           <DialogFooter>

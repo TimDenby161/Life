@@ -66,6 +66,7 @@ function HouseholdGate() {
           {modules.map((m) => (
             <Route key={m.id} path={m.path === '/' ? '/' : `${m.path}/*`} element={<m.component />} />
           ))}
+          <Route path="/mandarin" element={<Navigate to="/languages?lang=zh" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell>

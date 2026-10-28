@@ -7,11 +7,12 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { useUserId } from '@/modules/auth/AuthProvider'
 import { completeOccurrence, type Job, reopenOccurrence } from '@/modules/tasks/api'
 import { learnedSchedule, reviewedSchedule } from './lib/srs'
-import { type Kind, loadHsk } from './lib/vocab'
+import { type Language, LANGUAGES } from './lib/languages'
+import type { Kind } from './lib/vocab'
 
 export type Study = Tables<'language_study'>
 export type Progress = Tables<'language_progress'>
-export type Language = 'zh'
+export type { Language }
 export type StudySettings = Pick<Study, 'words_per_day' | 'characters_per_day' | 'start_level' | 'words_task_id' | 'characters_task_id' | 'review_task_id'>
 
 // Both members can read everything here; each person only writes their own (RLS).
@@ -23,7 +24,7 @@ export const languageKeys = {
 }
 
 export const useVocab = (language: Language) =>
-  useQuery({ queryKey: languageKeys.vocab(language), queryFn: loadHsk, staleTime: Infinity, gcTime: Infinity })
+  useQuery({ queryKey: languageKeys.vocab(language), queryFn: LANGUAGES[language].load, staleTime: Infinity, gcTime: Infinity })
 
 export const useStudy = () =>
   useQuery({ queryKey: languageKeys.study, queryFn: async () => unwrap(await supabase.from('language_study').select('*')) })

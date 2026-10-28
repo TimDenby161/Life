@@ -1,9 +1,9 @@
--- Languages: both members read each other's progress, only the owner writes,
+-- Languages (Mandarin, Spanish): both members read each other's progress, only the owner writes,
 -- outsiders see nothing, and linked jobs must be the household's own.
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(12);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -17,6 +17,10 @@ select set_config('t.sophie', '22222222-2222-2222-2222-222222222222', true);
 select set_config('t.out', '33333333-3333-3333-3333-333333333333', true);
 select set_config('t.hh', (select household_id::text from household_members where user_id = current_setting('t.tim')::uuid), true);
 select set_config('t.joint', (select id::text from task_lists where household_id = current_setting('t.hh')::uuid and kind = 'joint'), true);
+
+-- Start clean (rolled back at the end) so local test data doesn't collide.
+delete from language_progress;
+delete from language_study;
 
 select pg_temp.as_user(current_setting('t.tim')::uuid);
 with t as (
@@ -47,6 +51,14 @@ select throws_ok(
   format('insert into language_progress (household_id, user_id, language, kind, item, learned_on, due_on) values (%L, %L, %L, %L, %L, current_date, current_date)',
          current_setting('t.hh'), current_setting('t.tim'), 'zh', 'word', '谢谢'),
   '42501', null, 'nobody can record progress for someone else');
+
+select lives_ok(
+  format('insert into language_progress (household_id, language, kind, item, learned_on, due_on) values (%L, %L, %L, %L, current_date, current_date + 1)',
+         current_setting('t.hh'), 'es', 'word', 'hola'),
+  'Spanish words can be learned too');
+select throws_ok(
+  format('insert into language_study (household_id, language) values (%L, %L)', current_setting('t.hh'), 'fr'),
+  '23514', null, 'only the languages the app teaches');
 
 -- Outsiders ------------------------------------------------------------------------
 select pg_temp.as_user(current_setting('t.out')::uuid);

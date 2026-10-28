@@ -6,7 +6,8 @@ export type Kind = 'word' | 'character'
 export type VocabItem = {
   kind: Kind
   text: string
-  pinyin: string
+  /** Pinyin for Mandarin; the article or part of speech for Spanish (la casa, verb). */
+  reading: string
   /** Empty for characters that only appear inside words; show `examples` instead. */
   meaning: string
   level: number
@@ -15,24 +16,18 @@ export type VocabItem = {
 
 export type Vocab = { source: string; words: VocabItem[]; characters: VocabItem[] }
 
-type RawHsk = {
+export type RawVocab = {
   source: string
   words: [string, string, string, number][]
   characters: [string, string, string, number, string[]][]
 }
 
-export function parseHsk(raw: RawHsk): Vocab {
+export function parseVocab(raw: RawVocab): Vocab {
   return {
     source: raw.source,
-    words: raw.words.map(([text, pinyin, meaning, level]) => ({ kind: 'word', text, pinyin, meaning, level, examples: [] })),
-    characters: raw.characters.map(([text, pinyin, meaning, level, examples]) => ({ kind: 'character', text, pinyin, meaning, level, examples })),
+    words: raw.words.map(([text, reading, meaning, level]) => ({ kind: 'word', text, reading, meaning, level, examples: [] })),
+    characters: raw.characters.map(([text, reading, meaning, level, examples]) => ({ kind: 'character', text, reading, meaning, level, examples })),
   }
-}
-
-/** HSK words and characters (levels 1-6), loaded on demand: it's a few hundred KB. */
-export async function loadHsk(): Promise<Vocab> {
-  const raw = (await import('../data/hsk.json')).default as unknown as RawHsk
-  return parseHsk(raw)
 }
 
 export type ProgressRow = { kind: string; item: string; learned_on: ISODate; due_on: ISODate }

@@ -10,8 +10,14 @@ export function speak(text: string, lang = 'zh-CN') {
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = lang
   utterance.rate = 0.8
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang.replace('_', '-').startsWith(lang))
-  if (voice) utterance.voice = voice
+  // The exact voice (es-MX), else another of the same language, Spain's last.
+  const voices = window.speechSynthesis.getVoices().map((v) => ({ v, tag: v.lang.replace('_', '-') }))
+  const base = lang.split('-')[0]
+  const voice =
+    voices.find((x) => x.tag === lang) ??
+    voices.find((x) => x.tag.startsWith(`${base}-`) && x.tag !== 'es-ES') ??
+    voices.find((x) => x.tag.startsWith(base))
+  if (voice) utterance.voice = voice.v
   window.speechSynthesis.cancel()
   window.speechSynthesis.speak(utterance)
 }

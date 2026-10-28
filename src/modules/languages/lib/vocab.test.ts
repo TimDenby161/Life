@@ -1,15 +1,17 @@
-import raw from '../data/hsk.json'
-import { dueForReview, levelProgress, nextToLearn, parseHsk, remainingToday } from './vocab'
+import hsk from '../data/hsk.json'
+import spanishRaw from '../data/spanish.json'
+import { dueForReview, levelProgress, nextToLearn, parseVocab, type RawVocab, remainingToday } from './vocab'
 
-const vocab = parseHsk(raw as unknown as Parameters<typeof parseHsk>[0])
-const word = (text: string, level = 1) => ({ kind: 'word' as const, text, pinyin: '', meaning: '', level, examples: [] })
+const vocab = parseVocab(hsk as unknown as RawVocab)
+const spanish = parseVocab(spanishRaw as unknown as RawVocab)
+const word = (text: string, level = 1) => ({ kind: 'word' as const, text, reading: '', meaning: '', level, examples: [] })
 
 describe('HSK data', () => {
   it('has words for levels 1 to 6, easiest first', () => {
     const levels = vocab.words.map((w) => w.level)
     expect(new Set(levels)).toEqual(new Set([1, 2, 3, 4, 5, 6]))
     expect(levels).toEqual(levels.toSorted((a, b) => a - b))
-    expect(vocab.words.find((w) => w.text === '谢谢')).toMatchObject({ pinyin: 'xiè xie', level: 1 })
+    expect(vocab.words.find((w) => w.text === '谢谢')).toMatchObject({ reading: 'xiè xie', level: 1 })
   })
 
   it('covers every character used in the words once, either as a word or a character', () => {
@@ -18,7 +20,33 @@ describe('HSK data', () => {
     expect(new Set(chars).size).toBe(chars.length)
     expect(chars.some((c) => singles.has(c))).toBe(false)
     for (const w of vocab.words) for (const c of w.text) if (/\p{Script=Han}/u.test(c)) expect(singles.has(c) || chars.includes(c)).toBe(true)
-    expect(vocab.characters.every((c) => c.pinyin && (c.meaning || c.examples.length))).toBe(true)
+    expect(vocab.characters.every((c) => c.reading && (c.meaning || c.examples.length))).toBe(true)
+  })
+})
+
+describe('Spanish data', () => {
+  const byText = new Map(spanish.words.map((w) => [w.text, w]))
+
+  it('has 5,000 dictionary words, most common first, each once', () => {
+    expect(spanish.words).toHaveLength(5000)
+    expect(byText.size).toBe(5000)
+    expect(spanish.characters).toEqual([])
+    const levels = spanish.words.map((w) => w.level)
+    expect(levels).toEqual(levels.toSorted((a, b) => a - b))
+    expect(spanish.words.every((w) => w.meaning)).toBe(true)
+  })
+
+  it('teaches verbs by their infinitive, not their forms', () => {
+    for (const verb of ['ser', 'estar', 'tener', 'querer', 'ir']) expect(byText.get(verb)).toMatchObject({ reading: 'verb', level: 1 })
+    for (const form of ['quiero', 'es', 'fue', 'era', 'sabes']) expect(byText.has(form)).toBe(false)
+  })
+
+  it('uses Latin American words and gives nouns their article', () => {
+    expect(byText.get('computadora')?.reading).toBe('la computadora')
+    expect(byText.get('agua')?.reading).toBe('el agua')
+    expect(byText.get('casa')).toMatchObject({ reading: 'la casa', meaning: 'house', level: 1 })
+    expect(byText.has('vosotros')).toBe(false)
+    expect(byText.get('coger')?.meaning).toMatch(/vulgar/)
   })
 })
 
