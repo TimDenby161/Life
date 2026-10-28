@@ -1,4 +1,4 @@
-import { fundPot, move } from './pots'
+import { fundPot, move, nextTarget } from './pots'
 
 const items = [
   { id: 'italy', target_minor: 150_000 },
@@ -45,5 +45,26 @@ describe('move', () => {
   it('does nothing past either end', () => {
     expect(move(items, 0, -1)).toEqual(['italy', 'cornwall', 'japan'])
     expect(move(items, 2, 1)).toEqual(['italy', 'cornwall', 'japan'])
+  })
+})
+
+describe('nextTarget', () => {
+  const items = [
+    { id: 'venue', target_minor: 500_000 },
+    { id: 'rings', target_minor: 200_000 },
+  ]
+
+  it('is the first item not yet funded, with how much of it is covered', () => {
+    expect(nextTarget(650_000, items)).toMatchObject({ item: { id: 'rings', funded: 150_000 }, pct: 75 })
+    expect(nextTarget(0, items)).toMatchObject({ item: { id: 'venue' }, pct: 0 })
+  })
+
+  it('rounds down, so 100% only once it is funded', () => {
+    expect(nextTarget(699_999, items).pct).toBe(99)
+  })
+
+  it('has no item once everything is funded, or with no items', () => {
+    expect(nextTarget(800_000, items)).toEqual({ item: null, pct: 100 })
+    expect(nextTarget(100, [])).toEqual({ item: null, pct: 0 })
   })
 })

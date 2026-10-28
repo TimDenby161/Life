@@ -10,17 +10,16 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
-import { addDaysISO, formatDay, greeting, monthStart, parseISODate, todayISO } from '@/lib/dates'
+import { addDaysISO, formatDay, greeting, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
-import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { bucketByDay, formatEventTime } from '@/modules/calendar/lib/grid'
 import { ActivityRow, Composer } from '@/modules/feed/components/FeedItems'
 import { useFeedEvents, useMyReads, usePosts } from '@/modules/feed/hooks'
 import { type ActivityGroup, groupActivity } from '@/modules/feed/lib/activity'
-import { useAccountCurrency, useBalances, useAccounts, useBudgets, useGoals, useTransactions } from '@/modules/finances/hooks'
-import { activeBudgets, goalProgress, netWorth, spendingByCategory } from '@/modules/finances/lib/calc'
+import { useBalances, usePots } from '@/modules/finances/hooks'
+import { nextTarget } from '@/modules/finances/lib/pots'
 import { useMeasurements, useMetricDefinitions, useExerciseSessions } from '@/modules/health/api'
 import { formatValue } from '@/modules/health/lib/metrics'
 import { studyLinkFor, useStudy } from '@/modules/languages/api'
@@ -473,30 +472,20 @@ function FeedCard() {
   )
 }
 
+/** Each savings pot's next target (the first item not yet funded) and how far along it is. */
 function FinanceCard() {
-  const { household } = useHousehold()
-  const accounts = useAccounts()
+  const pots = usePots()
   const balances = useBalances()
-  const transactions = useTransactions()
-  const budgets = useBudgets()
-  const goals = useGoals()
-  const accountCurrency = useAccountCurrency()
-  const currency = household.default_currency
-  const today = todayISO()
-  const month = monthStart(today)
 
-  const content = useMemo(() => {
-    if (!accounts.data || !balances.data || !transactions.data) return null
-    const nw = netWorth(accounts.data, balances.data).find((n) => n.currency === currency)
-    const spend = spendingByCategory(transactions.data, accountCurrency, currency, month, today)
-    const spent = [...spend.values()].reduce((a, b) => a + b, 0)
-    const active = activeBudgets((budgets.data ?? []).filter((b) => b.currency === currency), month)
-    const budgetTotal = active.reduce((a, b) => a + b.amount_minor, 0)
-    // Compare budgets only with spending in budgeted categories.
-    const budgetedSpent = active.reduce((a, b) => a + (spend.get(b.category_id) ?? 0), 0)
-    const goal = (goals.data ?? []).find((g) => !g.reached_at)
-    return { nw, spent, budgetTotal, budgetedSpent, goal, goalP: goal ? goalProgress(goal, balances.data) : null }
-  }, [accounts.data, balances.data, transactions.data, budgets.data, goals.data, accountCurrency, currency, month, today])
+  const rows = useMemo(() => {
+    if (!pots.data || !balances.data) return null
+    return pots.data.pots.map((pot) => {
+      const balance = pot.account_id ? (balances.data.get(pot.account_id) ?? 0) : 0
+      const items = pots.data.items.filter((i) => i.pot_id === pot.id)
+      const { item, pct } = nextTarget(balance, items)
+      return { id: pot.id, name: pot.name, next: item?.name ?? null, pct, empty: !items.length }
+    })
+  }, [pots.data, balances.data])
 
   return (
     <Card>
@@ -505,41 +494,26 @@ function FinanceCard() {
         <CardLink to="/finances" label="Finances" />
       </CardHeader>
       <CardContent>
-        {!content ? (
+        {!rows ? (
           <ListSkeleton rows={2} />
-        ) : !accounts.data?.length ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="size-4" /> No accounts yet. <Link to="/finances" className="text-primary">Add one</Link></p>
+        ) : !rows.length ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="size-4" /> No savings pots yet. <Link to="/finances" className="text-primary">Add one</Link></p>
         ) : (
-          <div className="grid gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Net worth</p>
-              <p className="text-2xl font-semibold tracking-tight tabular">{formatMoney(content.nw?.total ?? 0, currency, { hidePence: true })}</p>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Spent in {format(new Date(), 'MMMM')}</span>
-              <span className="tabular">{formatMoney(content.spent, currency, { hidePence: true })}</span>
-            </div>
-            {content.budgetTotal ? (
-              <div>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="text-muted-foreground">Budgets</span>
-                  <span className="tabular">
-                    {formatMoney(content.budgetedSpent, currency, { hidePence: true })}
-                    <span className="text-muted-foreground"> of {formatMoney(content.budgetTotal, currency, { hidePence: true })}</span>
-                  </span>
+          <div className="grid gap-4">
+            {rows.map((r) => (
+              <div key={r.id}>
+                <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {r.empty ? 'No targets yet' : r.next ? `Next: ${r.next}` : 'Every target reached'}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xl font-semibold tracking-tight tabular">{r.empty ? '—' : `${r.pct}%`}</span>
                 </div>
-                <Progress value={(content.budgetedSpent / content.budgetTotal) * 100} indicatorClassName={content.budgetedSpent > content.budgetTotal ? 'bg-destructive' : undefined} />
+                <Progress value={r.pct} indicatorClassName={!r.next && !r.empty ? 'bg-success' : undefined} />
               </div>
-            ) : null}
-            {content.goal && content.goalP ? (
-              <div>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="text-muted-foreground">{content.goal.name}</span>
-                  <span className="tabular">{content.goalP.pct}%</span>
-                </div>
-                <Progress value={content.goalP.pct} />
-              </div>
-            ) : null}
+            ))}
           </div>
         )}
       </CardContent>
