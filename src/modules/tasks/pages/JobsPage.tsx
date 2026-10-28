@@ -108,11 +108,13 @@ export default function JobsPage() {
                 </button>
               </h2>
               {collapsed.has(group.key) ? null : group.items.length ? (
-                <ul>
-                  {group.items.map((job) => (
-                    <JobRow key={job.id} job={job} onOpen={() => setEditing(job)} />
-                  ))}
-                </ul>
+                <JobList
+                  groupKey={group.key}
+                  jobs={group.items}
+                  collapsed={collapsed}
+                  toggle={toggle}
+                  onOpen={(job) => setEditing(job)}
+                />
               ) : (
                 <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No jobs</p>
               )}
@@ -124,6 +126,59 @@ export default function JobsPage() {
       <JobDialog value={editing} onClose={() => setEditing(null)} />
     </>
   )
+}
+
+const assigneeOf = (job: Job) => job.open[0]?.assignee_id ?? job.assignee_id
+
+/** A group's jobs; split into collapsible per-person sections when more than one person has jobs in it. */
+function JobList({
+  groupKey,
+  jobs,
+  collapsed,
+  toggle,
+  onOpen,
+}: {
+  groupKey: string
+  jobs: Job[]
+  collapsed: Set<string>
+  toggle: (key: string) => void
+  onOpen: (job: Job) => void
+}) {
+  const { members } = useHousehold()
+  const byPerson = groupBy(jobs, (j) => assigneeOf(j) ?? '')
+  const rows = (items: Job[]) => (
+    <ul>
+      {items.map((job) => (
+        <JobRow key={job.id} job={job} onOpen={() => onOpen(job)} />
+      ))}
+    </ul>
+  )
+  if (Object.keys(byPerson).length < 2) return rows(jobs)
+
+  const people = [
+    ...members.filter((m) => byPerson[m.id]).map((m) => ({ id: m.id, label: m.display_name, member: m })),
+    ...Object.keys(byPerson)
+      .filter((id) => !members.some((m) => m.id === id))
+      .map((id) => ({ id, label: 'Either of us', member: undefined })),
+  ]
+  return people.map(({ id, label, member }) => {
+    const key = `${groupKey}/${id || 'none'}`
+    return (
+      <div key={key} className="pl-4">
+        <button
+          type="button"
+          onClick={() => toggle(key)}
+          aria-expanded={!collapsed.has(key)}
+          className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={cn('size-3.5 transition-transform', collapsed.has(key) && '-rotate-90')} />
+          {member ? <Avatar name={member.display_name} color={member.avatar_color} size="xs" /> : null}
+          {label} <span className="font-normal">· {byPerson[id].length}</span>
+        </button>
+        {collapsed.has(key) ? null : rows(byPerson[id])}
+      </div>
+    )
+  })
 }
 
 function JobRow({ job, onOpen }: { job: Job; onOpen: () => void }) {
