@@ -338,7 +338,8 @@ function NewItemsSection({
       { language, kind, item: item.text },
       {
         onSuccess: () => {
-          if (extra) setExtra((e) => e - 1)
+          // Only words past the daily amount use up an extra.
+          if (extra && learnedToday.length >= perDay) setExtra((e) => e - 1)
           if (learnedToday.length + 1 >= perDay) tick.mutate(job)
         },
       },
@@ -365,11 +366,25 @@ function NewItemsSection({
           />
         ))}
       </div>
-      {own && !next.length ? (
-        <div className="mt-2 flex items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>{learnedToday.length ? `Today's ${plural} done.` : `All ${plural} from ${config.levelLabel(startLevel)} up are learned.`}</span>
-          {nextToLearn(items, learned, startLevel, 1).length ? (
-            <Button variant="ghost" size="sm" onClick={() => setExtra((e) => e + 1)}>Learn one more</Button>
+      {own ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>
+            {next.length
+              ? `${next.length} to go today`
+              : learnedToday.length
+                ? `Today's ${plural} done.`
+                : `All ${plural} from ${config.levelLabel(startLevel)} up are learned.`}
+          </span>
+          {/* Beyond the daily amount: the extra ones show above to learn the same way. */}
+          {nextToLearn(items, learned, startLevel, next.length + 1).length > next.length ? (
+            <span className="inline-flex items-center gap-1.5">
+              Learn more
+              {[1, 5].map((n) => (
+                <Button key={n} variant="outline" size="sm" className="h-7 rounded-full px-2.5" onClick={() => setExtra((e) => e + n)}>
+                  +{n}
+                </Button>
+              ))}
+            </span>
           ) : null}
         </div>
       ) : null}
