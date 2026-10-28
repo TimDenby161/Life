@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Wallet } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 import { ErrorState, ListSkeleton } from '@/components/states'
@@ -65,19 +65,6 @@ export default function DashboardPage() {
 
   return (
     <div className="grid gap-5">
-      {partner ? (
-        <Segmented
-          aria-label="Whose tasks"
-          className="justify-self-start"
-          value={who}
-          onChange={setWho}
-          options={[
-            { value: me.id, label: `${me.display_name} + Joint` },
-            { value: partner.id, label: partner.display_name },
-          ]}
-        />
-      ) : null}
-
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{format(new Date(), 'EEEE d MMMM')}</p>
@@ -94,7 +81,25 @@ export default function DashboardPage() {
       <QuickAdd listId={lists.find((l) => l.kind === 'joint')?.id} placeholder="Quick add a joint task…" />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <DaysCard open={open} items={items} />
+        <DaysCard
+          open={open}
+          items={items}
+          filter={
+            partner ? (
+              <Segmented
+                aria-label="Whose tasks"
+                size="sm"
+                className="mx-1 mb-2 sm:mx-2"
+                value={who}
+                onChange={setWho}
+                options={[
+                  { value: me.id, label: `${me.display_name} + Joint` },
+                  { value: partner.id, label: partner.display_name },
+                ]}
+              />
+            ) : null
+          }
+        />
         <UpcomingCard />
         <MessagesCard />
         <FinanceCard />
@@ -120,7 +125,7 @@ function CardLink({ to, label }: { to: string; label: string }) {
 }
 
 /** Today (including overdue), tomorrow and the day after, each collapsible; only Today starts open. */
-function DaysCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
+function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> & { filter: ReactNode }) {
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
@@ -150,6 +155,7 @@ function DaysCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
         <CardLink to="/tasks" label="All tasks" />
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
+        {filter}
         {open.isPending ? (
           <ListSkeleton rows={4} className="px-2" />
         ) : open.error ? (
