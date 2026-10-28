@@ -68,7 +68,7 @@ function groupByCategory(items: OccurrenceWithTask[], categories: TaskCategory[]
 }
 
 /** A date section's tasks by category (non-empty ones only), or nothing if none has a category. */
-function categorySubgroups(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] | undefined {
+export function categorySubgroups(items: OccurrenceWithTask[], categories: TaskCategory[]): Group[] | undefined {
   const subgroups = groupByCategory(items, categories).filter((g) => g.items.length)
   return subgroups.some((g) => g.key !== 'none') ? subgroups : undefined
 }

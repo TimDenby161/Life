@@ -26,7 +26,9 @@ import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
-import { QuickAdd } from '@/modules/tasks/pages/TasksPage'
+import type { OccurrenceWithTask } from '@/modules/tasks/api'
+import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
+import { categorySubgroups, QuickAdd } from '@/modules/tasks/pages/TasksPage'
 
 /**
  * Open occurrences that are this person's own (Tasks page ownership rule),
@@ -124,7 +126,10 @@ function CardLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-/** Today (including overdue), tomorrow and the day after, each collapsible; only Today starts open. */
+/**
+ * Today (including overdue), tomorrow and the day after, each collapsible and
+ * split into collapsible categories; only Today starts open.
+ */
 function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> & { filter: ReactNode }) {
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
@@ -132,16 +137,35 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   const navigate = useNavigate()
   const today = todayISO()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
+  // Category groups start open; collapsing one is remembered (per day slot: today / tomorrow / day after).
+  const { collapsed, toggle: toggleCategory } = useCollapsedGroups('life.home.collapsed')
   const toggle = (day: string) =>
     setExpanded((prev) => {
       const next = new Set(prev)
       if (!next.delete(day)) next.add(day)
       return next
     })
+  const renderRows = (rows: OccurrenceWithTask[], showCategory: boolean) => (
+    <ul>
+      {rows.map((o) => (
+        <TaskRow
+          key={o.id}
+          occurrence={o}
+          lists={lists}
+          categories={categories}
+          showList
+          showCategory={showCategory}
+          onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
+          onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
+        />
+      ))}
+    </ul>
+  )
   const days = [0, 1, 2].map((i) => {
     const day = addDaysISO(today, i)
     return {
       day,
+      slot: ['today', 'tomorrow', 'later'][i],
       label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
       items: (items ?? [])
         .filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day))
@@ -161,7 +185,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
         ) : (
-          days.map(({ day, label, items: dayItems }) => {
+          days.map(({ day, slot, label, items: dayItems }) => {
             const isOpen = expanded.has(day)
             return (
               <section key={day} aria-labelledby={`day-${day}`} className="mb-1 last:mb-0">
@@ -185,19 +209,27 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
                     <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
                   )
                 ) : (
-                  <ul>
-                    {dayItems.map((o) => (
-                      <TaskRow
-                        key={o.id}
-                        occurrence={o}
-                        lists={lists}
-                        categories={categories}
-                        showList
-                        onOpen={() => navigate(`/tasks?task=${o.task_id}`)}
-                        onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
-                      />
-                    ))}
-                  </ul>
+                  (categorySubgroups(dayItems, categories)?.map((sub) => {
+                    const subKey = `${slot}/${sub.key}`
+                    const isCollapsed = collapsed.has(subKey)
+                    return (
+                      <div key={sub.key} className="pl-4">
+                        <h3>
+                          <button
+                            type="button"
+                            onClick={() => toggleCategory(subKey)}
+                            aria-expanded={!isCollapsed}
+                            className="flex w-full items-center gap-1.5 rounded-lg px-3 pb-1 pt-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                          >
+                            <ChevronDown className={cn('size-3.5 transition-transform', isCollapsed && '-rotate-90')} />
+                            {sub.dot ? <span className={cn('size-2 rounded-full', sub.dot)} /> : null}
+                            {sub.label} <span className="font-normal">· {sub.items.length}</span>
+                          </button>
+                        </h3>
+                        {isCollapsed ? null : renderRows(sub.items, false)}
+                      </div>
+                    )
+                  }) ?? renderRows(dayItems, true))
                 )}
               </section>
             )
