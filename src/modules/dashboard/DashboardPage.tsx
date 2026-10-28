@@ -361,7 +361,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   )
 }
 
-/** Calendar events for today and the next six days, one collapsible list per day like the Tasks card; only Today starts open. */
+/** Calendar events for today and the next six days, one collapsible list per day like the Tasks card; the first three days start open. */
 function UpcomingCard() {
   const integrations = useCalendarIntegrations()
   const connected = Boolean(integrations.data?.some((i) => i.enabled && i.mode === 'service_account'))
@@ -370,7 +370,7 @@ function UpcomingCard() {
   const events = useCalendarEvents(today, end, connected)
   const result = events.data
   const byDay = useMemo(() => bucketByDay(result?.status === 'ok' ? result.events : []), [result])
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([0, 1, 2].map((i) => addDaysISO(today, i))))
   const toggle = (day: string) =>
     setExpanded((prev) => {
       const next = new Set(prev)
