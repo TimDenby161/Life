@@ -19,7 +19,7 @@ import { bucketByDay, type CalendarEvent, formatEventTime, monthGrid, plainText,
 type View = 'month' | 'week' | 'agenda'
 
 export default function CalendarPage() {
-  const [view, setView] = useState<View>(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'agenda' : 'month'))
+  const [view, setView] = useState<View>('week')
   const [cursor, setCursor] = useState(todayISO())
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
   const integrations = useCalendarIntegrations()
@@ -209,7 +209,7 @@ function MonthView({ month, byDay, tasksByDay, onSelect }: DayProps & { month: I
 function WeekView({ days, byDay, tasksByDay, onSelect }: DayProps & { days: ISODate[] }) {
   const today = todayISO()
   return (
-    <div className="grid gap-2 md:grid-cols-7">
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
       {days.map((day) => {
         const events = byDay.get(day) ?? []
         const tasks = tasksByDay[day] ?? []
