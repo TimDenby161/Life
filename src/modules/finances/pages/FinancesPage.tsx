@@ -130,9 +130,9 @@ function Overview() {
   const isCombined = selected.kind === 'owner' && selected.owner === 'all'
 
   return (
-    <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="col-span-2 p-4 lg:col-span-1">
+    <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-4 sm:col-span-2 lg:col-span-1">
           <BoxHeading owner="all" title="Combined" total={money(primary.total)} change={changeFor('all')} money={money} large {...pick} />
           {others.length ? <p className="mt-1 text-xs text-muted-foreground">Plus {others.map((o) => formatMoney(o.total, o.currency)).join(', ')} (not converted)</p> : null}
           <CombinedBreakdown groups={primary.byGroup.all} owner="all" accountsIn={accountsIn} money={money} estimated={derived.estimatedGroups} {...pick} />
@@ -149,7 +149,7 @@ function Overview() {
         </Card>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <ChartCard
           title={`${selectionTitle} over time`}
           description={
@@ -262,12 +262,12 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
   return (
     <li>
       <Pickable selection={{ kind: 'group', owner, group }} selectedKey={pick.selectedKey} onSelect={(s) => { pick.onSelect(s); setOpen((o) => !o) }}>
-        <span className="flex items-center gap-1 text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
           <ChevronRight aria-hidden className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
           {label}
           <Pct change={pick.changeOf({ kind: 'group', owner, group })} />
         </span>
-        <span className={cn('tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
+        <span className={cn('shrink-0 whitespace-nowrap tabular', value < 0 && 'text-destructive')}>{money(value)}</span>
       </Pickable>
       {open ? (
         <ul className="mb-1 ml-4 mt-0.5 grid gap-0.5 border-l pl-2">
@@ -280,7 +280,7 @@ function GroupLine({ group, value, owner, accountsIn, money, estimated, ...pick 
                   <li key={o}>
                     <Pickable selection={{ kind: 'group', owner: o, group }} {...pick}>
                       <span className="truncate text-muted-foreground">{theirs[0].ownerName}<Pct change={pick.changeOf({ kind: 'group', owner: o, group })} /></span>
-                      <span className={cn('tabular', total < 0 && 'text-destructive')}>{money(total)}</span>
+                      <span className={cn('shrink-0 whitespace-nowrap tabular', total < 0 && 'text-destructive')}>{money(total)}</span>
                     </Pickable>
                     {/* Several accounts: list them. One account made of sheet rows: its rows straight under the name. */}
                     {theirs.length > 1 ? (
@@ -304,7 +304,7 @@ function AccountRows({ accounts, money, className, ...pick }: Pick<BreakdownProp
     <li key={a.id}>
       <Pickable selection={{ kind: 'account', accountId: a.id }} {...pick}>
         <span className="truncate text-muted-foreground">{a.name}<Pct change={pick.changeOf({ kind: 'account', accountId: a.id })} /></span>
-        <span className={cn('tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
+        <span className={cn('shrink-0 whitespace-nowrap tabular', a.balance < 0 && 'text-destructive')}>{money(a.balance)}</span>
       </Pickable>
       {a.parts.length ? <PartRows account={a} money={money} {...pick} /> : null}
     </li>
@@ -320,7 +320,7 @@ function PartRows({ account, money, ...pick }: Pick<BreakdownProps, 'money' | 's
         <li key={p.label}>
           <Pickable selection={{ kind: 'part', accountId: account.id, label: p.label }} {...pick} className="text-muted-foreground/80">
             <span className="truncate">{p.label}<Pct change={pick.changeOf({ kind: 'part', accountId: account.id, label: p.label })} /></span>
-            <span className={cn('tabular', p.balance_minor < 0 && 'text-destructive')}>{money(p.balance_minor)}</span>
+            <span className={cn('shrink-0 whitespace-nowrap tabular', p.balance_minor < 0 && 'text-destructive')}>{money(p.balance_minor)}</span>
           </Pickable>
         </li>
       ))}
@@ -358,7 +358,7 @@ function CombinedBreakdown({ groups = {}, ...props }: BreakdownProps) {
           <li>
             <Pickable selection={{ kind: 'equity' }} selectedKey={props.selectedKey} onSelect={props.onSelect} className="font-medium">
               <span className="pl-4">Equity{props.estimated.has('property') ? ' (est.)' : ''}<Pct change={props.changeOf({ kind: 'equity' })} /></span>
-              <span className={cn('tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
+              <span className={cn('shrink-0 whitespace-nowrap tabular', equity < 0 && 'text-destructive')}>{props.money(equity)}</span>
             </Pickable>
           </li>
         </ul>

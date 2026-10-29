@@ -53,8 +53,8 @@ export function SheetSyncCard() {
     return (
       <>
         <Card className="mb-4 flex flex-wrap items-center gap-3 p-4">
-          <FileSpreadsheet className="size-5 text-muted-foreground" />
-          <p className="min-w-0 flex-1 text-sm text-muted-foreground">Keep balances in a Google Sheet? Connect it and each new month's column comes in automatically.</p>
+          <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
+          <p className="min-w-0 flex-1 basis-48 text-sm text-muted-foreground">Keep balances in a Google Sheet? Connect it and each new month's column comes in automatically.</p>
           <Button variant="outline" size="sm" onClick={() => setConnecting(true)}><Link2 /> Connect sheet</Button>
         </Card>
         <ConnectSheetDialog open={connecting} onOpenChange={setConnecting} />
@@ -67,8 +67,9 @@ export function SheetSyncCard() {
     <>
       <Card className="mb-4 grid gap-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <FileSpreadsheet className="size-5 text-success" />
-          <div className="min-w-0 flex-1">
+          <FileSpreadsheet className="size-5 shrink-0 text-success" />
+          {/* The basis makes the buttons wrap below on phones rather than squeezing the text. */}
+          <div className="min-w-0 flex-1 basis-48">
             <p className="truncate text-sm font-medium">{s.name} <span className="font-normal text-muted-foreground">· Google Sheet, tab “{s.sheet_name}”</span></p>
             <p className="text-xs text-muted-foreground">
               {sync.isPending

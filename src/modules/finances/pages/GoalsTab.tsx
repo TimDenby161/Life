@@ -30,7 +30,7 @@ export function GoalsTab() {
   if (pots.error) return <ErrorState error={pots.error} onRetry={() => pots.refetch()} />
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">Each pot's account funds its items in order, one at a time.</p>
         <Button variant="outline" size="sm" onClick={() => setEditingPot('new')}><Plus /> New pot</Button>
@@ -40,7 +40,7 @@ export function GoalsTab() {
           <EmptyState icon={PiggyBank} title="No pots yet" description="Make a pot for each savings account, e.g. Holidays, then add what it's saving for in order." />
         </Card>
       ) : (
-        <div className="grid items-start gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
           {pots.data.pots.map((p) => (
             <PotCard
               key={p.id}
@@ -88,7 +88,7 @@ function PotCard({ pot, account, balance, items, onEdit }: { pot: SavingsPot; ac
         </>
       ) : null}
 
-      <ol className="mt-3 grid gap-2 border-t pt-3">
+      <ol className="mt-3 grid grid-cols-1 gap-2 border-t pt-3">
         {funded.items.map((item, i) => (
           <PotItemRow
             key={item.id}
@@ -102,7 +102,7 @@ function PotCard({ pot, account, balance, items, onEdit }: { pot: SavingsPot; ac
         ))}
         {!items.length ? <li className="text-xs text-muted-foreground">Nothing in this pot yet.</li> : null}
       </ol>
-      <Button variant="ghost" size="sm" className="mt-2" onClick={() => setEditing('new')}><Plus /> Add to {pot.name}</Button>
+      <Button variant="ghost" size="sm" className="mt-2 max-w-full" onClick={() => setEditing('new')}><Plus /> <span className="truncate">Add to {pot.name}</span></Button>
 
       <PotItemDialog key={editing === 'new' ? 'new' : editing?.id} pot={pot} item={editing} nextOrder={items.length} onClose={() => setEditing(null)} />
     </Card>
@@ -127,7 +127,7 @@ function PotItemRow({
   const [confirm, setConfirm] = useState(false)
   const pct = Math.round((item.funded / item.target_minor) * 100)
   return (
-    <li className={cn('grid gap-1 rounded-lg p-2', item.status === 'funding' && 'bg-muted/50')}>
+    <li className={cn('grid grid-cols-1 gap-1 rounded-lg p-2', item.status === 'funding' && 'bg-muted/50')}>
       <div className="flex items-start justify-between gap-2 text-sm">
         <div className="min-w-0">
           <p className="truncate font-medium">{item.name}</p>
