@@ -14,15 +14,19 @@ import { useAccountCurrency, useAccounts, useGoals, useBalances, useSnapshots, u
 import { balanceOn, goalProgress, monthlyFlows } from '@/modules/finances/lib/calc'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { usePersonSeries } from '@/modules/household/series'
-import { useCompletionEvents, useStatsOccurrences } from '@/modules/tasks/hooks'
+import { useCompletionEvents, useStatsOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
+import { ownerOf } from '@/modules/tasks/lib/owner'
 import { computeTaskStats } from '@/modules/tasks/lib/stats'
 
 type Period = '3m' | '12m'
+type Scope = 'joint' | 'all'
 
 export default function StatsPage() {
   const { members, household } = useHousehold()
   const series = usePersonSeries()
   const [period, setPeriod] = useState<Period>('3m')
+  // Task figures default to joint tasks only (same ownership rule as the Tasks page).
+  const [scope, setScope] = useState<Scope>('joint')
   const months = period === '3m' ? 3 : 12
   const today = todayISO()
   const from = toISODate(subMonths(parseISO(today), months))
@@ -31,6 +35,8 @@ export default function StatsPage() {
 
   const events = useCompletionEvents()
   const occurrences = useStatsOccurrences(from)
+  const categories = useTaskCategories()
+  const lists = useTaskLists()
   const transactions = useTransactions()
   const accounts = useAccounts()
   const snapshots = useSnapshots()
@@ -40,10 +46,18 @@ export default function StatsPage() {
   const accountCurrency = useAccountCurrency()
   const memberIds = useMemo(() => members.map((m) => m.id), [members])
 
-  const tasks = useMemo(
-    () => (events.data && occurrences.data ? computeTaskStats(events.data, occurrences.data, memberIds, { from, to: today }, today) : null),
-    [events.data, occurrences.data, memberIds, from, today],
-  )
+  const tasks = useMemo(() => {
+    if (!events.data || !occurrences.data) return null
+    const inScope = (task: { category_id: string | null; list_id: string | null }) =>
+      scope === 'all' || ownerOf(task, categories.data ?? [], lists.data ?? []) === null
+    return computeTaskStats(
+      events.data.filter(inScope),
+      occurrences.data.filter((o) => o.task && inScope(o.task)),
+      memberIds,
+      { from, to: today },
+      today,
+    )
+  }, [events.data, occurrences.data, categories.data, lists.data, scope, memberIds, from, today])
   const trend = (tasks ? (period === '12m' ? tasks.monthly : tasks.weekly) : []).map((t) => ({ label: t.label, ...Object.fromEntries(series.map((s) => [s.key, t.byPerson[s.key] ?? 0])) }))
 
   const flows = useMemo(() => (transactions.data ? monthlyFlows(transactions.data, accountCurrency, currency, months, today) : null), [transactions.data, accountCurrency, currency, months, today])
@@ -80,7 +94,12 @@ export default function StatsPage() {
       <PageHeader
         title="Statistics"
         description="How the household is running, from what you've actually recorded."
-        actions={<Segmented aria-label="Period" size="sm" value={period} onChange={setPeriod} options={[{ value: '3m', label: '3 months' }, { value: '12m', label: '12 months' }]} />}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Segmented aria-label="Which tasks" size="sm" value={scope} onChange={setScope} options={[{ value: 'joint', label: 'Joint tasks' }, { value: 'all', label: 'All tasks' }]} />
+            <Segmented aria-label="Period" size="sm" value={period} onChange={setPeriod} options={[{ value: '3m', label: '3 months' }, { value: '12m', label: '12 months' }]} />
+          </div>
+        }
       />
       {!ready ? (
         <div className="grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-72" />)}</div>
