@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unread = useUnreadPostCount()
   useHouseholdRealtime(household.id)
 
-  const primary = modules.filter((m) => m.mobilePrimary)
+  const primary = modules.filter((m) => m.mobilePrimary).toSorted((a, b) => a.mobilePrimary! - b.mobilePrimary!)
   const secondary = modules.filter((m) => !m.mobilePrimary)
   const moreActive = secondary.some((m) => isActive(pathname, m.path))
   const badgeFor = (id: string) => (id === 'feed' ? unread : 0)
