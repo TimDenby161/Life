@@ -70,7 +70,7 @@ export default function DashboardPage() {
     : ' '
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{format(new Date(), 'EEEE d MMMM')}</p>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
 
       <AddTask />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <DaysCard
           open={open}
           items={items}
