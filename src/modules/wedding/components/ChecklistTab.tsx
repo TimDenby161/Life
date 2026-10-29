@@ -35,7 +35,7 @@ export function ChecklistTab() {
   const datesFrom = weddingDate ? 'counting back from your wedding date' : 'counting back from 1 September 2028 until you set the exact date'
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <form
         className="flex flex-wrap gap-2"
         onSubmit={(e) => {
@@ -72,40 +72,45 @@ export function ChecklistTab() {
           {tasks.data.map((t) => {
             const overdue = !t.done && t.due_date && t.due_date < today
             return (
-              <div key={t.id} className="group flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
-                <Checkbox
-                  checked={t.done}
-                  aria-label={`${t.done ? 'Reopen' : 'Done'}: ${t.title}`}
-                  disabled={toggle.isPending}
-                  onCheckedChange={() => toggle.mutate(t, { onError })}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className={cn('truncate', t.done && 'text-muted-foreground line-through')}>{t.title}</p>
-                  {t.due_date || t.completed_at ? (
-                    <p className={cn('text-xs', overdue ? 'text-destructive' : 'text-muted-foreground')}>
-                      {t.completed_at ? `Done ${formatDay(t.completed_at.slice(0, 10))}` : `Due ${formatDay(t.due_date!)}${overdue ? ' · overdue' : ''}`}
-                    </p>
-                  ) : null}
+              <div key={t.id} className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm">
+                {/* The basis puts the controls on their own line on phones, so titles have room. */}
+                <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+                  <Checkbox
+                    checked={t.done}
+                    aria-label={`${t.done ? 'Reopen' : 'Done'}: ${t.title}`}
+                    disabled={toggle.isPending}
+                    onCheckedChange={() => toggle.mutate(t, { onError })}
+                  />
+                  <div className="min-w-0">
+                    <p className={cn('line-clamp-2 break-words', t.done && 'text-muted-foreground line-through')}>{t.title}</p>
+                    {t.due_date || t.completed_at ? (
+                      <p className={cn('text-xs', overdue ? 'text-destructive' : 'text-muted-foreground')}>
+                        {t.completed_at ? `Done ${formatDay(t.completed_at.slice(0, 10))}` : `Due ${formatDay(t.due_date!)}${overdue ? ' · overdue' : ''}`}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-                <NativeSelect
-                  aria-label={`Who's doing ${t.title}`}
-                  value={t.assignee_id ?? ''}
-                  onChange={(e) => update.mutate({ id: t.id, patch: { assignee_id: e.target.value || null } }, { onError })}
-                  className="h-8 w-28 text-[13px]"
-                >
-                  <option value="">Anyone</option>
-                  {members.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
-                </NativeSelect>
-                <Input
-                  aria-label={`Due date for ${t.title}`}
-                  type="date"
-                  value={t.due_date ?? ''}
-                  onChange={(e) => update.mutate({ id: t.id, patch: { due_date: e.target.value || null } }, { onError })}
-                  className="h-8 w-36 text-[13px]"
-                />
-                <Button variant="ghost" size="icon-sm" aria-label={`Delete ${t.title}`} onClick={() => del.mutate(t.id, { onError })}>
-                  <Trash2 />
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <NativeSelect
+                    aria-label={`Who's doing ${t.title}`}
+                    value={t.assignee_id ?? ''}
+                    onChange={(e) => update.mutate({ id: t.id, patch: { assignee_id: e.target.value || null } }, { onError })}
+                    className="h-8 w-24 text-[13px] sm:w-28"
+                  >
+                    <option value="">Anyone</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+                  </NativeSelect>
+                  <Input
+                    aria-label={`Due date for ${t.title}`}
+                    type="date"
+                    value={t.due_date ?? ''}
+                    onChange={(e) => update.mutate({ id: t.id, patch: { due_date: e.target.value || null } }, { onError })}
+                    className="h-8 w-36 text-[13px]"
+                  />
+                  <Button variant="ghost" size="icon-sm" aria-label={`Delete ${t.title}`} onClick={() => del.mutate(t.id, { onError })}>
+                    <Trash2 />
+                  </Button>
+                </div>
               </div>
             )
           })}

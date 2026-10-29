@@ -31,7 +31,7 @@ export function GuestsTab() {
   const parties = [...new Set(shown.map((g) => g.party ?? ''))]
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground tabular">
           {c.invited} invited ({c.day} day, {c.evening} evening) · {c.coming} coming · {c.notComing} not · {c.awaiting} awaiting
@@ -56,7 +56,8 @@ export function GuestsTab() {
             <ul className="divide-y">
               {shown.filter((g) => (g.party ?? '') === party).map((g) => (
                 <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
+                  {/* The basis puts the RSVP and edit controls on their own line on phones, so names have room. */}
+                  <div className="min-w-0 flex-1 basis-48">
                     <p className="truncate font-medium">{g.name}{g.plus_one ? <span className="font-normal text-muted-foreground"> +1</span> : null}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {[g.invite === 'evening' ? 'Evening' : 'Day', g.dietary, g.table_name && `Table ${g.table_name}`].filter(Boolean).join(' · ')}

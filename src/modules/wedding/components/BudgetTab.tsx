@@ -37,9 +37,9 @@ export function BudgetTab() {
     })
 
   return (
-    <div className="grid gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground tabular">
+    <div className="grid grid-cols-1 gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 basis-48 text-sm text-muted-foreground tabular">
           {items.data.length ? `${money(totals.budget)} budgeted · ${money(totals.paid)} paid · ${money(totals.remaining)} to pay` : 'The budget total sets the Wedding pot’s target.'}
         </p>
         <div className="flex shrink-0 gap-2">
@@ -60,14 +60,14 @@ export function BudgetTab() {
         byCategory(items.data).map((group) => (
           <Card key={group.category} className="overflow-hidden">
             <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2 text-sm">
-              <span className="font-semibold">{group.category}</span>
-              <span className="tabular text-muted-foreground">{money(group.totals.paid)} / {money(group.totals.budget)}</span>
+              <span className="min-w-0 truncate font-semibold">{group.category}</span>
+              <span className="shrink-0 tabular text-muted-foreground">{money(group.totals.paid)} / {money(group.totals.budget)}</span>
             </div>
             <ul className="divide-y">
               {group.items.map((i) => {
                 const pct = i.budget_minor ? Math.min(100, Math.round((i.paid_minor / i.budget_minor) * 100)) : 0
                 return (
-                  <li key={i.id} className="group grid gap-1.5 px-4 py-2.5">
+                  <li key={i.id} className="group grid grid-cols-1 gap-1.5 px-4 py-2.5">
                     <div className="flex items-start justify-between gap-3 text-sm">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{i.name}</p>

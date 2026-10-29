@@ -20,20 +20,20 @@ export function SuppliersTab() {
   if (suppliers.error) return <ErrorState error={suppliers.error} onRetry={() => suppliers.refetch()} />
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => setEditing('new')}><Plus /> Add supplier</Button>
       </div>
       {!suppliers.data.length ? (
         <Card><EmptyState icon={Store} title="No suppliers yet" description="Keep the venue, caterer, photographer and others here; link budget lines to them to see what you've paid." /></Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {suppliers.data.map((s) => {
             // What's budgeted and paid on the budget lines linked to this supplier.
             const lines = (budget.data ?? []).filter((b) => b.supplier_id === s.id)
             const t = budgetTotals(lines)
             return (
-              <Card key={s.id} className="grid gap-2 p-4 text-sm">
+              <Card key={s.id} className="grid grid-cols-1 gap-2 p-4 text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-muted-foreground">{s.role}</p>
@@ -48,7 +48,7 @@ export function SuppliersTab() {
                   {s.website ? <Button asChild variant="outline" size="sm"><a href={s.website} target="_blank" rel="noreferrer noopener"><ExternalLink /> Website</a></Button> : null}
                 </div>
                 {lines.length ? <p className="text-xs text-muted-foreground tabular">{money(t.paid)} paid of {money(t.budget)} budgeted</p> : null}
-                {s.notes ? <p className="whitespace-pre-line text-xs text-muted-foreground">{s.notes}</p> : null}
+                {s.notes ? <p className="whitespace-pre-line break-words text-xs text-muted-foreground">{s.notes}</p> : null}
               </Card>
             )
           })}
