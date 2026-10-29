@@ -17,7 +17,7 @@ import { bucketByDay, type CalendarEvent, formatEventTime, monthGrid, plainText,
 type View = 'month' | 'week' | 'agenda'
 
 export default function CalendarPage() {
-  const [view, setView] = useState<View>('week')
+  const [view, setView] = useState<View>('agenda')
   const [cursor, setCursor] = useState(todayISO())
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
   const integrations = useCalendarIntegrations()
