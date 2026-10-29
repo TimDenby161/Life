@@ -1,7 +1,7 @@
 import { addMonths, addWeeks, format, isSameMonth, parseISO, startOfMonth } from 'date-fns'
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, MapPin, Settings } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, MapPin, Settings } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Segmented, Skeleton } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { addDaysISO, formatDay, type ISODate, todayISO, toISODate } from '@/lib/dates'
-import { cn, groupBy } from '@/lib/utils'
-import type { OccurrenceWithTask } from '@/modules/tasks/api'
-import { useOpenOccurrences } from '@/modules/tasks/hooks'
+import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from './api'
 import { bucketByDay, type CalendarEvent, formatEventTime, monthGrid, plainText, weekDays } from './lib/grid'
 
@@ -39,11 +37,6 @@ export default function CalendarPage() {
   }, [view, cursor])
 
   const events = useCalendarEvents(range.from, range.to, Boolean(connected))
-  const tasks = useOpenOccurrences()
-  const tasksByDay = useMemo(
-    () => groupBy((tasks.data ?? []).filter((o) => o.due_date && o.due_date >= range.from && o.due_date <= range.to), (o) => o.due_date!),
-    [tasks.data, range],
-  )
   const eventList = events.data?.status === 'ok' ? events.data.events : []
   const byDay = useMemo(() => bucketByDay(eventList), [eventList])
 
@@ -62,7 +55,7 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Calendar" description="Your shared Google Calendar, with task due dates alongside." />
+      <PageHeader title="Calendar" description="Your shared Google Calendar." />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-sm" aria-label="Previous" onClick={() => step(-1)}><ChevronLeft /></Button>
@@ -76,11 +69,11 @@ export default function CalendarPage() {
       <CalendarStatus integrationsPending={integrations.isPending} connected={Boolean(connected)} embedUrl={embed?.embed_url ?? null} result={events.data} pending={events.isPending && Boolean(connected)} error={events.error} retry={() => events.refetch()} />
 
       {view === 'month' ? (
-        <MonthView month={cursor} byDay={byDay} tasksByDay={tasksByDay} onSelect={setSelected} />
+        <MonthView month={cursor} byDay={byDay} onSelect={setSelected} />
       ) : view === 'week' ? (
-        <WeekView days={weekDays(cursor)} byDay={byDay} tasksByDay={tasksByDay} onSelect={setSelected} />
+        <WeekView days={weekDays(cursor)} byDay={byDay} onSelect={setSelected} />
       ) : (
-        <AgendaView from={range.from} to={range.to} byDay={byDay} tasksByDay={tasksByDay} onSelect={setSelected} />
+        <AgendaView from={range.from} to={range.to} byDay={byDay} onSelect={setSelected} />
       )}
 
       <EventDialog event={selected} onClose={() => setSelected(null)} />
@@ -120,7 +113,7 @@ function CalendarStatus({
           <EmptyState
             icon={CalendarDays}
             title="Google Calendar isn't connected yet"
-            description="Task due dates still appear below. Connect your shared calendar in Settings."
+            description="Connect your shared calendar in Settings."
             action={<Button variant="outline" size="sm" asChild><Link to="/settings#calendar"><Settings /> Calendar settings</Link></Button>}
           />
         )}
@@ -142,7 +135,6 @@ function CalendarStatus({
 
 type DayProps = {
   byDay: Map<ISODate, CalendarEvent[]>
-  tasksByDay: Record<string, OccurrenceWithTask[]>
   onSelect: (e: CalendarEvent) => void
 }
 
@@ -161,17 +153,7 @@ function EventChip({ event, day, onSelect, compact }: { event: CalendarEvent; da
   )
 }
 
-function TaskChip({ occ }: { occ: OccurrenceWithTask }) {
-  const navigate = useNavigate()
-  return (
-    <button type="button" onClick={() => navigate(`/tasks?task=${occ.task_id}`)} className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted">
-      <CheckCircle2 className="size-3 shrink-0" />
-      <span className="truncate">{occ.task.title}</span>
-    </button>
-  )
-}
-
-function MonthView({ month, byDay, tasksByDay, onSelect }: DayProps & { month: ISODate }) {
+function MonthView({ month, byDay, onSelect }: DayProps & { month: ISODate }) {
   const grid = monthGrid(toISODate(startOfMonth(parseISO(month))))
   const today = todayISO()
   const monthDate = parseISO(month)
@@ -183,20 +165,16 @@ function MonthView({ month, byDay, tasksByDay, onSelect }: DayProps & { month: I
       <div className="grid grid-cols-7">
         {grid.flat().map((day) => {
           const events = byDay.get(day) ?? []
-          const tasks = tasksByDay[day] ?? []
-          const items = events.length + tasks.length
           return (
             <div key={day} className={cn('min-h-20 border-b border-r p-1 sm:min-h-28 [&:nth-child(7n)]:border-r-0', !isSameMonth(parseISO(day), monthDate) && 'bg-muted/40 text-muted-foreground')}>
               <div className={cn('mb-0.5 grid size-6 place-items-center rounded-full text-xs tabular', day === today && 'bg-primary font-semibold text-primary-foreground')}>{Number(day.slice(8))}</div>
               <div className="hidden gap-0.5 sm:grid">
                 {events.slice(0, 3).map((e) => <EventChip key={e.id} event={e} day={day} onSelect={onSelect} compact />)}
-                {tasks.slice(0, Math.max(0, 3 - events.length)).map((o) => <TaskChip key={o.id} occ={o} />)}
-                {items > 3 ? <span className="px-1.5 text-[11px] text-muted-foreground">+{items - 3} more</span> : null}
+                {events.length > 3 ? <span className="px-1.5 text-[11px] text-muted-foreground">+{events.length - 3} more</span> : null}
               </div>
               {/* Phones: dots only; the agenda view carries the detail. */}
               <div className="flex flex-wrap gap-0.5 px-1 sm:hidden">
                 {events.slice(0, 4).map((e) => <span key={e.id} className={cn('size-1.5 rounded-full', colorOf(e.color).dot)} />)}
-                {tasks.length ? <span className="size-1.5 rounded-full bg-muted-foreground/50" /> : null}
               </div>
             </div>
           )
@@ -206,20 +184,18 @@ function MonthView({ month, byDay, tasksByDay, onSelect }: DayProps & { month: I
   )
 }
 
-function WeekView({ days, byDay, tasksByDay, onSelect }: DayProps & { days: ISODate[] }) {
+function WeekView({ days, byDay, onSelect }: DayProps & { days: ISODate[] }) {
   const today = todayISO()
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
       {days.map((day) => {
         const events = byDay.get(day) ?? []
-        const tasks = tasksByDay[day] ?? []
         return (
           <Card key={day} className={cn('min-h-32 p-2', day === today && 'border-primary/50')}>
             <p className={cn('mb-1.5 px-1 text-xs font-semibold', day === today ? 'text-primary' : 'text-muted-foreground')}>{format(parseISO(day), 'EEE d')}</p>
             <div className="grid gap-0.5">
               {events.map((e) => <EventChip key={e.id} event={e} day={day} onSelect={onSelect} />)}
-              {tasks.map((o) => <TaskChip key={o.id} occ={o} />)}
-              {!events.length && !tasks.length ? <p className="px-1 text-xs text-muted-foreground/60">Nothing planned</p> : null}
+              {!events.length ? <p className="px-1 text-xs text-muted-foreground/60">Nothing planned</p> : null}
             </div>
           </Card>
         )
@@ -228,10 +204,10 @@ function WeekView({ days, byDay, tasksByDay, onSelect }: DayProps & { days: ISOD
   )
 }
 
-function AgendaView({ from, to, byDay, tasksByDay, onSelect }: DayProps & { from: ISODate; to: ISODate }) {
+function AgendaView({ from, to, byDay, onSelect }: DayProps & { from: ISODate; to: ISODate }) {
   const days: ISODate[] = []
-  for (let d = from; d <= to; d = addDaysISO(d, 1)) if (byDay.get(d)?.length || tasksByDay[d]?.length) days.push(d)
-  if (!days.length) return <Card><EmptyState icon={CalendarDays} title="Nothing coming up" description="No events or task due dates in the next six weeks." /></Card>
+  for (let d = from; d <= to; d = addDaysISO(d, 1)) if (byDay.get(d)?.length) days.push(d)
+  if (!days.length) return <Card><EmptyState icon={CalendarDays} title="Nothing coming up" description="No events in the next six weeks." /></Card>
   return (
     <Card className="divide-y">
       {days.map((day) => (
@@ -247,7 +223,6 @@ function AgendaView({ from, to, byDay, tasksByDay, onSelect }: DayProps & { from
                 </span>
               </button>
             ))}
-            {(tasksByDay[day] ?? []).map((o) => <TaskChip key={o.id} occ={o} />)}
           </div>
         </section>
       ))}
