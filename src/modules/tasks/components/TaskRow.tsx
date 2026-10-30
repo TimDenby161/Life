@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
 import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
-import { delayLabel, dueLabel, dueTone } from '../lib/format'
+import { delayLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
-import { delayDaysFor } from '../lib/topJobs'
+import { delayDaysFor, taskScore } from '../lib/topJobs'
 import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
@@ -240,12 +240,8 @@ export function TaskRow({
                 <span className="truncate">Waiting on {waitingOn}</span>
               </span>
             ) : null}
-            {!done && occurrence.due_date ? (
-              <span className={toneClass[tone]}>
-                {tone === 'overdue' ? 'Overdue · ' : ''}
-                {dueLabel(occurrence.due_date, occurrence.due_time)}
-              </span>
-            ) : null}
+            {/* Shown in place of the due date while we test the score; the detail page still has the date. */}
+            {!done ? <span className={toneClass[tone]}>Score {taskScore(occurrence, categories, todayISO())}</span> : null}
             {task.recurrence ? (
               <span className="inline-flex items-center gap-1" title="Repeats">
                 <Repeat className="size-3" />

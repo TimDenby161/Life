@@ -60,7 +60,7 @@ function urgencyScore(dueDate: ISODate | null, today: ISODate) {
   return -20
 }
 
-function score(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
+export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
   return importanceScore(o.task, categories) + urgencyScore(o.due_date, today)
 }
 
@@ -71,7 +71,7 @@ function score(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], tod
 export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate): T[] {
   const tier = (o: T) => (o.task.priority === 'urgent' ? 2 : o.due_date !== null && o.due_date <= today ? 1 : 0)
   return items
-    .map((item) => ({ item, tier: tier(item), score: score(item, categories, today) }))
+    .map((item) => ({ item, tier: tier(item), score: taskScore(item, categories, today) }))
     .sort((a, b) => b.tier - a.tier || b.score - a.score || compareOccurrences(a.item, b.item))
     .map(({ item }) => item)
 }
