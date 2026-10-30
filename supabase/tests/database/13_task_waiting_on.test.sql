@@ -2,7 +2,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(4);
+select plan(5);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -45,6 +45,9 @@ select throws_ok(
 delete from tasks where id = current_setting('t.first')::uuid;
 select is((select waiting_on_task_id from tasks where id = current_setting('t.then')::uuid), null,
   'deleting the other task clears the wait');
+
+update tasks set needs_both = true where id = current_setting('t.then')::uuid;
+select is((select needs_both from tasks where id = current_setting('t.then')::uuid), true, 'a member can mark a task as needing both');
 
 select * from finish();
 rollback;

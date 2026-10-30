@@ -29,7 +29,7 @@ import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
-import { ownerOf } from '@/modules/tasks/lib/owner'
+import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { splitShopping } from '@/modules/tasks/lib/shopping'
 import { byScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
@@ -37,27 +37,29 @@ import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
 import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
 
-/**
- * Open occurrences that are this person's own (Tasks page ownership rule),
- * plus the joint ones when `withJoint` is set. A task waiting on another
- * stays off Home until that one is done.
- */
-function useOccurrencesFor(personId: string, withJoint = true) {
+/** Open tasks for one view: what a person could do, or what takes both of us. A task waiting on another stays off Home. */
+function useOccurrencesFor(view: string) {
   const open = useOpenOccurrences()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
-  const items = open.data?.filter((o) => {
-    const owner = ownerOf(o.task, categories, lists)
-    return (owner === personId || (withJoint && owner === null)) && !waitingOnTitle(o.task, open.data)
-  })
+  const items = open.data?.filter((o) => inView(o.task, view, categories, lists) && !waitingOnTitle(o.task, open.data))
   return { open, items }
+}
+
+/** Me, together, then my partner. */
+function useViewOptions() {
+  const { me, partner } = useHousehold()
+  return [
+    { value: me.id, label: me.display_name },
+    ...(partner ? [{ value: TOGETHER, label: 'Together' }, { value: partner.id, label: partner.display_name }] : []),
+  ]
 }
 
 export default function DashboardPage() {
   const { me, partner } = useHousehold()
-  // Mine + joint by default; the partner view is only their own tasks.
+  const views = useViewOptions()
   const [who, setWho] = useState(me.id)
-  const { open, items } = useOccurrencesFor(who, who === me.id)
+  const { open, items } = useOccurrencesFor(who)
   const today = todayISO()
   const dueToday = (items ?? []).filter((o) => o.due_date === today)
   const overdue = (items ?? []).filter((o) => o.due_date && o.due_date < today)
@@ -108,10 +110,7 @@ export default function DashboardPage() {
                 className="mx-1 mb-2 sm:mx-2"
                 value={who}
                 onChange={setWho}
-                options={[
-                  { value: me.id, label: `${me.display_name} + Joint` },
-                  { value: partner.id, label: partner.display_name },
-                ]}
+                options={views}
               />
             ) : null
           }
@@ -159,7 +158,8 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
   }
   // Before choosing who, every category; after, the shared ones plus that person's own.
   const choices = categories.filter((c) => !who || !c.owner_id || c.owner_id === who)
-  const list = who === 'joint' ? lists.find((l) => l.kind === 'joint') : lists.find((l) => l.kind === 'personal' && l.owner_id === who)
+  const shared = who === 'joint' || who === TOGETHER
+  const list = shared ? lists.find((l) => l.kind === 'joint') : lists.find((l) => l.kind === 'personal' && l.owner_id === who)
   const ready = Boolean(title.trim() && list && categoryId && dueDate)
 
   return (
@@ -173,7 +173,8 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
             {
               title: title.trim(),
               list_id: list.id,
-              assignee_id: who === 'joint' ? null : who,
+              assignee_id: shared ? null : who,
+              needs_both: who === TOGETHER,
               due_date: dueDate,
               due_time: null,
               priority: 'normal',
@@ -203,7 +204,11 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
             size="sm"
             value={who}
             onChange={pickWho}
-            options={[{ value: 'joint', label: 'Joint' }, ...members.map((m) => ({ value: m.id, label: m.display_name }))]}
+            options={[
+              { value: 'joint', label: 'Joint' },
+              { value: TOGETHER, label: 'Together' },
+              ...members.map((m) => ({ value: m.id, label: m.display_name })),
+            ]}
           />
           <NativeSelect
             aria-label="Category"
@@ -257,9 +262,10 @@ function CardLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-/** The five open tasks that most need doing, for one of us plus the joint ones. */
+/** The five open tasks that most need doing, for one of us or for both together. */
 function TopJobsCard() {
   const { me, partner } = useHousehold()
+  const views = useViewOptions()
   const [who, setWho] = useState(me.id)
   const { open, items } = useOccurrencesFor(who)
   const lists = useTaskLists().data ?? []
@@ -281,10 +287,7 @@ function TopJobsCard() {
             className="mx-1 mb-2 sm:mx-2"
             value={who}
             onChange={setWho}
-            options={[
-              { value: me.id, label: `${me.display_name} + Joint` },
-              { value: partner.id, label: `${partner.display_name} + Joint` },
-            ]}
+            options={views}
           />
         ) : null}
         {open.isPending ? (

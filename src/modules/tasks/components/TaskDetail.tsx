@@ -269,6 +269,11 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
         </NativeSelect>
       </label>
 
+      <label className="flex items-center gap-2.5 text-sm font-semibold">
+        <Checkbox checked={task.needs_both} onCheckedChange={(v) => update.mutate({ id: task.id, patch: { needs_both: v === true } })} />
+        We both need to do this
+      </label>
+
       <label className="grid gap-1.5 text-sm font-semibold">
         Waiting on
         <NativeSelect

@@ -18,7 +18,7 @@ import { TaskDetailDialog } from '../components/TaskDetail'
 import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
 import { useTaskOpener } from '../components/useTaskOpener'
-import { ownerOf } from '../lib/owner'
+import { inView, TOGETHER } from '../lib/owner'
 import { byScore } from '../lib/topJobs'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import {
@@ -77,11 +77,11 @@ export function categorySubgroups(items: OccurrenceWithTask[], categories: TaskC
 }
 
 function TaskListView() {
-  const { members } = useHousehold()
+  const { me, members, partner } = useHousehold()
   const [params, setParams] = useSearchParams()
-  // 'joint', or a member's id for the tasks that are only ever theirs.
+  // A member's id for what they could do, or TOGETHER for what takes both of us.
   const whoParam = params.get('who')
-  const who = members.some((m) => m.id === whoParam) ? whoParam! : 'joint'
+  const who = whoParam === TOGETHER || members.some((m) => m.id === whoParam) ? whoParam! : me.id
   const groupMode = params.get('group') === 'date' ? 'date' : 'category'
   const openTaskId = params.get('task')
 
@@ -108,9 +108,7 @@ function TaskListView() {
   const allLists = lists.data ?? []
   const allCategories = categories.data ?? []
   const opener = useTaskOpener(allCategories, allLists, (taskId) => setParam('task', taskId))
-  // Joint tasks can still be assigned to someone; a person's own are the ones
-  // in a category they own or on their personal list.
-  const filter = (o: OccurrenceWithTask) => (ownerOf(o.task, allCategories, allLists) ?? 'joint') === who
+  const filter = (o: OccurrenceWithTask) => inView(o.task, who, allCategories, allLists)
 
   const today = todayISO()
   const visible = useMemo(
@@ -126,11 +124,8 @@ function TaskListView() {
   }
   // New tasks land where the filter will show them: a person's own list, otherwise the joint one.
   const addList = allLists.find((l) => l.kind === 'personal' && l.owner_id === who) ?? allLists.find((l) => l.kind === 'joint')
-  // Joint shows the shared categories; a person sees their own plus any shared one holding their personal tasks.
-  const shownCategories =
-    who === 'joint'
-      ? allCategories.filter((c) => !c.owner_id)
-      : allCategories.filter((c) => c.owner_id === who || (!c.owner_id && visible.some((o) => o.task.category_id === c.id)))
+  // The shared categories, plus this person's own (or any owned one holding a task that takes both of us).
+  const shownCategories = allCategories.filter((c) => !c.owner_id || c.owner_id === who || visible.some((o) => o.task.category_id === c.id))
   const groups: Group[] =
     groupMode === 'category'
       ? groupByCategory(visible, shownCategories)
@@ -188,10 +183,10 @@ function TaskListView() {
         <Segmented
           aria-label="Whose tasks"
           value={who}
-          onChange={(v) => setParam('who', v === 'joint' ? null : v)}
+          onChange={(v) => setParam('who', v === me.id ? null : v)}
           options={[
-            { value: 'joint', label: 'Joint' },
-            ...members.map((m) => ({ value: m.id, label: m.display_name })),
+            { value: me.id, label: me.display_name },
+            ...(partner ? [{ value: TOGETHER, label: 'Together' }, { value: partner.id, label: partner.display_name }] : []),
           ]}
         />
         <Segmented
@@ -206,7 +201,7 @@ function TaskListView() {
         />
       </div>
 
-      <QuickAdd listId={addList?.id} />
+      <QuickAdd listId={addList?.id} needsBoth={who === TOGETHER} />
 
       <Card className="mt-4 p-2 sm:p-3">
         {open.isPending || lists.isPending ? (
@@ -327,7 +322,7 @@ export function NewTaskDialog({
 }
 
 /** One-line add: type and press Enter. Uses the list's default assignee. */
-export function QuickAdd({ listId, placeholder }: { listId: string | undefined; placeholder?: string }) {
+export function QuickAdd({ listId, placeholder, needsBoth = false }: { listId: string | undefined; placeholder?: string; needsBoth?: boolean }) {
   const lists = useTaskLists().data ?? []
   const create = useCreateTask()
   const [title, setTitle] = useState('')
@@ -342,6 +337,7 @@ export function QuickAdd({ listId, placeholder }: { listId: string | undefined; 
             title: title.trim(),
             list_id: list.id,
             assignee_id: list.owner_id,
+            needs_both: needsBoth,
             due_date: null,
             due_time: null,
             priority: 'normal',

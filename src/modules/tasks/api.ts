@@ -134,6 +134,7 @@ export type TaskInput = Pick<
   | 'assignee_id'
   | 'category_id'
   | 'priority'
+  | 'needs_both'
   | 'due_date'
   | 'due_time'
   | 'recurrence'

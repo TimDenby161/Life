@@ -1828,6 +1828,7 @@ export type Database = {
           importance_votes: number
           last_done_on: string | null
           list_id: string
+          needs_both: boolean
           priority: string
           recurrence: Json | null
           room_id: string | null
@@ -1853,6 +1854,7 @@ export type Database = {
           importance_votes?: number
           last_done_on?: string | null
           list_id: string
+          needs_both?: boolean
           priority?: string
           recurrence?: Json | null
           room_id?: string | null
@@ -1878,6 +1880,7 @@ export type Database = {
           importance_votes?: number
           last_done_on?: string | null
           list_id?: string
+          needs_both?: boolean
           priority?: string
           recurrence?: Json | null
           room_id?: string | null
