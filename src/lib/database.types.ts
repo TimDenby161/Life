@@ -1835,6 +1835,7 @@ export type Database = {
           subtasks_collapsed: boolean
           title: string
           updated_at: string
+          waiting_on_task_id: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -1859,6 +1860,7 @@ export type Database = {
           subtasks_collapsed?: boolean
           title: string
           updated_at?: string
+          waiting_on_task_id?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -1883,6 +1885,7 @@ export type Database = {
           subtasks_collapsed?: boolean
           title?: string
           updated_at?: string
+          waiting_on_task_id?: string | null
         }
         Relationships: [
           {
@@ -1932,6 +1935,13 @@ export type Database = {
             columns: ["room_id", "household_id"]
             isOneToOne: false
             referencedRelation: "task_rooms"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "tasks_waiting_on_fkey"
+            columns: ["waiting_on_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id", "household_id"]
           },
         ]

@@ -1,11 +1,11 @@
-import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Lock, Repeat } from 'lucide-react'
 import { Checkbox } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations } from '../hooks'
+import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
 import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
@@ -186,6 +186,7 @@ export function TaskRow({
   const tone = done ? 'none' : dueTone(occurrence.due_date, todayISO())
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
+  const waitingOn = useWaitingOn(task)
   const update = useQuickTaskUpdate()
   const showSubtasks = !task.subtasks_collapsed
   const delay = useDelayOccurrence()
@@ -233,6 +234,12 @@ export function TaskRow({
                 {alsoCompleter ? ` & ${alsoCompleter.display_name}` : ''}
               </span>
             ) : null}
+            {!done && waitingOn ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <Lock className="size-3 shrink-0" />
+                <span className="truncate">Waiting on {waitingOn}</span>
+              </span>
+            ) : null}
             {!done && occurrence.due_date ? (
               <span className={toneClass[tone]}>
                 {tone === 'overdue' ? 'Overdue · ' : ''}
@@ -276,7 +283,7 @@ export function TaskRow({
             ) : null}
           </div>
         </div>
-        {done ? null : (
+        {done || waitingOn ? null : (
           <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
         )}
       </div>

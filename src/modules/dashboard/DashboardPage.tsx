@@ -33,13 +33,15 @@ import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
 import { splitShopping } from '@/modules/tasks/lib/shopping'
 import { topJobs } from '@/modules/tasks/lib/topJobs'
+import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
 import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
 
 /**
  * Open occurrences that are this person's own (Tasks page ownership rule),
- * plus the joint ones when `withJoint` is set.
+ * plus the joint ones when `withJoint` is set. A task waiting on another
+ * stays off Home until that one is done.
  */
 function useOccurrencesFor(personId: string, withJoint = true) {
   const open = useOpenOccurrences()
@@ -47,7 +49,7 @@ function useOccurrencesFor(personId: string, withJoint = true) {
   const categories = useTaskCategories().data ?? []
   const items = open.data?.filter((o) => {
     const owner = ownerOf(o.task, categories, lists)
-    return owner === personId || (withJoint && owner === null)
+    return (owner === personId || (withJoint && owner === null)) && !waitingOnTitle(o.task, open.data)
   })
   return { open, items }
 }

@@ -7,6 +7,7 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import * as api from './api'
 import { taskKeys } from './api'
 import { delayedDate } from './lib/format'
+import { waitingOnTitle } from './lib/waiting'
 
 export function useTaskLists() {
   return useQuery({ queryKey: taskKeys.lists, queryFn: api.fetchTaskLists, staleTime: 5 * 60_000 })
@@ -31,6 +32,11 @@ export function useCreateRoom() {
 
 export function useOpenOccurrences() {
   return useQuery({ queryKey: taskKeys.open, queryFn: api.fetchOpenOccurrences })
+}
+
+/** The still-open task this one is waiting on, if any. */
+export function useWaitingOn(task: { waiting_on_task_id: string | null }) {
+  return waitingOnTitle(task, useOpenOccurrences().data ?? [])
 }
 
 export function useRecentlyDone(days = 14) {

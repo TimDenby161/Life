@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { Archive, Check, ChevronDown, Clock, Pencil, Repeat, SkipForward, Trash2, Undo2, X } from 'lucide-react'
+import { Archive, Check, ChevronDown, Clock, Lock, Pencil, Repeat, SkipForward, Trash2, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -26,6 +26,7 @@ import {
   useCompleteOccurrence,
   useDeleteTask,
   useDelayOccurrence,
+  useOpenOccurrences,
   useMoveOccurrence,
   useReopenOccurrence,
   useSetCompletedBy,
@@ -35,9 +36,11 @@ import {
   useTaskDetail,
   useTaskLists,
   useUpdateTask,
+  useWaitingOn,
 } from '../hooks'
 import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { delayDaysFor } from '../lib/topJobs'
+import { waitingChoices } from '../lib/waiting'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
 import { TaskForm } from './TaskForm'
 import { ImportanceVote } from './TaskRow'
@@ -95,6 +98,8 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
   const reopen = useReopenOccurrence()
   const move = useMoveOccurrence()
   const delay = useDelayOccurrence()
+  const openTasks = useOpenOccurrences().data ?? []
+  const waitingOn = useWaitingOn(task)
   const update = useUpdateTask()
   const del = useDeleteTask()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -149,6 +154,13 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
 
       {task.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed">{task.description}</p> : null}
 
+      {waitingOn ? (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" />
+          <span>Can't be done until {waitingOn} is done</span>
+        </p>
+      ) : null}
+
       {/* Primary actions */}
       <div className="flex flex-wrap gap-2">
         {occ ? (
@@ -156,14 +168,14 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
             <div className="flex">
               <Button
                 className="rounded-r-none"
-                disabled={complete.isPending}
+                disabled={complete.isPending || Boolean(waitingOn)}
                 onClick={() => complete.mutate({ occurrenceId: occ.id }, { onSuccess: () => !rule && onClose() })}
               >
                 <Check /> Mark done
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="rounded-l-none border-l border-primary-foreground/20 px-2.5" aria-label="Mark done by someone else">
+                  <Button className="rounded-l-none border-l border-primary-foreground/20 px-2.5" aria-label="Mark done by someone else" disabled={Boolean(waitingOn)}>
                     <ChevronDown />
                   </Button>
                 </DropdownMenuTrigger>
@@ -252,6 +264,23 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+            </option>
+          ))}
+        </NativeSelect>
+      </label>
+
+      <label className="grid gap-1.5 text-sm font-semibold">
+        Waiting on
+        <NativeSelect
+          className="h-10 font-normal"
+          value={task.waiting_on_task_id ?? ''}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ id: task.id, patch: { waiting_on_task_id: e.target.value || null } })}
+        >
+          <option value="">Nothing</option>
+          {waitingChoices(task.id, openTasks).map((o) => (
+            <option key={o.task_id} value={o.task_id}>
+              {o.task.title}
             </option>
           ))}
         </NativeSelect>
