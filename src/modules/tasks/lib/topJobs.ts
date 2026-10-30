@@ -5,7 +5,7 @@ import { compareOccurrences, delayDays } from './format'
 type Scorable = {
   due_date: string | null
   due_time: string | null
-  task: { title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number }
+  task: { title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null }
 }
 
 // How important a task sounds, from its words. Each tier counts once however many words match.
@@ -20,6 +20,10 @@ const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 
 const VOTE_POINTS = 15
 const EVENING_STARTS = 16
 const POINTS_PER_EVENING_HOUR = 10
+const DEADLINE_DAY_SCORE = 195
+const DEADLINE_MISSED_SCORE = 200
+const DEADLINE_RUN_UP_DAYS = 7
+const DEADLINE_POINTS_PER_DAY = 20
 const WORK_POINTS = 40
 const LUNCH_POINTS = 30
 const WORK_HOURS = { from: 8, to: 17 }
@@ -31,8 +35,9 @@ function taskText(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 
   return [task.title, task.description, categoryName(task, categories)].filter(Boolean).join(' ')
 }
 
-/** Our own votes settle it; without any, the flag and the wording decide. */
+/** A deadline always counts; otherwise our own votes settle it, then the flag and the wording. */
 function isImportant(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
+  if (task.deadline) return true
   const votes = task.importance_votes ?? 0
   if (votes) return votes > 0
   return task.priority === 'high' || task.priority === 'urgent' || CRITICAL.test(taskText(task, categories))
@@ -92,8 +97,17 @@ export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCatego
   return WORK_CATEGORY.test(categoryName(task, categories)) && !within(WORK_HOURS, hour)
 }
 
+/** In the last week before a hard deadline the score climbs towards 200, whatever else it would be. */
+function deadlineScore(deadline: ISODate | null | undefined, today: ISODate) {
+  if (!deadline) return null
+  const days = daysBetween(today, deadline)
+  if (days < 0) return DEADLINE_MISSED_SCORE
+  return days <= DEADLINE_RUN_UP_DAYS ? DEADLINE_DAY_SCORE - days * DEADLINE_POINTS_PER_DAY : null
+}
+
 export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
-  return importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
+  const score = importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
+  return Math.max(score, deadlineScore(o.task.deadline, today) ?? score)
 }
 
 /** Highest score first. */

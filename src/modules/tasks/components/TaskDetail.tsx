@@ -289,6 +289,18 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
         </NativeSelect>
       </label>
 
+      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        Deadline
+        <Input
+          type="date"
+          aria-label="Deadline"
+          className="h-10 w-auto"
+          value={task.deadline ?? ''}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ id: task.id, patch: { deadline: e.target.value || null } })}
+        />
+      </label>
+
       <label className="grid gap-1.5 text-sm font-semibold">
         Waiting on
         <NativeSelect

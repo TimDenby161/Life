@@ -20,7 +20,7 @@ afterAll(() => {
   vi.useRealTimers()
 })
 
-function occ(title: string, due_date: string | null, task: Partial<{ priority: string; category_id: string; recurrence: unknown; description: string; importance_votes: number }> = {}) {
+function occ(title: string, due_date: string | null, task: Partial<{ priority: string; category_id: string; recurrence: unknown; description: string; importance_votes: number; deadline: string }> = {}) {
   return { due_date, due_time: null, task: { title, priority: 'normal', category_id: null, recurrence: null, ...task } }
 }
 const titles = (items: { task: { title: string } }[]) => items.map((o) => o.task.title)
@@ -161,6 +161,32 @@ describe('time of day', () => {
     const task = (category_id: string) => occ('Sort the loft', today, { category_id }).task
     expect([7, 8, 16, 17, 23].map((h) => isOutOfHours(task('c4'), categories, h))).toEqual([true, false, false, true, true])
     expect(isOutOfHours(task('cleaning'), categories, 23)).toBe(false)
+  })
+})
+
+describe('hard deadlines', () => {
+  const score = (deadline: string, due: string | null = '2026-12-25') => taskScore(occ('Sort the loft', due, { deadline }), categories, today, 10)
+
+  it('climbs towards 200 over the last week', () => {
+    const days = ['2026-11-06', '2026-11-03', '2026-10-31', today]
+    expect(days.map((d) => score(d))).toEqual([55, 115, 175, 195])
+  })
+  it('passes 195 once missed', () => {
+    expect(score('2026-10-29')).toBe(200)
+  })
+  it('does nothing earlier than that', () => {
+    const plain = taskScore(occ('Sort the loft', '2026-12-25'), categories, today, 10)
+    expect(score('2026-11-07')).toBe(plain)
+  })
+  it('never lowers a score that is already higher', () => {
+    const task = occ('Pay the bill', today, { priority: 'urgent', deadline: '2026-11-06' })
+    expect(taskScore(task, categories, today, 10)).toBe(130)
+  })
+  it('ignores a due date delayed past the deadline', () => {
+    expect(score(today, '2026-11-20')).toBe(195)
+  })
+  it('keeps delays to one day', () => {
+    expect(delayDaysFor({ delay_count: 3, ...occ('Sort the loft', today, { deadline: '2026-11-28' }) }, categories)).toBe(1)
   })
 })
 
