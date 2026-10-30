@@ -203,7 +203,7 @@ describe('birthdays', () => {
   })
   it('climbs gradually from two weeks out', () => {
     expect(score('Presents', '2026-11-07')).toBe(83)
-    expect(score('Presents', '2026-11-13')).toBe(13)
+    expect(score('Presents', '2026-11-10')).toBe(41)
   })
   it('does nothing earlier than two weeks out', () => {
     expect(score('Buy birthday present for Mum', '2026-11-20')).toBe(score('Sort the loft', '2026-11-20') + 25)
