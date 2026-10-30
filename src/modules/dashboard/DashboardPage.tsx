@@ -14,13 +14,11 @@ import { Composer } from '@/modules/feed/components/FeedItems'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { TaskGroup } from '@/modules/tasks/components/GroupToggle'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
-import { splitShopping } from '@/modules/tasks/lib/shopping'
 import { isOutOfHours, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
@@ -191,7 +189,7 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
 
 /**
  * The open tasks that most need doing: the top five, then everything else in
- * score order on request, with the shopping for the next few days kept together.
+ * score order on request.
  */
 function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; onToggleAdding: () => void; onMessage: () => void }) {
   const { me, partner } = useHousehold()
@@ -205,12 +203,10 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
   const [showMore, setShowMore] = useState(false)
-  const [shoppingOpen, setShoppingOpen] = useState(true)
   const today = todayISO()
   const ranked = topJobs(items ?? [], categories, today, Infinity)
   const top = ranked.slice(0, 5)
   const more = ranked.slice(5)
-  const { shopping, rest } = splitShopping(more, categories, today)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -255,12 +251,7 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
         ) : (
           renderRows(top)
         )}
-        {showMore && shopping.length ? (
-          <TaskGroup id="more-shopping" level={1} label="Shopping" count={shopping.length} open={shoppingOpen} onToggle={() => setShoppingOpen(!shoppingOpen)}>
-            {renderRows(shopping)}
-          </TaskGroup>
-        ) : null}
-        {showMore ? renderRows(rest) : null}
+        {showMore ? renderRows(more) : null}
         {more.length ? (
           <Button variant="ghost" className="mt-1 w-full" aria-expanded={showMore} onClick={() => setShowMore(!showMore)}>
             <ChevronDown className={cn('transition-transform', showMore && 'rotate-180')} />
