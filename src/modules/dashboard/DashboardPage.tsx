@@ -31,6 +31,7 @@ import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
+import { splitShopping } from '@/modules/tasks/lib/shopping'
 import { topJobs } from '@/modules/tasks/lib/topJobs'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
@@ -317,7 +318,8 @@ function TopJobsCard() {
 }
 
 /**
- * Today (including overdue) and the next four days, each collapsible and
+ * Shopping for those days in one group, then today (including overdue) and
+ * the next four days, each collapsible and
  * split into collapsible categories; only Today starts open.
  */
 function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> & { filter: ReactNode }) {
@@ -328,7 +330,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
   const today = todayISO()
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([today]))
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['shopping', today]))
   // Category groups start open; collapsing one is remembered (per day slot: today, tomorrow, then days 2–4 ahead).
   const { collapsed, toggle: toggleCategory } = useCollapsedGroups('life.home.collapsed')
   const toggle = (day: string) =>
@@ -353,13 +355,14 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
       ))}
     </ul>
   )
+  const { shopping, rest } = splitShopping(items ?? [], categories, today)
   const days = [0, 1, 2, 3, 4].map((i) => {
     const day = addDaysISO(today, i)
     return {
       day,
       slot: i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day${i}`,
       label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
-      items: (items ?? [])
+      items: rest
         .filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day))
         .toSorted(compareOccurrences),
     }
@@ -377,45 +380,52 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
         ) : (
-          days.map(({ day, slot, label, items: dayItems }) => (
-            <TaskGroup
-              key={day}
-              id={`day-${day}`}
-              level={1}
-              label={label}
-              count={dayItems.length}
-              open={expanded.has(day)}
-              onToggle={() => toggle(day)}
-            >
-              {!dayItems.length ? (
-                day === today ? (
-                  <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
-                    <CheckCircle2 className="size-4 text-success" /> Nothing due today
-                  </p>
-                ) : (
-                  <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
-                )
-              ) : (
-                (categorySubgroups(dayItems, categories)?.map((sub) => {
-                  const subKey = `${slot}/${sub.key}`
-                  return (
-                    <TaskGroup
-                      key={sub.key}
-                      id={`day-${subKey}`}
-                      level={2}
-                      label={sub.label}
-                      count={sub.items.length}
-                      dot={sub.dot}
-                      open={!collapsed.has(subKey)}
-                      onToggle={() => toggleCategory(subKey)}
-                    >
-                      {renderRows(sub.items, false)}
-                    </TaskGroup>
+          <>
+            {shopping.length ? (
+              <TaskGroup id="day-shopping" level={1} label="Shopping" count={shopping.length} open={expanded.has('shopping')} onToggle={() => toggle('shopping')}>
+                {renderRows(shopping.toSorted(compareOccurrences), false)}
+              </TaskGroup>
+            ) : null}
+            {days.map(({ day, slot, label, items: dayItems }) => (
+              <TaskGroup
+                key={day}
+                id={`day-${day}`}
+                level={1}
+                label={label}
+                count={dayItems.length}
+                open={expanded.has(day)}
+                onToggle={() => toggle(day)}
+              >
+                {!dayItems.length ? (
+                  day === today ? (
+                    <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
+                      <CheckCircle2 className="size-4 text-success" /> Nothing due today
+                    </p>
+                  ) : (
+                    <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
                   )
-                }) ?? renderRows(dayItems, true))
-              )}
-            </TaskGroup>
-          ))
+                ) : (
+                  (categorySubgroups(dayItems, categories)?.map((sub) => {
+                    const subKey = `${slot}/${sub.key}`
+                    return (
+                      <TaskGroup
+                        key={sub.key}
+                        id={`day-${subKey}`}
+                        level={2}
+                        label={sub.label}
+                        count={sub.items.length}
+                        dot={sub.dot}
+                        open={!collapsed.has(subKey)}
+                        onToggle={() => toggleCategory(subKey)}
+                      >
+                        {renderRows(sub.items, false)}
+                      </TaskGroup>
+                    )
+                  }) ?? renderRows(dayItems, true))
+                )}
+              </TaskGroup>
+            ))}
+          </>
         )}
       </CardContent>
       <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
