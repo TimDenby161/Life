@@ -1,11 +1,20 @@
 import { addDaysISO, daysBetween, formatDay, formatTime, type ISODate } from '@/lib/dates'
 import type { Priority } from '../api'
 
-export const DELAY_DAYS = 3
+const DELAY_STEPS = [1, 2, 4, 7]
 
-/** Where delaying a task puts it: a few days from now, or later still if it's already due later. */
-export function delayedDate(dueDate: ISODate | null, today: ISODate): ISODate {
-  return addDaysISO(dueDate && dueDate > today ? dueDate : today, DELAY_DAYS)
+/** Each put-off is longer than the last, but something important keeps coming back tomorrow. */
+export function delayDays(timesDelayed: number, important: boolean) {
+  return important ? 1 : DELAY_STEPS[Math.min(timesDelayed, DELAY_STEPS.length - 1)]
+}
+
+export function delayLabel(days: number) {
+  return `Delay ${days} ${days === 1 ? 'day' : 'days'}`
+}
+
+/** Where delaying a task puts it: counted from today, or from its due date if that's later. */
+export function delayedDate(dueDate: ISODate | null, today: ISODate, days: number): ISODate {
+  return addDaysISO(dueDate && dueDate > today ? dueDate : today, days)
 }
 
 export type DueTone = 'overdue' | 'today' | 'soon' | 'later' | 'none'

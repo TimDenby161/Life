@@ -1,11 +1,11 @@
 import { daysBetween, type ISODate } from '@/lib/dates'
 import type { TaskCategory } from '../api'
-import { compareOccurrences } from './format'
+import { compareOccurrences, delayDays } from './format'
 
 type Scorable = {
   due_date: string | null
   due_time: string | null
-  task: { title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown }
+  task: { title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number }
 }
 
 // How important a task sounds, from its words. Each tier counts once however many words match.
@@ -17,11 +17,29 @@ const ROUTINE =
   /\b(clean|wipe|dust|hoover|vacuum|tidy|mop|wash|laundry|descale|learn|study|practi[cs]e|review|words?|characters?|mandarin|spanish|stretch|weigh)\b/i
 
 const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 0, low: -25 }
+const VOTE_POINTS = 15
+
+function taskText(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
+  const category = categories.find((c) => c.id === task.category_id)?.name ?? ''
+  return [task.title, task.description, category].filter(Boolean).join(' ')
+}
+
+/** Our own votes settle it; without any, the flag and the wording decide. */
+function isImportant(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
+  const votes = task.importance_votes ?? 0
+  if (votes) return votes > 0
+  return task.priority === 'high' || task.priority === 'urgent' || CRITICAL.test(taskText(task, categories))
+}
+
+/** How long delaying this task puts it off, given how often it's been put off already. */
+export function delayDaysFor(o: { delay_count: number; task: Scorable['task'] }, categories: Pick<TaskCategory, 'id' | 'name'>[]) {
+  return delayDays(o.delay_count, isImportant(o.task, categories))
+}
 
 function importanceScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
-  const category = categories.find((c) => c.id === task.category_id)?.name ?? ''
-  const text = [task.title, task.description, category].filter(Boolean).join(' ')
+  const text = taskText(task, categories)
   return (
+    (task.importance_votes ?? 0) * VOTE_POINTS +
     (PRIORITY_POINTS[task.priority] ?? 0) +
     (CRITICAL.test(text) ? 40 : MAJOR.test(text) ? 25 : 0) -
     (ROUTINE.test(text) ? 15 : 0) -

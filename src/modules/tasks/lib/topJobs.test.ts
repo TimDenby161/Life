@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { topJobs } from './topJobs'
+import { delayDaysFor, topJobs } from './topJobs'
 
 const today = '2026-10-30'
 const categories = [
@@ -8,7 +8,7 @@ const categories = [
   { id: 'general', name: 'General' },
 ]
 
-function occ(title: string, due_date: string | null, task: Partial<{ priority: string; category_id: string; recurrence: unknown; description: string }> = {}) {
+function occ(title: string, due_date: string | null, task: Partial<{ priority: string; category_id: string; recurrence: unknown; description: string; importance_votes: number }> = {}) {
   return { due_date, due_time: null, task: { title, priority: 'normal', category_id: null, recurrence: null, ...task } }
 }
 const titles = (items: { task: { title: string } }[]) => items.map((o) => o.task.title)
@@ -62,6 +62,16 @@ describe('topJobs', () => {
     expect(titles(topJobs([lesson, occ('Do the thing', today)], categories, today))[0]).toBe('Do the thing')
   })
 
+  it('moves a task up with up-votes and down with down-votes', () => {
+    const items = [occ('Pay the bill', today), occ('Sort the loft', today, { importance_votes: 3 }), occ('Call the bank', today, { importance_votes: -2 })]
+    expect(titles(topJobs(items, categories, today))).toEqual(['Sort the loft', 'Pay the bill', 'Call the bank'])
+  })
+
+  it('keeps tasks due today ahead of a heavily up-voted task due later', () => {
+    const items = [occ('Sort the loft', '2026-11-05', { importance_votes: 10 }), occ('Sort the shed', today)]
+    expect(titles(topJobs(items, categories, today))[0]).toBe('Sort the shed')
+  })
+
   it('does not match words inside other words', () => {
     const items = [occ('Find the notebook and motor', today), occ('Book the plumber', today)]
     expect(titles(topJobs(items, categories, today))[0]).toBe('Book the plumber')
@@ -82,5 +92,23 @@ describe('topJobs', () => {
     expect(titles(topJobs(items, categories, today))[0]).toBe('Pay Beth back')
     const tied = [occ('B task', today), occ('A task', today)]
     expect(titles(topJobs(tied, categories, today))).toEqual(['A task', 'B task'])
+  })
+})
+
+describe('delayDaysFor', () => {
+  const after = (delay_count: number, title: string, task = {}) => delayDaysFor({ delay_count, ...occ(title, today, task) }, categories)
+
+  it('backs off a normal task the more it is put off', () => {
+    expect([0, 1, 2, 3].map((n) => after(n, 'Find a date for uncle Tim'))).toEqual([1, 2, 4, 7])
+  })
+  it('keeps something that sounds important or is flagged at one day', () => {
+    expect(after(3, 'Renew the passport')).toBe(1)
+    expect(after(3, 'Sort the loft', { priority: 'high' })).toBe(1)
+    expect(after(3, 'Sort the loft', { priority: 'urgent' })).toBe(1)
+  })
+  it('lets votes overrule the wording and the flag', () => {
+    expect(after(3, 'Sort the loft', { importance_votes: 1 })).toBe(1)
+    expect(after(3, 'Renew the passport', { importance_votes: -1 })).toBe(7)
+    expect(after(3, 'Sort the loft', { priority: 'high', importance_votes: -1 })).toBe(7)
   })
 })

@@ -302,6 +302,7 @@ function TopJobsCard() {
                 lists={lists}
                 categories={categories}
                 showList
+                showVotes
                 onOpen={() => opener.open(o)}
                 onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
               />

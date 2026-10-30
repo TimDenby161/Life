@@ -138,32 +138,50 @@ export function useMoveOccurrence() {
   })
 }
 
-type Delayable = Pick<api.OccurrenceWithTask, 'id' | 'task_id' | 'due_date'> & { task: { recurrence: unknown } }
+type Delayable = Pick<api.OccurrenceWithTask, 'id' | 'task_id' | 'due_date' | 'delay_count'> & { task: { recurrence: unknown } }
 
-/** Puts a task off for a few days. A repeating task only moves this occurrence, not its schedule. */
+/** Puts a task off. A repeating task only moves this occurrence, not its schedule. */
 export function useDelayOccurrence() {
   const qc = useQueryClient()
   const setDate = useMutation({
-    mutationFn: async ({ occurrence: o, dueDate }: { occurrence: Delayable; dueDate: string | null; undo?: boolean }) => {
-      if (o.task.recurrence) await api.moveOccurrence(o.id, dueDate!)
-      else await api.updateTask(o.task_id, { due_date: dueDate })
-    },
-    onMutate: async ({ occurrence, dueDate }) => {
+    mutationFn: ({ occurrence, dueDate, delayCount }: { occurrence: Delayable; dueDate: string | null; delayCount: number; undo?: boolean }) =>
+      api.delayOccurrence(occurrence, dueDate, delayCount),
+    onMutate: async ({ occurrence, dueDate, delayCount }) => {
       await qc.cancelQueries({ queryKey: taskKeys.open })
       qc.setQueryData<api.OccurrenceWithTask[]>(taskKeys.open, (old) =>
-        old?.map((o) => (o.id === occurrence.id ? { ...o, due_date: dueDate } : o)),
+        old?.map((o) => (o.id === occurrence.id ? { ...o, due_date: dueDate, delay_count: delayCount } : o)),
       )
     },
     onError: (e) => toast.error(getErrorMessage(e)),
     onSuccess: (_data, { occurrence, dueDate, undo }) => {
       if (undo || !dueDate) return
       toast(`Delayed until ${formatDay(dueDate)}`, {
-        action: { label: 'Undo', onClick: () => setDate.mutate({ occurrence, dueDate: occurrence.due_date, undo: true }) },
+        action: {
+          label: 'Undo',
+          onClick: () => setDate.mutate({ occurrence, dueDate: occurrence.due_date, delayCount: occurrence.delay_count, undo: true }),
+        },
       })
     },
     onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
   })
-  return (occurrence: Delayable) => setDate.mutate({ occurrence, dueDate: delayedDate(occurrence.due_date, todayISO()) })
+  return (occurrence: Delayable, days: number) =>
+    setDate.mutate({ occurrence, dueDate: delayedDate(occurrence.due_date, todayISO(), days), delayCount: occurrence.delay_count + 1 })
+}
+
+/** Sets a task's net votes; shows at once, so Top jobs reorders on the tap. */
+export function useVoteImportance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, votes }: { taskId: string; votes: number }) => api.updateTask(taskId, { importance_votes: votes }),
+    onMutate: async ({ taskId, votes }) => {
+      await qc.cancelQueries({ queryKey: taskKeys.open })
+      qc.setQueryData<api.OccurrenceWithTask[]>(taskKeys.open, (old) =>
+        old?.map((o) => (o.task_id === taskId ? { ...o, task: { ...o.task, importance_votes: votes } } : o)),
+      )
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+    onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  })
 }
 
 export function useSubtaskMutations(taskId: string) {

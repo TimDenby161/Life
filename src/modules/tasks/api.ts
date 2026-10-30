@@ -195,6 +195,16 @@ export async function moveOccurrence(id: string, dueDate: string) {
   unwrap(await supabase.from('task_occurrences').update({ due_date: dueDate }).eq('id', id))
 }
 
+/** A one-off keeps its date on the task, so that moves too; the trigger leaves the occurrence in place. */
+export async function delayOccurrence(
+  o: { id: string; task_id: string; task: { recurrence: unknown } },
+  dueDate: ISODate | null,
+  delayCount: number,
+) {
+  if (!o.task.recurrence) await updateTask(o.task_id, { due_date: dueDate })
+  unwrap(await supabase.from('task_occurrences').update({ due_date: dueDate, delay_count: delayCount }).eq('id', o.id))
+}
+
 export async function addSubtask(householdId: string, taskId: string, title: string, sortOrder: number) {
   unwrap(await supabase.from('task_subtasks').insert({ household_id: householdId, task_id: taskId, title, sort_order: sortOrder }))
 }

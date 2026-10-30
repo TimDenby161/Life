@@ -1631,6 +1631,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null
@@ -1647,6 +1648,7 @@ export type Database = {
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
+          delay_count?: number
           due_date?: string | null
           due_time?: string | null
           generated_from?: string | null
@@ -1663,6 +1665,7 @@ export type Database = {
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
+          delay_count?: number
           due_date?: string | null
           due_time?: string | null
           generated_from?: string | null
@@ -1822,6 +1825,7 @@ export type Database = {
           due_time: string | null
           household_id: string
           id: string
+          importance_votes: number
           last_done_on: string | null
           list_id: string
           priority: string
@@ -1844,6 +1848,7 @@ export type Database = {
           due_time?: string | null
           household_id: string
           id?: string
+          importance_votes?: number
           last_done_on?: string | null
           list_id: string
           priority?: string
@@ -1866,6 +1871,7 @@ export type Database = {
           due_time?: string | null
           household_id?: string
           id?: string
+          importance_votes?: number
           last_done_on?: string | null
           list_id?: string
           priority?: string
@@ -2231,6 +2237,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null
@@ -2285,6 +2292,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null
@@ -2349,6 +2357,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null
@@ -2382,6 +2391,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null
@@ -2408,6 +2418,7 @@ export type Database = {
           completed_at: string | null
           completed_by: string | null
           created_at: string
+          delay_count: number
           due_date: string | null
           due_time: string | null
           generated_from: string | null

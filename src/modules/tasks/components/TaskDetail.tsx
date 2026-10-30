@@ -36,9 +36,11 @@ import {
   useTaskLists,
   useUpdateTask,
 } from '../hooks'
-import { DELAY_DAYS, dueLabel, dueTone } from '../lib/format'
+import { delayLabel, dueLabel, dueTone } from '../lib/format'
+import { delayDaysFor } from '../lib/topJobs'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
 import { TaskForm } from './TaskForm'
+import { ImportanceVote } from './TaskRow'
 
 export function TaskDetailDialog({ taskId, onClose }: { taskId: string | null; onClose: () => void }) {
   const [editing, setEditing] = useState(false)
@@ -104,6 +106,7 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
   const assignee = member(occ?.assignee_id ?? task.assignee_id)
   const today = todayISO()
   const tone = dueTone(occ?.due_date ?? null, today)
+  const delayBy = occ ? delayDaysFor({ ...occ, task }, categories) : 1
   const lastCompletion = data.events.find((e) => e.event_type === 'completed')
   const upcoming = rule && !rule.afterDone && occ?.due_date ? upcomingOccurrences(rule, task.due_date!, occ.due_date, 4).slice(1) : []
 
@@ -183,9 +186,10 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <Button variant="outline" onClick={() => delay({ ...occ, task })}>
-              <Clock /> Delay {DELAY_DAYS} days
+            <Button variant="outline" onClick={() => delay({ ...occ, task }, delayBy)}>
+              <Clock /> {delayLabel(delayBy)}
             </Button>
+            <ImportanceVote taskId={task.id} title={task.title} votes={task.importance_votes} className="items-center" />
             {rule ? (
               <Button variant="outline" disabled={skip.isPending} onClick={() => skip.mutate(occ.id, { onSuccess: () => toast('Skipped this time') })}>
                 <SkipForward /> Skip

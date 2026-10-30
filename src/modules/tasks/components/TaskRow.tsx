@@ -1,12 +1,13 @@
-import { Check, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { useDelayOccurrence } from '../hooks'
-import { DELAY_DAYS, dueLabel, dueTone } from '../lib/format'
+import { useDelayOccurrence, useVoteImportance } from '../hooks'
+import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
+import { delayDaysFor } from '../lib/topJobs'
 import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
@@ -101,6 +102,34 @@ export function WhoDidIt({
   )
 }
 
+/** Two arrows: is this more or less important? Lit up whichever way the votes lean. */
+export function ImportanceVote({ taskId, title, votes, className }: { taskId: string; title: string; votes: number; className?: string }) {
+  const vote = useVoteImportance()
+  const arrows = [
+    { delta: 1, Icon: ChevronUp, label: `${title} is more important`, on: votes > 0 },
+    { delta: -1, Icon: ChevronDown, label: `${title} is less important`, on: votes < 0 },
+  ]
+  return (
+    <div className={cn('flex shrink-0', className)} role="group" aria-label={`How important is ${title}?`}>
+      {arrows.map(({ delta, Icon, label, on }) => (
+        <button
+          key={delta}
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={(e) => {
+            e.stopPropagation()
+            vote.mutate({ taskId, votes: votes + delta })
+          }}
+          className={cn('grid h-6 w-7 place-items-center rounded-md hover:bg-muted', on ? 'text-primary' : 'text-muted-foreground/60')}
+        >
+          <Icon className="size-[18px]" strokeWidth={on ? 3 : 2} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const toneClass = {
   overdue: 'text-destructive font-medium',
   today: 'text-warning font-medium',
@@ -115,6 +144,7 @@ export function TaskRow({
   categories,
   showList,
   showCategory = true,
+  showVotes = false,
   onOpen,
   onComplete,
   onReopen,
@@ -125,6 +155,7 @@ export function TaskRow({
   categories: TaskCategory[]
   showList?: boolean
   showCategory?: boolean
+  showVotes?: boolean
   onOpen: () => void
   onComplete?: (completedBy: string, alsoCompletedBy: string | null) => void
   onReopen?: () => void
@@ -140,7 +171,8 @@ export function TaskRow({
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
   const delay = useDelayOccurrence()
-  const swipe = useSwipeRight(done ? undefined : () => delay(occurrence))
+  const delayBy = delayDaysFor(occurrence, categories)
+  const swipe = useSwipeRight(done ? undefined : () => delay(occurrence, delayBy))
 
   return (
     <li className="relative touch-pan-y overflow-hidden rounded-xl animate-fade-in" {...swipe.handlers}>
@@ -152,7 +184,7 @@ export function TaskRow({
             swipe.ready ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
           )}
         >
-          <Clock className="size-4" /> Delay {DELAY_DAYS} days
+          <Clock className="size-4" /> {delayLabel(delayBy)}
         </div>
       ) : null}
       <div
@@ -164,6 +196,7 @@ export function TaskRow({
         onClick={onOpen}
       >
         {done ? <TaskCheck done onToggle={() => onReopen?.()} label={`Reopen ${task.title}`} /> : null}
+        {showVotes ? <ImportanceVote taskId={occurrence.task_id} title={task.title} votes={task.importance_votes} className="-my-1 -ml-1.5 -mr-1 flex-col" /> : null}
         <div className="min-w-0 flex-1">
           <button
             type="button"
