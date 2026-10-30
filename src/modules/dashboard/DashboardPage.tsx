@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Trophy, Wallet, X } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { ArrowRight, CalendarDays, CheckCircle2, ChevronDown, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Trophy, Wallet, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 import { ErrorState, ListSkeleton } from '@/components/states'
@@ -31,11 +31,9 @@ import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { splitShopping } from '@/modules/tasks/lib/shopping'
-import { byScore, isOutOfHours, topJobs } from '@/modules/tasks/lib/topJobs'
+import { isOutOfHours, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
-import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
-import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
 function useOccurrencesFor(view: string) {
@@ -56,10 +54,6 @@ function useViewOptions() {
 }
 
 export default function DashboardPage() {
-  const { me, partner } = useHousehold()
-  const views = useViewOptions()
-  const [who, setWho] = useState(me.id)
-  const { open, items } = useOccurrencesFor(who)
   const [composing, setComposing] = useState(false)
   const [adding, setAdding] = useState(false)
 
@@ -72,22 +66,6 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <TopJobsCard adding={adding} onToggleAdding={() => setAdding(!adding)} onMessage={() => setComposing(true)} />
-        <DaysCard
-          open={open}
-          items={items}
-          filter={
-            partner ? (
-              <Segmented
-                aria-label="Whose tasks"
-                size="sm"
-                className="mx-1 mb-2 sm:mx-2"
-                value={who}
-                onChange={setWho}
-                options={views}
-              />
-            ) : null
-          }
-        />
         <UpcomingCard />
         <FeedCard />
         <FinanceCard />
@@ -235,7 +213,10 @@ function CardLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-/** The five open tasks that most need doing, for one of us or for both together. */
+/**
+ * The open tasks that most need doing: the top five, then everything else in
+ * score order on request, with the shopping for the next few days kept together.
+ */
 function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; onToggleAdding: () => void; onMessage: () => void }) {
   const { me, partner } = useHousehold()
   const views = useViewOptions()
@@ -244,9 +225,32 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
+  // Tasks open in place, so editing one doesn't leave Home.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
-  const top = topJobs(items ?? [], categories, todayISO())
+  const [showMore, setShowMore] = useState(false)
+  const [shoppingOpen, setShoppingOpen] = useState(true)
+  const today = todayISO()
+  const ranked = topJobs(items ?? [], categories, today, Infinity)
+  const top = ranked.slice(0, 5)
+  const more = ranked.slice(5)
+  const { shopping, rest } = splitShopping(more, categories, today)
+  const renderRows = (rows: OccurrenceWithTask[]) => (
+    <ul>
+      {rows.map((o) => (
+        <TaskRow
+          key={o.id}
+          occurrence={o}
+          lists={lists}
+          categories={categories}
+          showList
+          showVotes
+          onOpen={() => opener.open(o)}
+          onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
+        />
+      ))}
+    </ul>
+  )
   return (
     <Card className="md:col-span-2 xl:col-span-3">
       <CardHeader>
@@ -262,14 +266,7 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
         {partner ? (
-          <Segmented
-            aria-label="Whose top jobs"
-            size="sm"
-            className="mx-1 mb-2 sm:mx-2"
-            value={who}
-            onChange={setWho}
-            options={views}
-          />
+          <Segmented aria-label="Whose top jobs" size="sm" className="mx-1 mb-2 sm:mx-2" value={who} onChange={setWho} options={views} />
         ) : null}
         {open.isPending ? (
           <ListSkeleton rows={5} className="px-2" />
@@ -280,140 +277,20 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
             <CheckCircle2 className="size-4 text-success" /> Nothing to do
           </p>
         ) : (
-          <ul>
-            {top.map((o) => (
-              <TaskRow
-                key={o.id}
-                occurrence={o}
-                lists={lists}
-                categories={categories}
-                showList
-                showVotes
-                onOpen={() => opener.open(o)}
-                onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
-              />
-            ))}
-          </ul>
+          renderRows(top)
         )}
-      </CardContent>
-      <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
-      {opener.dialogs}
-    </Card>
-  )
-}
-
-/**
- * Shopping for those days in one group, then today (including overdue) and
- * the next four days, each collapsible and
- * split into collapsible categories; only Today starts open.
- */
-function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> & { filter: ReactNode }) {
-  const lists = useTaskLists().data ?? []
-  const categories = useTaskCategories().data ?? []
-  const complete = useCompleteOccurrence()
-  // Tasks open in place, so editing one doesn't leave Home.
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
-  const opener = useTaskOpener(categories, lists, setOpenTaskId)
-  const today = todayISO()
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['shopping', today]))
-  // Category groups start open; collapsing one is remembered (per day slot: today, tomorrow, then days 2–4 ahead).
-  const { collapsed, toggle: toggleCategory } = useCollapsedGroups('life.home.collapsed')
-  const toggle = (day: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (!next.delete(day)) next.add(day)
-      return next
-    })
-  const renderRows = (rows: OccurrenceWithTask[], showCategory: boolean) => (
-    <ul>
-      {rows.map((o) => (
-        <TaskRow
-          key={o.id}
-          occurrence={o}
-          lists={lists}
-          categories={categories}
-          showList
-          showCategory={showCategory}
-          onOpen={() => opener.open(o)}
-          onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
-        />
-      ))}
-    </ul>
-  )
-  const { shopping, rest } = splitShopping(items ?? [], categories, today)
-  const days = [0, 1, 2, 3, 4].map((i) => {
-    const day = addDaysISO(today, i)
-    return {
-      day,
-      slot: i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day${i}`,
-      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
-      items: byScore(
-        rest.filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day)),
-        categories,
-        today,
-      ),
-    }
-  })
-  return (
-    <Card className="md:row-span-2">
-      <CardHeader>
-        <CardTitle>Tasks</CardTitle>
-        <CardLink to="/tasks" label="All tasks" />
-      </CardHeader>
-      <CardContent className="px-2 sm:px-3">
-        {filter}
-        {open.isPending ? (
-          <ListSkeleton rows={4} className="px-2" />
-        ) : open.error ? (
-          <ErrorState error={open.error} onRetry={() => open.refetch()} />
-        ) : (
-          <>
-            {shopping.length ? (
-              <TaskGroup id="day-shopping" level={1} label="Shopping" count={shopping.length} open={expanded.has('shopping')} onToggle={() => toggle('shopping')}>
-                {renderRows(byScore(shopping, categories, today), false)}
-              </TaskGroup>
-            ) : null}
-            {days.map(({ day, slot, label, items: dayItems }) => (
-              <TaskGroup
-                key={day}
-                id={`day-${day}`}
-                level={1}
-                label={label}
-                count={dayItems.length}
-                open={expanded.has(day)}
-                onToggle={() => toggle(day)}
-              >
-                {!dayItems.length ? (
-                  day === today ? (
-                    <p className="flex items-center gap-2 px-3 pb-2 pl-8 text-sm text-muted-foreground">
-                      <CheckCircle2 className="size-4 text-success" /> Nothing due today
-                    </p>
-                  ) : (
-                    <p className="px-3 pb-2 pl-8 text-sm text-muted-foreground">No tasks</p>
-                  )
-                ) : (
-                  (categorySubgroups(dayItems, categories)?.map((sub) => {
-                    const subKey = `${slot}/${sub.key}`
-                    return (
-                      <TaskGroup
-                        key={sub.key}
-                        id={`day-${subKey}`}
-                        level={2}
-                        label={sub.label}
-                        count={sub.items.length}
-                        dot={sub.dot}
-                        open={!collapsed.has(subKey)}
-                        onToggle={() => toggleCategory(subKey)}
-                      >
-                        {renderRows(sub.items, false)}
-                      </TaskGroup>
-                    )
-                  }) ?? renderRows(dayItems, true))
-                )}
-              </TaskGroup>
-            ))}
-          </>
-        )}
+        {showMore && shopping.length ? (
+          <TaskGroup id="more-shopping" level={1} label="Shopping" count={shopping.length} open={shoppingOpen} onToggle={() => setShoppingOpen(!shoppingOpen)}>
+            {renderRows(shopping)}
+          </TaskGroup>
+        ) : null}
+        {showMore ? renderRows(rest) : null}
+        {more.length ? (
+          <Button variant="ghost" className="mt-1 w-full" aria-expanded={showMore} onClick={() => setShowMore(!showMore)}>
+            <ChevronDown className={cn('transition-transform', showMore && 'rotate-180')} />
+            {showMore ? 'Show fewer jobs' : 'Show more jobs'}
+          </Button>
+        ) : null}
       </CardContent>
       <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
       {opener.dialogs}
