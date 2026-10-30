@@ -10,7 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
-import { addDaysISO, greeting, parseISODate, todayISO } from '@/lib/dates'
+import { addDaysISO, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -60,32 +60,13 @@ export default function DashboardPage() {
   const views = useViewOptions()
   const [who, setWho] = useState(me.id)
   const { open, items } = useOccurrencesFor(who)
-  const today = todayISO()
-  const dueToday = (items ?? []).filter((o) => o.due_date === today)
-  const overdue = (items ?? []).filter((o) => o.due_date && o.due_date < today)
   const [composing, setComposing] = useState(false)
   const [adding, setAdding] = useState(false)
 
-  const summary = open.data
-    ? [
-        dueToday.length ? `${dueToday.length} ${dueToday.length === 1 ? 'task' : 'tasks'} due today` : 'Nothing due today',
-        overdue.length ? `${overdue.length} overdue` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : ' '
-
   return (
     <div className="grid grid-cols-1 gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">{format(new Date(), 'EEEE d MMMM')}</p>
-          <h1 className="text-[28px] font-semibold tracking-tight sm:text-3xl">
-            {greeting()}, {me.display_name}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
-        </div>
-      </header>
+      <h1 className="sr-only">Home</h1>
+      <PotTiles />
 
       {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
 
@@ -558,20 +539,52 @@ function FeedCard() {
 const HIDDEN_POTS = /service charge/i
 
 /** Each savings pot's next target (the first item not yet funded) and how far along it is. */
-function FinanceCard() {
+function usePotProgress() {
   const pots = usePots()
   const balances = useBalances()
-
-  const rows = useMemo(() => {
+  return useMemo(() => {
     if (!pots.data || !balances.data) return null
-    // Service charge is a bill being saved for, not a goal; it stays on the Finances page.
-    return pots.data.pots.filter((pot) => !HIDDEN_POTS.test(pot.name)).map((pot) => {
+    return pots.data.pots.map((pot) => {
       const balance = pot.account_id ? (balances.data.get(pot.account_id) ?? 0) : 0
       const items = pots.data.items.filter((i) => i.pot_id === pot.id)
       const { item, pct } = nextTarget(balance, items)
       return { id: pot.id, name: pot.name, next: item?.name ?? null, pct, empty: !items.length }
     })
   }, [pots.data, balances.data])
+}
+
+const POT_TILES = [
+  { label: 'Wedding', pot: /wedding/i },
+  { label: 'Next trip', pot: /holiday/i },
+  { label: 'Service', pot: /service/i },
+]
+
+function PotTiles() {
+  const rows = usePotProgress()
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {POT_TILES.map((tile) => {
+        const row = rows?.find((r) => tile.pot.test(r.name))
+        const pct = row && !row.empty ? row.pct : null
+        return (
+          <Link key={tile.label} to="/finances">
+            <Card className="grid gap-2 p-3">
+              <div>
+                <p className="truncate text-xs text-muted-foreground">{tile.label}</p>
+                <p className="text-2xl font-semibold tracking-tight tabular">{pct === null ? '—' : `${pct}%`}</p>
+              </div>
+              <Progress value={pct ?? 0} indicatorClassName={pct === 100 ? 'bg-success' : undefined} />
+            </Card>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Each savings pot's next target. Service charge is a bill being saved for, not a goal; it stays on the Finances page. */
+function FinanceCard() {
+  const rows = usePotProgress()?.filter((pot) => !HIDDEN_POTS.test(pot.name))
 
   return (
     <Card>

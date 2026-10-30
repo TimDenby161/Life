@@ -53,11 +53,3 @@ export function formatDateTime(iso: string): string {
 export function monthStart(value: ISODate): ISODate {
   return `${value.slice(0, 7)}-01`
 }
-
-export function greeting(now = new Date()): string {
-  const h = now.getHours()
-  if (h < 5) return 'Good evening'
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
-}
