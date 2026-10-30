@@ -1,10 +1,12 @@
-import { daysBetween, type ISODate } from '@/lib/dates'
+import { daysBetween, type ISODate, parseISODate, todayISO } from '@/lib/dates'
 import type { TaskCategory } from '../api'
 import { compareOccurrences, delayDays } from './format'
 
 type Subtask = { is_done: boolean; due_date?: string | null }
 
 type Scorable = {
+  created_at?: string
+  delay_count?: number
   due_date: string | null
   due_time: string | null
   task: { subtasks?: Subtask[]; title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null }
@@ -14,12 +16,14 @@ type Scorable = {
 const CRITICAL =
   /\b(pay|payments?|bills?|invoices?|tax|hmrc|deadlines?|renew(al)?|expir(es?|y|ing)|insurance|mortgage|rent|passport|visa|licen[cs]e|mot|solicitor|contract|legal|court|fines?|urgent|asap|important|doctor|gp|dentist|hospital|prescriptions?|vet)\b/i
 const MAJOR =
-  /\b(book|register|submit|apply|sign|cancel|confirm|deposit|wedding|venue|quotes?|finances?|appointments?|call|phone|reply|send|order|fix|repair|boiler|buy)\b/i
+  /\b(book|register|submit|apply|sign|cancel|confirm|deposit|venue|quotes?|finances?|appointments?|call|phone|reply|send|order|fix|repair|boiler|buy)\b/i
 const ROUTINE =
   /\b(clean|wipe|dust|hoover|vacuum|tidy|mop|wash|laundry|descale|learn|study|practi[cs]e|review|words?|characters?|mandarin|spanish|stretch|weigh)\b/i
 
 const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 0, low: -25 }
-const VOTE_POINTS = 15
+const VOTE_POINTS = 10
+const CRITICAL_WORD_POINTS = 30
+const MAJOR_WORD_POINTS = 15
 const EVENING_STARTS = 16
 const POINTS_PER_EVENING_HOUR = 10
 const BEDTIME = 22
@@ -67,7 +71,7 @@ function importanceScore(task: Scorable['task'], categories: Pick<TaskCategory, 
   return (
     (task.importance_votes ?? 0) * VOTE_POINTS +
     (PRIORITY_POINTS[task.priority] ?? 0) +
-    (CRITICAL.test(text) ? 40 : MAJOR.test(text) ? 25 : 0) -
+    (CRITICAL.test(text) ? CRITICAL_WORD_POINTS : MAJOR.test(text) ? MAJOR_WORD_POINTS : 0) -
     (ROUTINE.test(text) ? 15 : 0) -
     (task.recurrence ? 15 : 0)
   )
@@ -146,16 +150,21 @@ function categoryName(task: Scorable['task'], categories: Pick<TaskCategory, 'id
 
 const within = (hours: { from: number; to: number }, hour: number) => hour >= hours.from && hour < hours.to
 
+function isWorkTime(hour: number, today: ISODate) {
+  const day = parseISODate(today).getDay()
+  return day !== 0 && day !== 6 && within(WORK_HOURS, hour)
+}
+
 /** Work jobs matter in work hours; cleaning and anything uncategorised suit the lunch break. */
-function timeOfDayScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number) {
+function timeOfDayScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number, today: ISODate) {
   const category = categoryName(task, categories)
-  if (WORK_CATEGORY.test(category)) return within(WORK_HOURS, hour) ? WORK_POINTS : 0
+  if (WORK_CATEGORY.test(category)) return isWorkTime(hour, today) ? WORK_POINTS : 0
   return (!category || LUNCH_CATEGORIES.test(category)) && within(LUNCH_HOURS, hour) ? LUNCH_POINTS : 0
 }
 
-/** Work jobs stay out of sight outside work hours. */
-export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour = new Date().getHours()) {
-  return WORK_CATEGORY.test(categoryName(task, categories)) && !within(WORK_HOURS, hour)
+/** Work jobs stay out of sight evenings and weekends. */
+export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour = new Date().getHours(), today = todayISO()) {
+  return WORK_CATEGORY.test(categoryName(task, categories)) && !isWorkTime(hour, today)
 }
 
 /**
@@ -174,13 +183,14 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
 }
 
 function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
-  const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
+  const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour, today)
   return Math.max(score, deadlineScore(o, categories, today) ?? score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
 }
 
-/** A subtask scores like its task, on its own date if it has one. */
+/** A subtask scores like its task, on its own date if it has one. Delaying the task holds its subtasks back too. */
 export function subtaskScore(o: Scorable, subtask: Subtask, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
-  return ownScore({ ...o, due_date: subtask.due_date ?? o.due_date }, categories, today, hour)
+  const dates = [subtask.due_date, o.delay_count ? o.due_date : null].filter((d) => d != null)
+  return ownScore({ ...o, due_date: dates.toSorted().at(-1) ?? o.due_date }, categories, today, hour)
 }
 
 /** A task with subtasks left is as pressing as the most pressing of them. */
@@ -190,11 +200,11 @@ export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'na
   return Math.max(...left.map((s) => subtaskScore(o, s, categories, today, hour)))
 }
 
-/** Highest score first. */
+/** Highest score first; on a tie, whatever has been waiting longest. */
 export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour?: number): T[] {
   return items
     .map((item) => ({ item, score: taskScore(item, categories, today, hour) }))
-    .sort((a, b) => b.score - a.score || compareOccurrences(a.item, b.item))
+    .sort((a, b) => b.score - a.score || (a.item.created_at ?? '').localeCompare(b.item.created_at ?? '') || compareOccurrences(a.item, b.item))
     .map(({ item }) => item)
 }
 
