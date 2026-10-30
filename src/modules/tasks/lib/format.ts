@@ -1,5 +1,12 @@
-import { daysBetween, formatDay, formatTime, type ISODate } from '@/lib/dates'
+import { addDaysISO, daysBetween, formatDay, formatTime, type ISODate } from '@/lib/dates'
 import type { Priority } from '../api'
+
+export const DELAY_DAYS = 3
+
+/** Where delaying a task puts it: a few days from now, or later still if it's already due later. */
+export function delayedDate(dueDate: ISODate | null, today: ISODate): ISODate {
+  return addDaysISO(dueDate && dueDate > today ? dueDate : today, DELAY_DAYS)
+}
 
 export type DueTone = 'overdue' | 'today' | 'soon' | 'later' | 'none'
 

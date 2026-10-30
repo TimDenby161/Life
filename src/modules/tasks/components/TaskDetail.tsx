@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { Archive, Check, ChevronDown, Pencil, Repeat, SkipForward, Trash2, Undo2, X } from 'lucide-react'
+import { Archive, Check, ChevronDown, Clock, Pencil, Repeat, SkipForward, Trash2, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -25,6 +25,7 @@ import {
   useCommentMutations,
   useCompleteOccurrence,
   useDeleteTask,
+  useDelayOccurrence,
   useMoveOccurrence,
   useReopenOccurrence,
   useSetCompletedBy,
@@ -35,7 +36,7 @@ import {
   useTaskLists,
   useUpdateTask,
 } from '../hooks'
-import { dueLabel, dueTone } from '../lib/format'
+import { DELAY_DAYS, dueLabel, dueTone } from '../lib/format'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
 import { TaskForm } from './TaskForm'
 
@@ -91,6 +92,7 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
   const skip = useSkipOccurrence()
   const reopen = useReopenOccurrence()
   const move = useMoveOccurrence()
+  const delay = useDelayOccurrence()
   const update = useUpdateTask()
   const del = useDeleteTask()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -181,6 +183,9 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            <Button variant="outline" onClick={() => delay({ ...occ, task })}>
+              <Clock /> Delay {DELAY_DAYS} days
+            </Button>
             {rule ? (
               <Button variant="outline" disabled={skip.isPending} onClick={() => skip.mutate(occ.id, { onSuccess: () => toast('Skipped this time') })}>
                 <SkipForward /> Skip

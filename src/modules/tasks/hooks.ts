@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { subDays } from 'date-fns'
 import { toast } from 'sonner'
+import { formatDay, todayISO } from '@/lib/dates'
+import { getErrorMessage } from '@/lib/errors'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import * as api from './api'
 import { taskKeys } from './api'
+import { delayedDate } from './lib/format'
 
 export function useTaskLists() {
   return useQuery({ queryKey: taskKeys.lists, queryFn: api.fetchTaskLists, staleTime: 5 * 60_000 })
@@ -133,6 +136,34 @@ export function useMoveOccurrence() {
     mutationFn: ({ id, dueDate }: { id: string; dueDate: string }) => api.moveOccurrence(id, dueDate),
     onSuccess: invalidate,
   })
+}
+
+type Delayable = Pick<api.OccurrenceWithTask, 'id' | 'task_id' | 'due_date'> & { task: { recurrence: unknown } }
+
+/** Puts a task off for a few days. A repeating task only moves this occurrence, not its schedule. */
+export function useDelayOccurrence() {
+  const qc = useQueryClient()
+  const setDate = useMutation({
+    mutationFn: async ({ occurrence: o, dueDate }: { occurrence: Delayable; dueDate: string | null; undo?: boolean }) => {
+      if (o.task.recurrence) await api.moveOccurrence(o.id, dueDate!)
+      else await api.updateTask(o.task_id, { due_date: dueDate })
+    },
+    onMutate: async ({ occurrence, dueDate }) => {
+      await qc.cancelQueries({ queryKey: taskKeys.open })
+      qc.setQueryData<api.OccurrenceWithTask[]>(taskKeys.open, (old) =>
+        old?.map((o) => (o.id === occurrence.id ? { ...o, due_date: dueDate } : o)),
+      )
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+    onSuccess: (_data, { occurrence, dueDate, undo }) => {
+      if (undo || !dueDate) return
+      toast(`Delayed until ${formatDay(dueDate)}`, {
+        action: { label: 'Undo', onClick: () => setDate.mutate({ occurrence, dueDate: occurrence.due_date, undo: true }) },
+      })
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  })
+  return (occurrence: Delayable) => setDate.mutate({ occurrence, dueDate: delayedDate(occurrence.due_date, todayISO()) })
 }
 
 export function useSubtaskMutations(taskId: string) {

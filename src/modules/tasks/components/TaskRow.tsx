@@ -1,11 +1,13 @@
-import { Check, Flag, ListChecks, Repeat } from 'lucide-react'
+import { Check, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { dueLabel, dueTone } from '../lib/format'
+import { useDelayOccurrence } from '../hooks'
+import { DELAY_DAYS, dueLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
+import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
   done,
@@ -137,67 +139,86 @@ export function TaskRow({
   const tone = done ? 'none' : dueTone(occurrence.due_date, todayISO())
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
+  const delay = useDelayOccurrence()
+  const swipe = useSwipeRight(done ? undefined : () => delay(occurrence))
 
   return (
-    <li
-      className="group flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/60 animate-fade-in"
-      onClick={onOpen}
-    >
-      {done ? <TaskCheck done onToggle={() => onReopen?.()} label={`Reopen ${task.title}`} /> : null}
-      <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          className={cn('block w-full truncate text-left text-[15px] leading-snug', done && 'text-muted-foreground line-through decoration-muted-foreground/40')}
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpen()
-          }}
+    <li className="relative touch-pan-y overflow-hidden rounded-xl animate-fade-in" {...swipe.handlers}>
+      {swipe.offset ? (
+        <div
+          aria-hidden
+          className={cn(
+            'absolute inset-0 flex items-center gap-2 rounded-xl px-4 text-sm font-medium',
+            swipe.ready ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+          )}
         >
-          {task.title}
-        </button>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
-          {done && completer ? (
-            <span>
-              Done by {completer.display_name}
-              {alsoCompleter ? ` & ${alsoCompleter.display_name}` : ''}
-            </span>
-          ) : null}
-          {!done && occurrence.due_date ? (
-            <span className={toneClass[tone]}>
-              {tone === 'overdue' ? 'Overdue · ' : ''}
-              {dueLabel(occurrence.due_date, occurrence.due_time)}
-            </span>
-          ) : null}
-          {task.recurrence ? (
-            <span className="inline-flex items-center gap-1" title="Repeats">
-              <Repeat className="size-3" />
-              <span className="sr-only">Repeats</span>
-            </span>
-          ) : null}
-          {showList && list ? <span>{list.name}</span> : null}
-          {showCategory && category ? (
-            <span className="inline-flex items-center gap-1">
-              <span className={cn('size-1.5 rounded-full', colorOf(category.color).dot)} />
-              {category.name}
-            </span>
-          ) : null}
-          {subtasks.length ? (
-            <span className="inline-flex items-center gap-1">
-              <ListChecks className="size-3" />
-              {subDone}/{subtasks.length}
-            </span>
-          ) : null}
-          {task.priority === 'high' || task.priority === 'urgent' ? (
-            <span className={cn('inline-flex items-center gap-1', task.priority === 'urgent' ? 'text-destructive' : 'text-warning')}>
-              <Flag className="size-3" />
-              {task.priority === 'urgent' ? 'Urgent' : 'High'}
-            </span>
-          ) : null}
+          <Clock className="size-4" /> Delay {DELAY_DAYS} days
         </div>
+      ) : null}
+      <div
+        className={cn(
+          'group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5',
+          swipe.offset ? 'bg-card' : 'transition-colors hover:bg-muted/60',
+        )}
+        style={swipe.offset ? { transform: `translateX(${swipe.offset}px)` } : undefined}
+        onClick={onOpen}
+      >
+        {done ? <TaskCheck done onToggle={() => onReopen?.()} label={`Reopen ${task.title}`} /> : null}
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            className={cn('block w-full truncate text-left text-[15px] leading-snug', done && 'text-muted-foreground line-through decoration-muted-foreground/40')}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+          >
+            {task.title}
+          </button>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
+            {done && completer ? (
+              <span>
+                Done by {completer.display_name}
+                {alsoCompleter ? ` & ${alsoCompleter.display_name}` : ''}
+              </span>
+            ) : null}
+            {!done && occurrence.due_date ? (
+              <span className={toneClass[tone]}>
+                {tone === 'overdue' ? 'Overdue · ' : ''}
+                {dueLabel(occurrence.due_date, occurrence.due_time)}
+              </span>
+            ) : null}
+            {task.recurrence ? (
+              <span className="inline-flex items-center gap-1" title="Repeats">
+                <Repeat className="size-3" />
+                <span className="sr-only">Repeats</span>
+              </span>
+            ) : null}
+            {showList && list ? <span>{list.name}</span> : null}
+            {showCategory && category ? (
+              <span className="inline-flex items-center gap-1">
+                <span className={cn('size-1.5 rounded-full', colorOf(category.color).dot)} />
+                {category.name}
+              </span>
+            ) : null}
+            {subtasks.length ? (
+              <span className="inline-flex items-center gap-1">
+                <ListChecks className="size-3" />
+                {subDone}/{subtasks.length}
+              </span>
+            ) : null}
+            {task.priority === 'high' || task.priority === 'urgent' ? (
+              <span className={cn('inline-flex items-center gap-1', task.priority === 'urgent' ? 'text-destructive' : 'text-warning')}>
+                <Flag className="size-3" />
+                {task.priority === 'urgent' ? 'Urgent' : 'High'}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {done ? null : (
+          <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
+        )}
       </div>
-      {done ? null : (
-        <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
-      )}
     </li>
   )
 }
