@@ -29,7 +29,7 @@ function importanceScore(task: Scorable['task'], categories: Pick<TaskCategory, 
   )
 }
 
-/** Overdue edges past due today, but only a little: a late chore shouldn't outrank a real deadline. */
+/** Overdue edges past due today, but only a little: among today's tasks, importance decides. */
 function urgencyScore(dueDate: ISODate | null, today: ISODate) {
   if (!dueDate) return 0
   const days = daysBetween(today, dueDate)
@@ -46,11 +46,15 @@ export function topJobScore(o: Scorable, categories: Pick<TaskCategory, 'id' | '
   return importanceScore(o.task, categories) + urgencyScore(o.due_date, today)
 }
 
-/** The tasks that most need doing: how important they sound plus how soon they're due. */
+/**
+ * The tasks that most need doing: everything due today (or overdue) comes
+ * first, then how important they sound plus how soon they're due.
+ */
 export function topJobs<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, limit = 5): T[] {
+  const dueNow = (o: T) => Number(o.due_date !== null && o.due_date <= today)
   return items
     .map((item) => ({ item, score: topJobScore(item, categories, today) }))
-    .sort((a, b) => b.score - a.score || compareOccurrences(a.item, b.item))
+    .sort((a, b) => dueNow(b.item) - dueNow(a.item) || b.score - a.score || compareOccurrences(a.item, b.item))
     .slice(0, limit)
     .map(({ item }) => item)
 }

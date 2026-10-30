@@ -29,9 +29,18 @@ describe('topJobs', () => {
     expect(titles(topJobs(items, categories, today))[0]).toBe('Book the dentist')
   })
 
-  it('lets a real deadline next week beat a long-overdue repeating chore', () => {
+  it('puts anything due today or overdue ahead of more important tasks due later', () => {
     const items = [
+      occ('Renew the car insurance', '2026-10-31', { priority: 'urgent' }),
+      occ('Sort the loft', today),
       occ('Clean the oven', '2026-09-01', { recurrence: { afterDone: true } }),
+    ]
+    expect(titles(topJobs(items, categories, today))).toEqual(['Sort the loft', 'Clean the oven', 'Renew the car insurance'])
+  })
+
+  it('lets a real deadline next week beat a chore due the week after', () => {
+    const items = [
+      occ('Clean the oven', '2026-11-12', { recurrence: { afterDone: true } }),
       occ('Renew the car insurance', '2026-11-05'),
     ]
     expect(titles(topJobs(items, categories, today))[0]).toBe('Renew the car insurance')
