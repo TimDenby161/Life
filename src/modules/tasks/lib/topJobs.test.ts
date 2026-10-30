@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { delayDaysFor, topJobs } from './topJobs'
+import { byScore, delayDaysFor, taskScore, topJobs } from './topJobs'
 
 const today = '2026-10-30'
 const categories = [
@@ -97,6 +97,34 @@ describe('topJobs', () => {
     expect(titles(topJobs(items, categories, today))[0]).toBe('Pay Beth back')
     const tied = [occ('B task', today), occ('A task', today)]
     expect(titles(topJobs(tied, categories, today))).toEqual(['A task', 'B task'])
+  })
+})
+
+describe('end of the day', () => {
+  const daily = { recurrence: { freq: 'daily' } }
+  const score = (o: ReturnType<typeof occ>, hour: number) => taskScore(o, categories, today, hour)
+
+  it('leaves a daily task alone until the evening, then climbs each hour', () => {
+    const task = occ('Sort the loft', today, daily)
+    expect([9, 16, 17, 20, 23].map((h) => score(task, h) - score(task, 9))).toEqual([0, 0, 10, 40, 70])
+  })
+  it('still counts a daily task left over from yesterday', () => {
+    const task = occ('Sort the loft', '2026-10-29', daily)
+    expect(score(task, 23) - score(task, 9)).toBe(70)
+  })
+  it('skips weekly tasks, every-other-day tasks and one-offs, and daily tasks due later', () => {
+    const tasks = [
+      occ('Sort the loft', today, { recurrence: { freq: 'weekly' } }),
+      occ('Sort the loft', today, { recurrence: { freq: 'daily', interval: 2 } }),
+      occ('Sort the loft', today),
+      occ('Sort the loft', '2026-10-31', daily),
+    ]
+    for (const task of tasks) expect(score(task, 23)).toBe(score(task, 9))
+  })
+  it('lets a daily task overtake a bigger task late in the evening', () => {
+    const items = [occ('Pay the bill', today), occ('Sort the loft', today, daily)]
+    expect(titles(byScore(items, categories, today, 9))[0]).toBe('Pay the bill')
+    expect(titles(byScore(items, categories, today, 23))[0]).toBe('Sort the loft')
   })
 })
 

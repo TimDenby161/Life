@@ -18,6 +18,8 @@ const ROUTINE =
 
 const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 0, low: -25 }
 const VOTE_POINTS = 15
+const EVENING_STARTS = 16
+const POINTS_PER_EVENING_HOUR = 10
 
 function taskText(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
   const category = categories.find((c) => c.id === task.category_id)?.name ?? ''
@@ -60,18 +62,25 @@ function urgencyScore(dueDate: ISODate | null, today: ISODate) {
   return -20
 }
 
-export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
-  return importanceScore(o.task, categories) + urgencyScore(o.due_date, today)
+/** A daily task can't wait for tomorrow, so it climbs every hour from 5pm until it's done. */
+function endOfDayScore(o: Scorable, today: ISODate, hour: number) {
+  const rule = o.task.recurrence as { freq?: string; interval?: number } | null | undefined
+  if (rule?.freq !== 'daily' || (rule.interval ?? 1) !== 1 || !o.due_date || o.due_date > today) return 0
+  return Math.max(0, hour - EVENING_STARTS) * POINTS_PER_EVENING_HOUR
+}
+
+export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
+  return importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour)
 }
 
 /**
  * Every task's hidden score, most pressing first: anything flagged Urgent, then
  * everything due today (or overdue), then how important it sounds plus how soon it's due.
  */
-export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate): T[] {
+export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour?: number): T[] {
   const tier = (o: T) => (o.task.priority === 'urgent' ? 2 : o.due_date !== null && o.due_date <= today ? 1 : 0)
   return items
-    .map((item) => ({ item, tier: tier(item), score: taskScore(item, categories, today) }))
+    .map((item) => ({ item, tier: tier(item), score: taskScore(item, categories, today, hour) }))
     .sort((a, b) => b.tier - a.tier || b.score - a.score || compareOccurrences(a.item, b.item))
     .map(({ item }) => item)
 }
