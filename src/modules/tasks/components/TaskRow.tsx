@@ -241,7 +241,7 @@ export function TaskRow({
               </span>
             ) : null}
             {/* Shown in place of the due date while we test the score; the detail page still has the date. */}
-            {!done ? <span className={toneClass[tone]}>Score {taskScore(occurrence, categories, todayISO())}</span> : null}
+            {!done ? <span className={toneClass[tone]}>{taskScore(occurrence, categories, todayISO())}</span> : null}
             {task.recurrence ? (
               <span className="inline-flex items-center gap-1" title="Repeats">
                 <Repeat className="size-3" />
