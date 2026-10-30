@@ -201,8 +201,12 @@ describe('birthdays', () => {
     expect(score('Presents', '2026-11-06')).toBe(97)
     expect(score('Gift for Toby', '2026-11-06')).toBe(97)
   })
-  it('does nothing earlier than a week out', () => {
-    expect(score('Buy birthday present for Mum', '2026-11-07')).toBe(score('Sort the loft', '2026-11-07') + 25)
+  it('climbs gradually from two weeks out', () => {
+    expect(score('Presents', '2026-11-07')).toBe(83)
+    expect(score('Presents', '2026-11-13')).toBe(13)
+  })
+  it('does nothing earlier than two weeks out', () => {
+    expect(score('Buy birthday present for Mum', '2026-11-20')).toBe(score('Sort the loft', '2026-11-20') + 25)
   })
   it('uses the deadline when there is one', () => {
     expect(score('Presents', '2026-12-25', { deadline: '2026-11-06' })).toBe(97)
