@@ -32,6 +32,9 @@ const DEADLINE_POINTS_PER_DAY = 20
 const BIRTHDAY_RUN_UP_DAYS = 14
 const BIRTHDAY_POINTS_PER_DAY = 14
 const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
+const DUE_DAY_SCORE = 100
+const DUE_RUN_UP_DAYS = 7
+const DUE_POINTS_PER_DAY = 10
 const WORK_POINTS = 40
 const LUNCH_POINTS = 30
 const WORK_HOURS = { from: 8, to: 17 }
@@ -68,16 +71,31 @@ function importanceScore(task: Scorable['task'], categories: Pick<TaskCategory, 
 }
 
 /** Overdue edges past due today, but only a little: importance still counts for more. */
-function urgencyScore(dueDate: ISODate | null, today: ISODate) {
-  if (!dueDate) return 0
-  const days = daysBetween(today, dueDate)
+function repeatingUrgency(days: number) {
   if (days < 0) return 40 + Math.min(-days, 14)
   if (days === 0) return 40
   if (days === 1) return 30
   if (days <= 3) return 22
   if (days <= 7) return 12
-  if (days <= 30) return 4
-  return -20
+  return days <= 30 ? 4 : -20
+}
+
+/** The date someone picks for a one-off task is the day it reaches 100, after a week's climb. */
+function oneOffUrgency(days: number) {
+  if (days < 0) return DUE_DAY_SCORE + Math.min(-days, 14)
+  if (days <= DUE_RUN_UP_DAYS) return DUE_DAY_SCORE - days * DUE_POINTS_PER_DAY
+  return days <= 30 ? 4 : -20
+}
+
+function urgencyScore(o: Scorable, today: ISODate) {
+  if (!o.due_date) return 0
+  const days = daysBetween(today, o.due_date)
+  return o.task.recurrence ? repeatingUrgency(days) : oneOffUrgency(days)
+}
+
+/** Nothing talks a one-off task below 100 once its day has come. */
+function dueDayFloor(o: Scorable, today: ISODate) {
+  return !o.task.recurrence && o.due_date && o.due_date <= today ? DUE_DAY_SCORE : null
 }
 
 function isDailyAndDue(o: Scorable, today: ISODate) {
@@ -130,8 +148,8 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
 }
 
 function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
-  const score = importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
-  return Math.max(score, deadlineScore(o, categories, today) ?? score, endOfDayFloor(o, today, hour) ?? score)
+  const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
+  return Math.max(score, deadlineScore(o, categories, today) ?? score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
 }
 
 /** A subtask scores like its task, on its own date if it has one. */
