@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input, NativeSelect, Textarea } from '@/components/ui/input'
-import { Badge, Checkbox } from '@/components/ui/misc'
+import { Badge, Checkbox, Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { formatDateTime, formatDay, parseISODate, todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -39,6 +39,7 @@ import {
   useWaitingOn,
 } from '../hooks'
 import { delayLabel, dueLabel, dueTone } from '../lib/format'
+import { assignedTo, assignPatch, JOINT, TOGETHER } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
 import { waitingChoices } from '../lib/waiting'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
@@ -90,7 +91,7 @@ type DetailData = NonNullable<ReturnType<typeof useTaskDetail>['data']>
 
 function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: () => void; onClose: () => void }) {
   const task = data.task!
-  const { member, members, me } = useHousehold()
+  const { member, members, me, partner } = useHousehold()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
@@ -250,6 +251,22 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
         ) : null}
       </div>
 
+      <div className="grid gap-1.5 text-sm text-muted-foreground">
+        Assigned
+        <Segmented
+          aria-label="Assigned"
+          size="sm"
+          className="justify-self-start"
+          value={assignedTo(task, categories, lists)}
+          onChange={(v) => update.mutate({ id: task.id, patch: assignPatch(v, task, categories, lists) })}
+          options={[
+            { value: me.id, label: me.display_name },
+            ...(partner ? [{ value: TOGETHER, label: 'Together' }, { value: partner.id, label: partner.display_name }] : []),
+            { value: JOINT, label: 'Joint' },
+          ]}
+        />
+      </div>
+
       <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
         Category
         <NativeSelect
@@ -257,8 +274,11 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
           className="h-10 w-auto"
           value={task.category_id ?? ''}
           disabled={update.isPending}
-          // An owned category also reassigns the task (the database sees to that).
-          onChange={(e) => update.mutate({ id: task.id, patch: { category_id: e.target.value || null } })}
+          // An owned category also reassigns the task (the database sees to that), so it can't stay Together.
+          onChange={(e) => {
+            const owned = categories.find((c) => c.id === e.target.value)?.owner_id
+            update.mutate({ id: task.id, patch: { category_id: e.target.value || null, ...(owned ? { needs_both: false } : {}) } })
+          }}
         >
           <option value="">None</option>
           {categories.map((c) => (
@@ -267,11 +287,6 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
             </option>
           ))}
         </NativeSelect>
-      </label>
-
-      <label className="flex items-center gap-2.5 text-sm font-semibold">
-        <Checkbox checked={task.needs_both} onCheckedChange={(v) => update.mutate({ id: task.id, patch: { needs_both: v === true } })} />
-        We both need to do this
       </label>
 
       <label className="grid gap-1.5 text-sm font-semibold">
