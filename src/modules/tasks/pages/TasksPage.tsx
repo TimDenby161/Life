@@ -19,6 +19,7 @@ import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
 import { useTaskOpener } from '../components/useTaskOpener'
 import { ownerOf } from '../lib/owner'
+import { byScore } from '../lib/topJobs'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import {
   useCompleteOccurrence,
@@ -29,7 +30,7 @@ import {
   useTaskCategories,
   useTaskLists,
 } from '../hooks'
-import { compareOccurrences, type Section, SECTION_LABELS, sectionOf } from '../lib/format'
+import { type Section, SECTION_LABELS, sectionOf } from '../lib/format'
 import TaskStatsPage from './TaskStatsPage'
 
 export default function TasksPage() {
@@ -113,8 +114,8 @@ function TaskListView() {
 
   const today = todayISO()
   const visible = useMemo(
-    () => (open.data ?? []).filter(filter).toSorted(compareOccurrences),
-    [open.data, who, allCategories, allLists],
+    () => byScore((open.data ?? []).filter(filter), allCategories, today),
+    [open.data, who, allCategories, allLists, today],
   )
   const sections = useMemo(() => groupBy(visible, (o) => sectionOf(o.due_date, today)), [visible, today])
   const recentDone = (done.data ?? []).filter(filter)

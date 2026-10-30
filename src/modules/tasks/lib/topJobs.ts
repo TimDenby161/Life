@@ -60,19 +60,22 @@ function urgencyScore(dueDate: ISODate | null, today: ISODate) {
   return -20
 }
 
-export function topJobScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
+function score(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
   return importanceScore(o.task, categories) + urgencyScore(o.due_date, today)
 }
 
 /**
- * The tasks that most need doing: everything due today (or overdue) comes
- * first, then how important they sound plus how soon they're due.
+ * Every task's hidden score, most pressing first: anything flagged Urgent, then
+ * everything due today (or overdue), then how important it sounds plus how soon it's due.
  */
-export function topJobs<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, limit = 5): T[] {
-  const dueNow = (o: T) => Number(o.due_date !== null && o.due_date <= today)
+export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate): T[] {
+  const tier = (o: T) => (o.task.priority === 'urgent' ? 2 : o.due_date !== null && o.due_date <= today ? 1 : 0)
   return items
-    .map((item) => ({ item, score: topJobScore(item, categories, today) }))
-    .sort((a, b) => dueNow(b.item) - dueNow(a.item) || b.score - a.score || compareOccurrences(a.item, b.item))
-    .slice(0, limit)
+    .map((item) => ({ item, tier: tier(item), score: score(item, categories, today) }))
+    .sort((a, b) => b.tier - a.tier || b.score - a.score || compareOccurrences(a.item, b.item))
     .map(({ item }) => item)
+}
+
+export function topJobs<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, limit = 5): T[] {
+  return byScore(items, categories, today).slice(0, limit)
 }

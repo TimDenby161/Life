@@ -29,10 +29,9 @@ import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
-import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
 import { splitShopping } from '@/modules/tasks/lib/shopping'
-import { topJobs } from '@/modules/tasks/lib/topJobs'
+import { byScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
@@ -364,9 +363,11 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
       day,
       slot: i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day${i}`,
       label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'),
-      items: rest
-        .filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day))
-        .toSorted(compareOccurrences),
+      items: byScore(
+        rest.filter((o) => o.due_date && (i === 0 ? o.due_date <= today : o.due_date === day)),
+        categories,
+        today,
+      ),
     }
   })
   return (
@@ -385,7 +386,7 @@ function DaysCard({ open, items, filter }: ReturnType<typeof useOccurrencesFor> 
           <>
             {shopping.length ? (
               <TaskGroup id="day-shopping" level={1} label="Shopping" count={shopping.length} open={expanded.has('shopping')} onToggle={() => toggle('shopping')}>
-                {renderRows(shopping.toSorted(compareOccurrences), false)}
+                {renderRows(byScore(shopping, categories, today), false)}
               </TaskGroup>
             ) : null}
             {days.map(({ day, slot, label, items: dayItems }) => (

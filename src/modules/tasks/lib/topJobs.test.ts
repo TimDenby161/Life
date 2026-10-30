@@ -31,7 +31,7 @@ describe('topJobs', () => {
 
   it('puts anything due today or overdue ahead of more important tasks due later', () => {
     const items = [
-      occ('Renew the car insurance', '2026-10-31', { priority: 'urgent' }),
+      occ('Renew the car insurance', '2026-10-31', { priority: 'high' }),
       occ('Sort the loft', today),
       occ('Clean the oven', '2026-09-01', { recurrence: { afterDone: true } }),
     ]
@@ -70,6 +70,11 @@ describe('topJobs', () => {
   it('keeps tasks due today ahead of a heavily up-voted task due later', () => {
     const items = [occ('Sort the loft', '2026-11-05', { importance_votes: 10 }), occ('Sort the shed', today)]
     expect(titles(topJobs(items, categories, today))[0]).toBe('Sort the shed')
+  })
+
+  it('puts a task flagged Urgent first, even ahead of tasks due today', () => {
+    const items = [occ('Pay the bill', today), occ('Sort the loft', '2026-11-20', { priority: 'urgent' }), occ('Sort the shed', null)]
+    expect(titles(topJobs(items, categories, today))).toEqual(['Sort the loft', 'Pay the bill', 'Sort the shed'])
   })
 
   it('does not match words inside other words', () => {
