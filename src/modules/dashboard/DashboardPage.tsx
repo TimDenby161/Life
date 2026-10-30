@@ -85,15 +85,12 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
         </div>
-        <Button variant="outline" onClick={() => setComposing(true)}>
-          <MessageSquarePlus /> Message
-        </Button>
       </header>
 
       {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <TopJobsCard adding={adding} onToggleAdding={() => setAdding(!adding)} />
+        <TopJobsCard adding={adding} onToggleAdding={() => setAdding(!adding)} onMessage={() => setComposing(true)} />
         <DaysCard
           open={open}
           items={items}
@@ -258,7 +255,7 @@ function CardLink({ to, label }: { to: string; label: string }) {
 }
 
 /** The five open tasks that most need doing, for one of us or for both together. */
-function TopJobsCard({ adding, onToggleAdding }: { adding: boolean; onToggleAdding: () => void }) {
+function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; onToggleAdding: () => void; onMessage: () => void }) {
   const { me, partner } = useHousehold()
   const views = useViewOptions()
   const [who, setWho] = useState(me.id)
@@ -273,9 +270,14 @@ function TopJobsCard({ adding, onToggleAdding }: { adding: boolean; onToggleAddi
     <Card className="md:col-span-2 xl:col-span-3">
       <CardHeader>
         <CardTitle>Top jobs</CardTitle>
-        <Button size="icon-sm" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={onToggleAdding}>
-          {adding ? <X /> : <Plus />}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="icon-sm" variant="outline" aria-label="Message" title="Message" onClick={onMessage}>
+            <MessageSquarePlus />
+          </Button>
+          <Button size="icon-sm" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={onToggleAdding}>
+            {adding ? <X /> : <Plus />}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
         {partner ? (
