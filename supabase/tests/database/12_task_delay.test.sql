@@ -2,7 +2,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(10);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -55,8 +55,9 @@ update tasks set importance_votes = -9 where id = current_setting('t.task')::uui
 select pg_temp.as_user(current_setting('t.tim')::uuid);
 select is((select importance_votes from tasks where id = current_setting('t.task')::uuid), 2, 'an outsider cannot');
 
-update tasks set subtasks_collapsed = true where id = current_setting('t.task')::uuid;
-select is((select subtasks_collapsed from tasks where id = current_setting('t.task')::uuid), true, 'a member can minimise a task''s subtasks');
+select is((select subtasks_collapsed from tasks where id = current_setting('t.task')::uuid), true, 'subtasks start minimised');
+update tasks set subtasks_collapsed = false where id = current_setting('t.task')::uuid;
+select is((select subtasks_collapsed from tasks where id = current_setting('t.task')::uuid), false, 'a member can open a task''s subtasks');
 
 select * from finish();
 rollback;
