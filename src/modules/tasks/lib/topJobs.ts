@@ -22,6 +22,9 @@ const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 
 const VOTE_POINTS = 15
 const EVENING_STARTS = 16
 const POINTS_PER_EVENING_HOUR = 10
+const BEDTIME = 22
+const DAILY_SCORE_AT_BEDTIME = 100
+const POINTS_PER_BEDTIME_HOUR = 15
 const DEADLINE_DAY_SCORE = 195
 const DEADLINE_MISSED_SCORE = 200
 const DEADLINE_RUN_UP_DAYS = 7
@@ -77,11 +80,20 @@ function urgencyScore(dueDate: ISODate | null, today: ISODate) {
   return -20
 }
 
+function isDailyAndDue(o: Scorable, today: ISODate) {
+  const rule = o.task.recurrence as { freq?: string; interval?: number } | null | undefined
+  return rule?.freq === 'daily' && (rule.interval ?? 1) === 1 && Boolean(o.due_date) && o.due_date! <= today
+}
+
 /** A daily task can't wait for tomorrow, so it climbs every hour from 5pm until it's done. */
 function endOfDayScore(o: Scorable, today: ISODate, hour: number) {
-  const rule = o.task.recurrence as { freq?: string; interval?: number } | null | undefined
-  if (rule?.freq !== 'daily' || (rule.interval ?? 1) !== 1 || !o.due_date || o.due_date > today) return 0
-  return Math.max(0, hour - EVENING_STARTS) * POINTS_PER_EVENING_HOUR
+  return isDailyAndDue(o, today) ? Math.max(0, hour - EVENING_STARTS) * POINTS_PER_EVENING_HOUR : 0
+}
+
+/** However low it started, an unfinished daily task reaches 100 by 10pm. */
+function endOfDayFloor(o: Scorable, today: ISODate, hour: number) {
+  if (!isDailyAndDue(o, today) || hour <= EVENING_STARTS) return null
+  return DAILY_SCORE_AT_BEDTIME + (hour - BEDTIME) * POINTS_PER_BEDTIME_HOUR
 }
 
 function categoryName(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
@@ -119,7 +131,7 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
 
 function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
   const score = importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
-  return Math.max(score, deadlineScore(o, categories, today) ?? score)
+  return Math.max(score, deadlineScore(o, categories, today) ?? score, endOfDayFloor(o, today, hour) ?? score)
 }
 
 /** A subtask scores like its task, on its own date if it has one. */

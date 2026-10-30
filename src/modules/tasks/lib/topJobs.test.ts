@@ -118,11 +118,18 @@ describe('end of the day', () => {
 
   it('leaves a daily task alone until the evening, then climbs each hour', () => {
     const task = occ('Sort the loft', today, daily)
-    expect([9, 16, 17, 20, 23].map((h) => score(task, h) - score(task, 9))).toEqual([0, 0, 10, 40, 70])
+    expect([9, 16, 17, 20, 22, 23].map((h) => score(task, h))).toEqual([25, 25, 35, 70, 100, 115])
+  })
+  it('gets a low daily task to 100 by 10pm', () => {
+    const stretch = occ('Stretch', today, { recurrence: { freq: 'daily', afterDone: true } })
+    expect(score(stretch, 22)).toBeGreaterThanOrEqual(100)
+  })
+  it('keeps a daily task that is already over the minimum', () => {
+    expect(score(occ('Pay the bill', today, { ...daily, priority: 'urgent' }), 22)).toBe(175)
   })
   it('still counts a daily task left over from yesterday', () => {
     const task = occ('Sort the loft', '2026-10-29', daily)
-    expect(score(task, 23) - score(task, 9)).toBe(70)
+    expect(score(task, 22)).toBe(100)
   })
   it('skips weekly tasks, every-other-day tasks and one-offs, and daily tasks due later', () => {
     const tasks = [
