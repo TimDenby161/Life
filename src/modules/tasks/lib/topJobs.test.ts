@@ -142,8 +142,8 @@ describe('end of the day', () => {
     for (const task of tasks) expect(score(task, 23)).toBe(score(task, 9))
   })
   it('lets a daily task overtake a bigger task late in the evening', () => {
-    const items = [occ('Pay the bill', today, { recurrence: { freq: 'weekly' } }), occ('Sort the loft', today, daily)]
-    expect(titles(byScore(items, categories, today, 9))[0]).toBe('Pay the bill')
+    const items = [occ('Fix the shed', today, { recurrence: { freq: 'weekly' } }), occ('Sort the loft', today, daily)]
+    expect(titles(byScore(items, categories, today, 9))[0]).toBe('Fix the shed')
     expect(titles(byScore(items, categories, today, 23))[0]).toBe('Sort the loft')
   })
 })
@@ -196,8 +196,18 @@ describe('due dates', () => {
     const items = [occ('Confirm timings and final payments with suppliers', '2028-08-01'), occ('Book the venue', '2027-01-01')]
     expect(titles(topJobs(items, categories, today))[0]).toBe('Book the venue')
   })
-  it('leaves repeating tasks on their own scale', () => {
-    expect(score(today, { recurrence: { freq: 'weekly' } })).toBe(25)
+  it('scores a repeating job on how far through its cycle it is', () => {
+    const everyThreeWeeks = { recurrence: { freq: 'weekly', interval: 3 } }
+    expect(['2026-11-20', '2026-11-09', '2026-10-31', today, '2026-10-20'].map((d) => score(d, everyThreeWeeks))).toEqual([-11, 14, 78, 85, 95])
+  })
+  it('does not let a six-monthly job climb weeks ahead', () => {
+    expect(score('2026-11-19', { recurrence: { freq: 'monthly', interval: 6 } })).toBe(-11)
+  })
+  it('counts a longer cycle further along than a short one with the same days left', () => {
+    expect(score('2026-11-02', { recurrence: { freq: 'monthly', interval: 2 } })).toBeGreaterThan(score('2026-11-02', { recurrence: { freq: 'weekly' } }))
+  })
+  it('still puts a one-off due today above a repeating job due today', () => {
+    expect(score(today)).toBeGreaterThan(score(today, { recurrence: { freq: 'weekly' } }))
   })
 })
 

@@ -33,6 +33,8 @@ const BIRTHDAY_RUN_UP_DAYS = 14
 const BIRTHDAY_POINTS_PER_DAY = 14
 const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
 const DUE_DAY_SCORE = 100
+const MAX_CYCLE_RUN_UP_DAYS = 14
+const CYCLE_DAYS: Record<string, number> = { weekly: 7, monthly: 30, yearly: 365 }
 const FAR_OFF_POINTS_PER_MONTH = 5
 const DUE_RUN_UP_DAYS = 7
 const DUE_POINTS_PER_DAY = 10
@@ -91,10 +93,30 @@ function oneOffUrgency(days: number) {
   return days <= DUE_RUN_UP_DAYS ? DUE_DAY_SCORE - days * DUE_POINTS_PER_DAY : farOffUrgency(days)
 }
 
+/** How many days a repeating task's cycle runs, for anything from weekly up. */
+function cycleDays(recurrence: unknown) {
+  const rule = recurrence as { freq?: string; interval?: number } | null | undefined
+  const days = rule?.freq ? CYCLE_DAYS[rule.freq] : undefined
+  return days ? days * (rule?.interval ?? 1) : null
+}
+
+/**
+ * How far through its cycle a job is: just done is 0, and it reaches 100 when it
+ * comes due. Long cycles only count their last fortnight, so a six-monthly job
+ * doesn't look pressing weeks ahead.
+ */
+function cycleUrgency(days: number, cycle: number) {
+  if (days < 0) return DUE_DAY_SCORE + Math.min(-days, 14)
+  const runUp = Math.min(cycle, MAX_CYCLE_RUN_UP_DAYS)
+  return days <= runUp ? Math.round(DUE_DAY_SCORE * (1 - days / runUp)) : farOffUrgency(days)
+}
+
 function urgencyScore(o: Scorable, today: ISODate) {
   if (!o.due_date) return 0
   const days = daysBetween(today, o.due_date)
-  return o.task.recurrence ? repeatingUrgency(days) : oneOffUrgency(days)
+  if (!o.task.recurrence) return oneOffUrgency(days)
+  const cycle = cycleDays(o.task.recurrence)
+  return cycle ? cycleUrgency(days, cycle) : repeatingUrgency(days)
 }
 
 /** Nothing talks a one-off task below 100 once its day has come. */
