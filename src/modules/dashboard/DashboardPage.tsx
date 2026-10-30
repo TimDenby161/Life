@@ -31,6 +31,7 @@ import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { compareOccurrences } from '@/modules/tasks/lib/format'
 import { ownerOf } from '@/modules/tasks/lib/owner'
+import { topJobs } from '@/modules/tasks/lib/topJobs'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
 import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
@@ -87,6 +88,7 @@ export default function DashboardPage() {
       <AddTask />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <TopJobsCard open={open} items={items} />
         <DaysCard
           open={open}
           items={items}
@@ -250,6 +252,50 @@ function CardLink({ to, label }: { to: string; label: string }) {
     <Link to={to} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
       {label} <ArrowRight className="size-3" />
     </Link>
+  )
+}
+
+/** The five open tasks that most need doing, for whoever the Tasks card's toggle is showing. */
+function TopJobsCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
+  const lists = useTaskLists().data ?? []
+  const categories = useTaskCategories().data ?? []
+  const complete = useCompleteOccurrence()
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  const opener = useTaskOpener(categories, lists, setOpenTaskId)
+  const top = topJobs(items ?? [], categories, todayISO())
+  return (
+    <Card className="md:col-span-2 xl:col-span-3">
+      <CardHeader>
+        <CardTitle>Top jobs</CardTitle>
+      </CardHeader>
+      <CardContent className="px-2 sm:px-3">
+        {open.isPending ? (
+          <ListSkeleton rows={5} className="px-2" />
+        ) : open.error ? (
+          <ErrorState error={open.error} onRetry={() => open.refetch()} />
+        ) : !top.length ? (
+          <p className="flex items-center gap-2 px-2 pb-2 text-sm text-muted-foreground">
+            <CheckCircle2 className="size-4 text-success" /> Nothing to do
+          </p>
+        ) : (
+          <ul>
+            {top.map((o) => (
+              <TaskRow
+                key={o.id}
+                occurrence={o}
+                lists={lists}
+                categories={categories}
+                showList
+                onOpen={() => opener.open(o)}
+                onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
+              />
+            ))}
+          </ul>
+        )}
+      </CardContent>
+      <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+      {opener.dialogs}
+    </Card>
   )
 }
 
