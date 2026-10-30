@@ -213,6 +213,10 @@ export function useSubtaskMutations(taskId: string) {
       },
       onSettled: invalidate,
     }),
+    setDate: useMutation({
+      mutationFn: ({ id, dueDate }: { id: string; dueDate: string | null }) => api.setSubtaskDate(id, dueDate),
+      onSuccess: invalidate,
+    }),
     remove: useMutation({ mutationFn: api.deleteSubtask, onSuccess: invalidate }),
   }
 }

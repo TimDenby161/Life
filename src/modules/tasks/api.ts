@@ -10,7 +10,7 @@ export type TaskOccurrence = Tables<'task_occurrences'>
 export type CompletionEvent = Tables<'task_completion_events'>
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 
-const OCCURRENCE_WITH_TASK = '*, task:tasks!inner(*, subtasks:task_subtasks(id, title, is_done, sort_order))'
+const OCCURRENCE_WITH_TASK = '*, task:tasks!inner(*, subtasks:task_subtasks(id, title, is_done, sort_order, due_date))'
 
 export type OccurrenceWithTask = Awaited<ReturnType<typeof fetchOpenOccurrences>>[number]
 
@@ -208,6 +208,10 @@ export async function delayOccurrence(
 
 export async function addSubtask(householdId: string, taskId: string, title: string, sortOrder: number) {
   unwrap(await supabase.from('task_subtasks').insert({ household_id: householdId, task_id: taskId, title, sort_order: sortOrder }))
+}
+
+export async function setSubtaskDate(id: string, dueDate: ISODate | null) {
+  unwrap(await supabase.from('task_subtasks').update({ due_date: dueDate }).eq('id', id))
 }
 
 export async function setSubtaskDone(id: string, isDone: boolean) {

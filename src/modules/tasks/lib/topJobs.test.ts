@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { byScore, delayDaysFor, isOutOfHours, taskScore, topJobs } from './topJobs'
+import { byScore, delayDaysFor, isOutOfHours, subtaskScore, taskScore, topJobs } from './topJobs'
 
 const today = '2026-10-30'
 const categories = [
@@ -209,6 +209,30 @@ describe('birthdays', () => {
   })
   it('leaves other deadlines climbing from lower down', () => {
     expect(score('Sort the loft', '2026-12-25', { deadline: '2026-11-06' })).toBe(55)
+  })
+})
+
+describe('subtasks', () => {
+  const sub = (due_date: string | null, is_done = false) => ({ is_done, due_date })
+  const presents = (subtasks: ReturnType<typeof sub>[]) => ({ ...occ('Presents', '2026-11-20'), task: { ...occ('Presents', '2026-11-20').task, subtasks } })
+  const score = (subtasks: ReturnType<typeof sub>[]) => taskScore(presents(subtasks), categories, today, 10)
+
+  it('scores each subtask on its own date', () => {
+    const task = presents([])
+    expect(subtaskScore(task, sub(today), categories, today, 10)).toBe(195)
+    expect(subtaskScore(task, sub('2026-11-06'), categories, today, 10)).toBe(97)
+  })
+  it('falls back to the task date without one', () => {
+    expect(subtaskScore(presents([]), sub(null), categories, today, 10)).toBe(taskScore(presents([]), categories, today, 10))
+  })
+  it('gives the task the highest subtask score, not a total', () => {
+    expect(score([sub(today), sub('2026-11-06'), sub('2026-11-06')])).toBe(195)
+  })
+  it('drops to the next one once the highest is ticked', () => {
+    expect(score([sub(today, true), sub('2026-11-06'), sub('2026-11-03')])).toBe(139)
+  })
+  it('goes back to its own score when every subtask is done', () => {
+    expect(score([sub(today, true)])).toBe(taskScore(presents([]), categories, today, 10))
   })
 })
 

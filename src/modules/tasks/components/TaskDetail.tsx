@@ -359,7 +359,7 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
 }
 
 function Subtasks({ taskId, subtasks }: { taskId: string; subtasks: DetailData['subtasks'] }) {
-  const { add, toggle, remove } = useSubtaskMutations(taskId)
+  const { add, toggle, setDate, remove } = useSubtaskMutations(taskId)
   const [title, setTitle] = useState('')
   return (
     <section aria-label="Subtasks" className="grid gap-1.5">
@@ -372,7 +372,14 @@ function Subtasks({ taskId, subtasks }: { taskId: string; subtasks: DetailData['
               onCheckedChange={(v) => toggle.mutate({ id: s.id, isDone: v === true })}
               aria-label={s.title}
             />
-            <span className={cn('flex-1 text-sm', s.is_done && 'text-muted-foreground line-through')}>{s.title}</span>
+            <span className={cn('min-w-0 flex-1 text-sm', s.is_done && 'text-muted-foreground line-through')}>{s.title}</span>
+            <Input
+              type="date"
+              aria-label={`${s.title} date`}
+              className="h-8 w-auto text-xs"
+              value={s.due_date ?? ''}
+              onChange={(e) => setDate.mutate({ id: s.id, dueDate: e.target.value || null })}
+            />
             <button
               type="button"
               className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100"

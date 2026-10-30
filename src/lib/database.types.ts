@@ -1758,6 +1758,7 @@ export type Database = {
           created_at: string
           done_at: string | null
           done_by: string | null
+          due_date: string | null
           household_id: string
           id: string
           is_done: boolean
@@ -1769,6 +1770,7 @@ export type Database = {
           created_at?: string
           done_at?: string | null
           done_by?: string | null
+          due_date?: string | null
           household_id: string
           id?: string
           is_done?: boolean
@@ -1780,6 +1782,7 @@ export type Database = {
           created_at?: string
           done_at?: string | null
           done_by?: string | null
+          due_date?: string | null
           household_id?: string
           id?: string
           is_done?: boolean

@@ -2,10 +2,12 @@ import { daysBetween, type ISODate } from '@/lib/dates'
 import type { TaskCategory } from '../api'
 import { compareOccurrences, delayDays } from './format'
 
+type Subtask = { is_done: boolean; due_date?: string | null }
+
 type Scorable = {
   due_date: string | null
   due_time: string | null
-  task: { title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null }
+  task: { subtasks?: Subtask[]; title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null }
 }
 
 // How important a task sounds, from its words. Each tier counts once however many words match.
@@ -114,9 +116,21 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
   return DEADLINE_DAY_SCORE - days * (birthday ? BIRTHDAY_POINTS_PER_DAY : DEADLINE_POINTS_PER_DAY)
 }
 
-export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
+function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
   const score = importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
   return Math.max(score, deadlineScore(o, categories, today) ?? score)
+}
+
+/** A subtask scores like its task, on its own date if it has one. */
+export function subtaskScore(o: Scorable, subtask: Subtask, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
+  return ownScore({ ...o, due_date: subtask.due_date ?? o.due_date }, categories, today, hour)
+}
+
+/** A task with subtasks left is as pressing as the most pressing of them. */
+export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
+  const left = o.task.subtasks?.filter((s) => !s.is_done) ?? []
+  if (!left.length) return ownScore(o, categories, today, hour)
+  return Math.max(...left.map((s) => subtaskScore(o, s, categories, today, hour)))
 }
 
 /** Highest score first. */

@@ -8,7 +8,7 @@ import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
 import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
 import { delayLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
-import { delayDaysFor, taskScore } from '../lib/topJobs'
+import { delayDaysFor, subtaskScore, taskScore } from '../lib/topJobs'
 import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
@@ -131,15 +131,20 @@ export function ImportanceVote({ taskId, title, votes, className }: { taskId: st
   )
 }
 
-/** The individual jobs inside a bigger task, tickable without opening it. */
-function SubtaskList({ taskId, subtasks }: { taskId: string; subtasks: OccurrenceWithTask['task']['subtasks'] }) {
-  const { toggle } = useSubtaskMutations(taskId)
+/** The individual jobs inside a bigger task, most pressing first, tickable without opening it. */
+function SubtaskList({ occurrence, categories }: { occurrence: OccurrenceWithTask; categories: TaskCategory[] }) {
+  const { toggle } = useSubtaskMutations(occurrence.task_id)
+  const today = todayISO()
+  const rows = occurrence.task.subtasks
+    .map((s) => ({ ...s, score: subtaskScore(occurrence, s, categories, today) }))
+    .toSorted((a, b) => Number(a.is_done) - Number(b.is_done) || b.score - a.score || a.sort_order - b.sort_order)
   return (
     <ul className="grid gap-0.5 px-3 pb-2 pl-5">
-      {subtasks.toSorted((a, b) => a.sort_order - b.sort_order).map((s) => (
+      {rows.map((s) => (
         <li key={s.id} className="flex items-center gap-2.5 py-1">
           <Checkbox checked={s.is_done} onCheckedChange={(v) => toggle.mutate({ id: s.id, isDone: v === true })} aria-label={s.title} />
           <span className={cn('min-w-0 flex-1 text-sm', s.is_done && 'text-muted-foreground line-through')}>{s.title}</span>
+          {s.is_done ? null : <span className="text-xs tabular text-muted-foreground">{s.score}</span>}
         </li>
       ))}
     </ul>
@@ -283,7 +288,7 @@ export function TaskRow({
           <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
         )}
       </div>
-      {showSubtasks && subtasks.length > 0 && !done ? <SubtaskList taskId={occurrence.task_id} subtasks={subtasks} /> : null}
+      {showSubtasks && subtasks.length > 0 && !done ? <SubtaskList occurrence={occurrence} categories={categories} /> : null}
     </li>
   )
 }
