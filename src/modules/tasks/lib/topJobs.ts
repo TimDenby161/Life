@@ -33,6 +33,7 @@ const BIRTHDAY_RUN_UP_DAYS = 14
 const BIRTHDAY_POINTS_PER_DAY = 14
 const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
 const DUE_DAY_SCORE = 100
+const FAR_OFF_POINTS_PER_MONTH = 5
 const DUE_RUN_UP_DAYS = 7
 const DUE_POINTS_PER_DAY = 10
 const WORK_POINTS = 40
@@ -70,21 +71,24 @@ function importanceScore(task: Scorable['task'], categories: Pick<TaskCategory, 
   )
 }
 
+/** Further off counts for less, a little more each month, so distant tasks sort by date whatever their wording. */
+function farOffUrgency(days: number) {
+  return days <= 30 ? 4 : -20 - Math.floor((days - 30) / 30) * FAR_OFF_POINTS_PER_MONTH
+}
+
 /** Overdue edges past due today, but only a little: importance still counts for more. */
 function repeatingUrgency(days: number) {
   if (days < 0) return 40 + Math.min(-days, 14)
   if (days === 0) return 40
   if (days === 1) return 30
   if (days <= 3) return 22
-  if (days <= 7) return 12
-  return days <= 30 ? 4 : -20
+  return days <= 7 ? 12 : farOffUrgency(days)
 }
 
 /** The date someone picks for a one-off task is the day it reaches 100, after a week's climb. */
 function oneOffUrgency(days: number) {
   if (days < 0) return DUE_DAY_SCORE + Math.min(-days, 14)
-  if (days <= DUE_RUN_UP_DAYS) return DUE_DAY_SCORE - days * DUE_POINTS_PER_DAY
-  return days <= 30 ? 4 : -20
+  return days <= DUE_RUN_UP_DAYS ? DUE_DAY_SCORE - days * DUE_POINTS_PER_DAY : farOffUrgency(days)
 }
 
 function urgencyScore(o: Scorable, today: ISODate) {

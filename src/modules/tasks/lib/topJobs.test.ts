@@ -189,6 +189,13 @@ describe('due dates', () => {
   it('adds importance on top', () => {
     expect(taskScore(occ('Pay the bill', today), categories, today, 10)).toBe(140)
   })
+  it('lowers a task the further off it is', () => {
+    expect(['2026-11-20', '2026-12-25', '2027-01-30', '2027-04-30'].map((d) => score(d))).toEqual([4, -20, -30, -45])
+  })
+  it('puts a nearer task above a distant one, whatever its wording', () => {
+    const items = [occ('Confirm timings and final payments with suppliers', '2028-08-01'), occ('Book the venue', '2027-01-01')]
+    expect(titles(topJobs(items, categories, today))[0]).toBe('Book the venue')
+  })
   it('leaves repeating tasks on their own scale', () => {
     expect(score(today, { recurrence: { freq: 'weekly' } })).toBe(25)
   })
