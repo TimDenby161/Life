@@ -190,6 +190,28 @@ describe('hard deadlines', () => {
   })
 })
 
+describe('birthdays', () => {
+  const score = (title: string, due: string, task = {}) => taskScore(occ(title, due, task), categories, today, 10)
+
+  it('sits around 100 a week out and climbs to 195 on the day', () => {
+    const days = ['2026-11-06', '2026-11-03', '2026-10-31', today]
+    expect(days.map((d) => score('Buy birthday present for Mum', d))).toEqual([97, 139, 181, 195])
+  })
+  it('counts presents and gifts too', () => {
+    expect(score('Presents', '2026-11-06')).toBe(97)
+    expect(score('Gift for Toby', '2026-11-06')).toBe(97)
+  })
+  it('does nothing earlier than a week out', () => {
+    expect(score('Buy birthday present for Mum', '2026-11-07')).toBe(score('Sort the loft', '2026-11-07') + 25)
+  })
+  it('uses the deadline when there is one', () => {
+    expect(score('Presents', '2026-12-25', { deadline: '2026-11-06' })).toBe(97)
+  })
+  it('leaves other deadlines climbing from lower down', () => {
+    expect(score('Sort the loft', '2026-12-25', { deadline: '2026-11-06' })).toBe(55)
+  })
+})
+
 describe('delayDaysFor', () => {
   const after = (delay_count: number, title: string, task = {}) => delayDaysFor({ delay_count, ...occ(title, today, task) }, categories)
 

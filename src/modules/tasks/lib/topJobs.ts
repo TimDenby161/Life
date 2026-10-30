@@ -24,6 +24,8 @@ const DEADLINE_DAY_SCORE = 195
 const DEADLINE_MISSED_SCORE = 200
 const DEADLINE_RUN_UP_DAYS = 7
 const DEADLINE_POINTS_PER_DAY = 20
+const BIRTHDAY_POINTS_PER_DAY = 14
+const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
 const WORK_POINTS = 40
 const LUNCH_POINTS = 30
 const WORK_HOURS = { from: 8, to: 17 }
@@ -97,17 +99,24 @@ export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCatego
   return WORK_CATEGORY.test(categoryName(task, categories)) && !within(WORK_HOURS, hour)
 }
 
-/** In the last week before a hard deadline the score climbs towards 200, whatever else it would be. */
-function deadlineScore(deadline: ISODate | null | undefined, today: ISODate) {
+/**
+ * In the last week before a hard deadline the score climbs towards 200, whatever
+ * else it would be. A birthday's date can't move either, so its due date counts
+ * as a deadline, and it starts higher: around 100 a week out.
+ */
+function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate) {
+  const birthday = BIRTHDAY.test(taskText(o.task, categories))
+  const deadline = o.task.deadline ?? (birthday ? o.due_date : null)
   if (!deadline) return null
   const days = daysBetween(today, deadline)
   if (days < 0) return DEADLINE_MISSED_SCORE
-  return days <= DEADLINE_RUN_UP_DAYS ? DEADLINE_DAY_SCORE - days * DEADLINE_POINTS_PER_DAY : null
+  if (days > DEADLINE_RUN_UP_DAYS) return null
+  return DEADLINE_DAY_SCORE - days * (birthday ? BIRTHDAY_POINTS_PER_DAY : DEADLINE_POINTS_PER_DAY)
 }
 
 export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
   const score = importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
-  return Math.max(score, deadlineScore(o.task.deadline, today) ?? score)
+  return Math.max(score, deadlineScore(o, categories, today) ?? score)
 }
 
 /** Highest score first. */
