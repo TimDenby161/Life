@@ -94,7 +94,7 @@ export default function DashboardPage() {
       {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <TopJobsCard open={open} items={items} />
+        <TopJobsCard />
         <DaysCard
           open={open}
           items={items}
@@ -255,8 +255,11 @@ function CardLink({ to, label }: { to: string; label: string }) {
   )
 }
 
-/** The five open tasks that most need doing, for whoever the Tasks card's toggle is showing. */
-function TopJobsCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
+/** The five open tasks that most need doing, for one of us plus the joint ones. */
+function TopJobsCard() {
+  const { me, partner } = useHousehold()
+  const [who, setWho] = useState(me.id)
+  const { open, items } = useOccurrencesFor(who)
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
@@ -269,6 +272,19 @@ function TopJobsCard({ open, items }: ReturnType<typeof useOccurrencesFor>) {
         <CardTitle>Top jobs</CardTitle>
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
+        {partner ? (
+          <Segmented
+            aria-label="Whose top jobs"
+            size="sm"
+            className="mx-1 mb-2 sm:mx-2"
+            value={who}
+            onChange={setWho}
+            options={[
+              { value: me.id, label: `${me.display_name} + Joint` },
+              { value: partner.id, label: `${partner.display_name} + Joint` },
+            ]}
+          />
+        ) : null}
         {open.isPending ? (
           <ListSkeleton rows={5} className="px-2" />
         ) : open.error ? (
