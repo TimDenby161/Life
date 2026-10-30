@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Trophy, Wallet } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, MessageSquarePlus, MessagesSquare, Plus, Trophy, Wallet, X } from 'lucide-react'
 import { type ReactNode, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const dueToday = (items ?? []).filter((o) => o.due_date === today)
   const overdue = (items ?? []).filter((o) => o.due_date && o.due_date < today)
   const [composing, setComposing] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   const summary = open.data
     ? [
@@ -80,12 +81,17 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
         </div>
-        <Button variant="outline" onClick={() => setComposing(true)}>
-          <MessageSquarePlus /> Message
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setComposing(true)}>
+            <MessageSquarePlus /> Message
+          </Button>
+          <Button size="icon" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={() => setAdding(!adding)}>
+            {adding ? <X /> : <Plus />}
+          </Button>
+        </div>
       </header>
 
-      <AddTask />
+      {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <TopJobsCard open={open} items={items} />
@@ -127,7 +133,7 @@ export default function DashboardPage() {
  * Adding from Home always asks who, which category and when. A person's task
  * goes on their own list (so it shows as theirs); joint ones on the joint list.
  */
-function AddTask() {
+function AddTask({ onAdded }: { onAdded: () => void }) {
   const { members } = useHousehold()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
@@ -173,14 +179,7 @@ function AddTask() {
               description: null,
               recurrence: null,
             },
-            {
-              onSuccess: () => {
-                setTitle('')
-                setWho('')
-                setCategoryId('')
-                setDueDate('')
-              },
-            },
+            { onSuccess: onAdded },
           )
         }}
       >
@@ -189,6 +188,7 @@ function AddTask() {
           <Input
             aria-label="New task"
             placeholder="Add a task…"
+            autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="h-11 rounded-full pl-10"
