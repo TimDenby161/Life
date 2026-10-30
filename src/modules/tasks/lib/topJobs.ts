@@ -20,10 +20,15 @@ const PRIORITY_POINTS: Record<string, number> = { urgent: 50, high: 25, normal: 
 const VOTE_POINTS = 15
 const EVENING_STARTS = 16
 const POINTS_PER_EVENING_HOUR = 10
+const WORK_POINTS = 40
+const LUNCH_POINTS = 30
+const WORK_HOURS = { from: 8, to: 17 }
+const LUNCH_HOURS = { from: 12, to: 14 }
+const WORK_CATEGORY = /^c4\b/i
+const LUNCH_CATEGORIES = /^(cleaning|other)$/i
 
 function taskText(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
-  const category = categories.find((c) => c.id === task.category_id)?.name ?? ''
-  return [task.title, task.description, category].filter(Boolean).join(' ')
+  return [task.title, task.description, categoryName(task, categories)].filter(Boolean).join(' ')
 }
 
 /** Our own votes settle it; without any, the flag and the wording decide. */
@@ -69,8 +74,26 @@ function endOfDayScore(o: Scorable, today: ISODate, hour: number) {
   return Math.max(0, hour - EVENING_STARTS) * POINTS_PER_EVENING_HOUR
 }
 
+function categoryName(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[]) {
+  return categories.find((c) => c.id === task.category_id)?.name ?? ''
+}
+
+const within = (hours: { from: number; to: number }, hour: number) => hour >= hours.from && hour < hours.to
+
+/** Work jobs matter in work hours; cleaning and anything uncategorised suit the lunch break. */
+function timeOfDayScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number) {
+  const category = categoryName(task, categories)
+  if (WORK_CATEGORY.test(category)) return within(WORK_HOURS, hour) ? WORK_POINTS : 0
+  return (!category || LUNCH_CATEGORIES.test(category)) && within(LUNCH_HOURS, hour) ? LUNCH_POINTS : 0
+}
+
+/** Work jobs stay out of sight outside work hours. */
+export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour = new Date().getHours()) {
+  return WORK_CATEGORY.test(categoryName(task, categories)) && !within(WORK_HOURS, hour)
+}
+
 export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()) {
-  return importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour)
+  return importanceScore(o.task, categories) + urgencyScore(o.due_date, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour)
 }
 
 /** Highest score first. */

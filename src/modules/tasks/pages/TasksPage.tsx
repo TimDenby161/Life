@@ -19,7 +19,7 @@ import { TaskForm } from '../components/TaskForm'
 import { TaskRow } from '../components/TaskRow'
 import { useTaskOpener } from '../components/useTaskOpener'
 import { inView, TOGETHER } from '../lib/owner'
-import { byScore } from '../lib/topJobs'
+import { byScore, isOutOfHours } from '../lib/topJobs'
 import { useCollapsedGroups } from '../lib/useCollapsedGroups'
 import {
   useCompleteOccurrence,
@@ -108,12 +108,13 @@ function TaskListView() {
   const allLists = lists.data ?? []
   const allCategories = categories.data ?? []
   const opener = useTaskOpener(allCategories, allLists, (taskId) => setParam('task', taskId))
-  const filter = (o: OccurrenceWithTask) => inView(o.task, who, allCategories, allLists)
+  const filter = (o: OccurrenceWithTask) => inView(o.task, who, allCategories, allLists) && !isOutOfHours(o.task, allCategories)
 
   const today = todayISO()
+  const hour = new Date().getHours()
   const visible = useMemo(
-    () => byScore((open.data ?? []).filter(filter), allCategories, today),
-    [open.data, who, allCategories, allLists, today],
+    () => byScore((open.data ?? []).filter(filter), allCategories, today, hour),
+    [open.data, who, allCategories, allLists, today, hour],
   )
   const sections = useMemo(() => groupBy(visible, (o) => sectionOf(o.due_date, today)), [visible, today])
   const recentDone = (done.data ?? []).filter(filter)

@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest'
-import { byScore, delayDaysFor, taskScore, topJobs } from './topJobs'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { byScore, delayDaysFor, isOutOfHours, taskScore, topJobs } from './topJobs'
 
 const today = '2026-10-30'
 const categories = [
   { id: 'finance', name: 'Finance' },
   { id: 'spanish', name: 'Spanish' },
   { id: 'general', name: 'General' },
+  { id: 'c4', name: 'C4 Logistics' },
+  { id: 'cleaning', name: 'Cleaning' },
+  { id: 'other', name: 'Other' },
 ]
+
+// The score moves with the time of day, so pin these to a quiet morning hour.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-30T10:00:00'))
+})
+afterAll(() => {
+  vi.useRealTimers()
+})
 
 function occ(title: string, due_date: string | null, task: Partial<{ priority: string; category_id: string; recurrence: unknown; description: string; importance_votes: number }> = {}) {
   return { due_date, due_time: null, task: { title, priority: 'normal', category_id: null, recurrence: null, ...task } }
@@ -125,6 +137,30 @@ describe('end of the day', () => {
     const items = [occ('Pay the bill', today), occ('Sort the loft', today, daily)]
     expect(titles(byScore(items, categories, today, 9))[0]).toBe('Pay the bill')
     expect(titles(byScore(items, categories, today, 23))[0]).toBe('Sort the loft')
+  })
+})
+
+describe('time of day', () => {
+  const gain = (category_id: string | null, hour: number) => {
+    const task = occ('Sort the loft', today, category_id ? { category_id } : {})
+    return taskScore(task, categories, today, hour) - taskScore(task, categories, today, 3)
+  }
+
+  it('raises work jobs from 8am until 5pm', () => {
+    expect([7, 8, 16, 17].map((h) => gain('c4', h))).toEqual([0, 40, 40, 0])
+  })
+  it('raises cleaning, other and uncategorised jobs from 12 until 2pm', () => {
+    expect([11, 12, 13, 14].map((h) => gain('cleaning', h))).toEqual([0, 30, 30, 0])
+    expect(gain('other', 13)).toBe(30)
+    expect(gain(null, 13)).toBe(30)
+  })
+  it('leaves other categories alone', () => {
+    expect([9, 13].map((h) => gain('general', h))).toEqual([0, 0])
+  })
+  it('hides work jobs outside work hours only', () => {
+    const task = (category_id: string) => occ('Sort the loft', today, { category_id }).task
+    expect([7, 8, 16, 17, 23].map((h) => isOutOfHours(task('c4'), categories, h))).toEqual([true, false, false, true, true])
+    expect(isOutOfHours(task('cleaning'), categories, 23)).toBe(false)
   })
 })
 

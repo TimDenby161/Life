@@ -31,18 +31,18 @@ import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { splitShopping } from '@/modules/tasks/lib/shopping'
-import { byScore, topJobs } from '@/modules/tasks/lib/topJobs'
+import { byScore, isOutOfHours, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { useCollapsedGroups } from '@/modules/tasks/lib/useCollapsedGroups'
 import { categorySubgroups } from '@/modules/tasks/pages/TasksPage'
 
-/** Open tasks for one view: what a person could do, or what takes both of us. A task waiting on another stays off Home. */
+/** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
 function useOccurrencesFor(view: string) {
   const open = useOpenOccurrences()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
-  const items = open.data?.filter((o) => inView(o.task, view, categories, lists) && !waitingOnTitle(o.task, open.data))
+  const items = open.data?.filter((o) => inView(o.task, view, categories, lists) && !waitingOnTitle(o.task, open.data) && !isOutOfHours(o.task, categories))
   return { open, items }
 }
 
