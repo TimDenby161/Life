@@ -1,12 +1,11 @@
 import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
-import { useState } from 'react'
 import { Checkbox } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { useDelayOccurrence, useSubtaskMutations, useVoteImportance } from '../hooks'
+import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations } from '../hooks'
 import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
@@ -106,7 +105,7 @@ export function WhoDidIt({
 
 /** Two arrows: is this more or less important? Lit up whichever way the votes lean. */
 export function ImportanceVote({ taskId, title, votes, className }: { taskId: string; title: string; votes: number; className?: string }) {
-  const vote = useVoteImportance()
+  const update = useQuickTaskUpdate()
   const arrows = [
     { delta: 1, Icon: ChevronUp, label: `${title} is more important`, on: votes > 0 },
     { delta: -1, Icon: ChevronDown, label: `${title} is less important`, on: votes < 0 },
@@ -121,7 +120,7 @@ export function ImportanceVote({ taskId, title, votes, className }: { taskId: st
           title={label}
           onClick={(e) => {
             e.stopPropagation()
-            vote.mutate({ taskId, votes: votes + delta })
+            update.mutate({ taskId, patch: { importance_votes: votes + delta } })
           }}
           className={cn('grid h-6 w-7 place-items-center rounded-md hover:bg-muted', on ? 'text-primary' : 'text-muted-foreground/60')}
         >
@@ -187,7 +186,8 @@ export function TaskRow({
   const tone = done ? 'none' : dueTone(occurrence.due_date, todayISO())
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
-  const [showSubtasks, setShowSubtasks] = useState(true)
+  const update = useQuickTaskUpdate()
+  const showSubtasks = !task.subtasks_collapsed
   const delay = useDelayOccurrence()
   const delayBy = delayDaysFor(occurrence, categories)
   const swipe = useSwipeRight(done ? undefined : () => delay(occurrence, delayBy))
@@ -260,7 +260,7 @@ export function TaskRow({
                 aria-label={`${showSubtasks ? 'Hide' : 'Show'} subtasks of ${task.title}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setShowSubtasks(!showSubtasks)
+                  update.mutate({ taskId: occurrence.task_id, patch: { subtasks_collapsed: showSubtasks } })
                 }}
               >
                 <ListChecks className="size-3" />

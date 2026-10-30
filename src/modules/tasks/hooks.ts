@@ -168,15 +168,16 @@ export function useDelayOccurrence() {
     setDate.mutate({ occurrence, dueDate: delayedDate(occurrence.due_date, todayISO(), days), delayCount: occurrence.delay_count + 1 })
 }
 
-/** Sets a task's net votes; shows at once, so Top jobs reorders on the tap. */
-export function useVoteImportance() {
+/** Small row-level changes to a task that show at once, such as a vote reordering Top jobs. */
+export function useQuickTaskUpdate() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ taskId, votes }: { taskId: string; votes: number }) => api.updateTask(taskId, { importance_votes: votes }),
-    onMutate: async ({ taskId, votes }) => {
+    mutationFn: ({ taskId, patch }: { taskId: string; patch: Partial<Pick<api.Task, 'importance_votes' | 'subtasks_collapsed'>> }) =>
+      api.updateTask(taskId, patch),
+    onMutate: async ({ taskId, patch }) => {
       await qc.cancelQueries({ queryKey: taskKeys.open })
       qc.setQueryData<api.OccurrenceWithTask[]>(taskKeys.open, (old) =>
-        old?.map((o) => (o.task_id === taskId ? { ...o, task: { ...o.task, importance_votes: votes } } : o)),
+        old?.map((o) => (o.task_id === taskId ? { ...o, task: { ...o.task, ...patch } } : o)),
       )
     },
     onError: (e) => toast.error(getErrorMessage(e)),

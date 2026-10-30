@@ -1832,6 +1832,7 @@ export type Database = {
           recurrence: Json | null
           room_id: string | null
           status: string
+          subtasks_collapsed: boolean
           title: string
           updated_at: string
         }
@@ -1855,6 +1856,7 @@ export type Database = {
           recurrence?: Json | null
           room_id?: string | null
           status?: string
+          subtasks_collapsed?: boolean
           title: string
           updated_at?: string
         }
@@ -1878,6 +1880,7 @@ export type Database = {
           recurrence?: Json | null
           room_id?: string | null
           status?: string
+          subtasks_collapsed?: boolean
           title?: string
           updated_at?: string
         }
