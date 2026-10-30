@@ -85,20 +85,15 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setComposing(true)}>
-            <MessageSquarePlus /> Message
-          </Button>
-          <Button size="icon" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={() => setAdding(!adding)}>
-            {adding ? <X /> : <Plus />}
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => setComposing(true)}>
+          <MessageSquarePlus /> Message
+        </Button>
       </header>
 
       {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <TopJobsCard />
+        <TopJobsCard adding={adding} onToggleAdding={() => setAdding(!adding)} />
         <DaysCard
           open={open}
           items={items}
@@ -263,7 +258,7 @@ function CardLink({ to, label }: { to: string; label: string }) {
 }
 
 /** The five open tasks that most need doing, for one of us or for both together. */
-function TopJobsCard() {
+function TopJobsCard({ adding, onToggleAdding }: { adding: boolean; onToggleAdding: () => void }) {
   const { me, partner } = useHousehold()
   const views = useViewOptions()
   const [who, setWho] = useState(me.id)
@@ -278,6 +273,9 @@ function TopJobsCard() {
     <Card className="md:col-span-2 xl:col-span-3">
       <CardHeader>
         <CardTitle>Top jobs</CardTitle>
+        <Button size="icon-sm" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={onToggleAdding}>
+          {adding ? <X /> : <Plus />}
+        </Button>
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
         {partner ? (
