@@ -1,10 +1,12 @@
 import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Repeat } from 'lucide-react'
+import { useState } from 'react'
+import { Checkbox } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { useDelayOccurrence, useVoteImportance } from '../hooks'
+import { useDelayOccurrence, useSubtaskMutations, useVoteImportance } from '../hooks'
 import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
@@ -130,6 +132,21 @@ export function ImportanceVote({ taskId, title, votes, className }: { taskId: st
   )
 }
 
+/** The individual jobs inside a bigger task, tickable without opening it. */
+function SubtaskList({ taskId, subtasks }: { taskId: string; subtasks: OccurrenceWithTask['task']['subtasks'] }) {
+  const { toggle } = useSubtaskMutations(taskId)
+  return (
+    <ul className="grid gap-0.5 px-3 pb-2 pl-5">
+      {subtasks.toSorted((a, b) => a.sort_order - b.sort_order).map((s) => (
+        <li key={s.id} className="flex items-center gap-2.5 py-1">
+          <Checkbox checked={s.is_done} onCheckedChange={(v) => toggle.mutate({ id: s.id, isDone: v === true })} aria-label={s.title} />
+          <span className={cn('min-w-0 flex-1 text-sm', s.is_done && 'text-muted-foreground line-through')}>{s.title}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 const toneClass = {
   overdue: 'text-destructive font-medium',
   today: 'text-warning font-medium',
@@ -170,6 +187,7 @@ export function TaskRow({
   const tone = done ? 'none' : dueTone(occurrence.due_date, todayISO())
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
+  const [showSubtasks, setShowSubtasks] = useState(true)
   const delay = useDelayOccurrence()
   const delayBy = delayDaysFor(occurrence, categories)
   const swipe = useSwipeRight(done ? undefined : () => delay(occurrence, delayBy))
@@ -235,10 +253,20 @@ export function TaskRow({
               </span>
             ) : null}
             {subtasks.length ? (
-              <span className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 hover:text-foreground"
+                aria-expanded={showSubtasks}
+                aria-label={`${showSubtasks ? 'Hide' : 'Show'} subtasks of ${task.title}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowSubtasks(!showSubtasks)
+                }}
+              >
                 <ListChecks className="size-3" />
                 {subDone}/{subtasks.length}
-              </span>
+                <ChevronDown className={cn('size-3 transition-transform', showSubtasks && 'rotate-180')} />
+              </button>
             ) : null}
             {task.priority === 'high' || task.priority === 'urgent' ? (
               <span className={cn('inline-flex items-center gap-1', task.priority === 'urgent' ? 'text-destructive' : 'text-warning')}>
@@ -252,6 +280,7 @@ export function TaskRow({
           <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
         )}
       </div>
+      {showSubtasks && subtasks.length > 0 && !done ? <SubtaskList taskId={occurrence.task_id} subtasks={subtasks} /> : null}
     </li>
   )
 }

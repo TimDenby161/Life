@@ -196,7 +196,15 @@ export function useSubtaskMutations(taskId: string) {
     }),
     toggle: useMutation({
       mutationFn: ({ id, isDone }: { id: string; isDone: boolean }) => api.setSubtaskDone(id, isDone),
-      onSuccess: invalidate,
+      onMutate: async ({ id, isDone }) => {
+        await qc.cancelQueries({ queryKey: taskKeys.open })
+        qc.setQueryData<api.OccurrenceWithTask[]>(taskKeys.open, (old) =>
+          old?.map((o) =>
+            o.task_id === taskId ? { ...o, task: { ...o.task, subtasks: o.task.subtasks.map((s) => (s.id === id ? { ...s, is_done: isDone } : s)) } } : o,
+          ),
+        )
+      },
+      onSettled: invalidate,
     }),
     remove: useMutation({ mutationFn: api.deleteSubtask, onSuccess: invalidate }),
   }

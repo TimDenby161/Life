@@ -10,7 +10,7 @@ export type TaskOccurrence = Tables<'task_occurrences'>
 export type CompletionEvent = Tables<'task_completion_events'>
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 
-const OCCURRENCE_WITH_TASK = '*, task:tasks!inner(*, subtasks:task_subtasks(id, is_done))'
+const OCCURRENCE_WITH_TASK = '*, task:tasks!inner(*, subtasks:task_subtasks(id, title, is_done, sort_order))'
 
 export type OccurrenceWithTask = Awaited<ReturnType<typeof fetchOpenOccurrences>>[number]
 
