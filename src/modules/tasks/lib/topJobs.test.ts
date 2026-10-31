@@ -119,14 +119,14 @@ describe('end of the day', () => {
 
   it('leaves a daily task alone until the evening, then climbs each hour', () => {
     const task = occ('Sort the loft', today, daily)
-    expect([9, 16, 17, 20, 22, 23].map((h) => score(task, h))).toEqual([25, 25, 35, 70, 100, 115])
+    expect([9, 16, 17, 20, 22, 23].map((h) => score(task, h))).toEqual([25, 25, 35, 70, 100, 100])
   })
   it('gets a low daily task to 100 by 10pm', () => {
     const stretch = occ('Stretch', today, { recurrence: { freq: 'daily', afterDone: true } })
     expect(score(stretch, 22)).toBeGreaterThanOrEqual(100)
   })
-  it('keeps a daily task that is already over the minimum', () => {
-    expect(score(occ('Pay the bill', today, { ...daily, priority: 'urgent' }), 22)).toBe(165)
+  it('holds a daily task due today at 100', () => {
+    expect(score(occ('Pay the bill', today, { ...daily, priority: 'urgent' }), 22)).toBe(100)
   })
   it('still counts a daily task left over from yesterday', () => {
     const task = occ('Sort the loft', '2026-10-29', daily)
@@ -150,7 +150,7 @@ describe('end of the day', () => {
 
 describe('time of day', () => {
   const gain = (category_id: string | null, hour: number) => {
-    const task = occ('Sort the loft', today, category_id ? { category_id } : {})
+    const task = occ('Sort the loft', '2026-11-03', category_id ? { category_id } : {})
     return taskScore(task, categories, today, hour) - taskScore(task, categories, today, 3)
   }
 
@@ -166,7 +166,7 @@ describe('time of day', () => {
     expect([9, 13].map((h) => gain('general', h))).toEqual([0, 0])
   })
   it('hides work jobs at the weekend, without the work boost', () => {
-    const task = occ('Sort the loft', today, { category_id: 'c4' })
+    const task = occ('Sort the loft', '2026-11-02', { category_id: 'c4' })
     const saturday = '2026-10-31'
     const sunday = '2026-11-01'
     expect(isOutOfHours(task.task, categories, 10, saturday)).toBe(true)
@@ -191,6 +191,27 @@ describe('ties', () => {
   })
 })
 
+describe('the 100 cap', () => {
+  const score = (due: string, task = {}) => taskScore(occ('Pay the bill', due, task), categories, today, 10)
+
+  it('holds everything at 100 or below until its date has passed', () => {
+    expect(score(today, { priority: 'urgent', importance_votes: 5 })).toBe(100)
+    expect(score('2026-10-31', { priority: 'urgent', importance_votes: 5 })).toBe(100)
+  })
+  it('lets a task past its date go higher, and keep climbing', () => {
+    expect(score('2026-10-20')).toBe(140)
+    expect(score('2026-08-01')).toBe(220)
+  })
+  it('still ranks tasks tied at 100 by what sits underneath', () => {
+    const items = [occ('Sort the loft', today), occ('Pay the bill', today, { priority: 'urgent' })]
+    expect(titles(byScore(items, categories, today, 10))[0]).toBe('Pay the bill')
+  })
+  it('leaves the climb to a hard deadline or birthday above 100', () => {
+    expect(score('2026-12-25', { deadline: today })).toBe(195)
+    expect(taskScore(occ('Presents', today), categories, today, 10)).toBe(195)
+  })
+})
+
 describe('due dates', () => {
   const score = (due: string, task = {}) => taskScore(occ('Sort the loft', due, task), categories, today, 10)
 
@@ -206,7 +227,7 @@ describe('due dates', () => {
     expect(taskScore(occ('Wipe the sink', today), categories, today, 10)).toBe(100)
   })
   it('adds importance on top', () => {
-    expect(taskScore(occ('Pay the bill', today), categories, today, 10)).toBe(130)
+    expect(taskScore(occ('Pay the bill', '2026-11-03'), categories, today, 10)).toBe(90)
   })
   it('lowers a task the further off it is', () => {
     expect(['2026-11-20', '2026-12-25', '2027-01-30', '2027-04-30'].map((d) => score(d))).toEqual([4, -20, -30, -45])
@@ -246,7 +267,7 @@ describe('hard deadlines', () => {
   })
   it('never lowers a score that is already higher', () => {
     const task = occ('Pay the bill', today, { priority: 'urgent', deadline: '2026-11-06' })
-    expect(taskScore(task, categories, today, 10)).toBe(180)
+    expect(taskScore(task, categories, today, 10)).toBe(100)
   })
   it('ignores a due date delayed past the deadline', () => {
     expect(score(today, '2026-11-20')).toBe(195)

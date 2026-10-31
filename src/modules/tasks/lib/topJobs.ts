@@ -93,7 +93,7 @@ function repeatingUrgency(days: number) {
 
 /** The date someone picks for a one-off task is the day it reaches 100, after a week's climb. */
 function oneOffUrgency(days: number) {
-  if (days < 0) return DUE_DAY_SCORE + Math.min(-days, 14)
+  if (days < 0) return DUE_DAY_SCORE - days
   return days <= DUE_RUN_UP_DAYS ? DUE_DAY_SCORE - days * DUE_POINTS_PER_DAY : farOffUrgency(days)
 }
 
@@ -182,9 +182,18 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
   return DEADLINE_DAY_SCORE - days * (birthday ? BIRTHDAY_POINTS_PER_DAY : DEADLINE_POINTS_PER_DAY)
 }
 
-function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
+/** Everything that makes a task pressing, before the cap. */
+function pressure(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
   const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour, today)
-  return Math.max(score, deadlineScore(o, categories, today) ?? score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
+  return Math.max(score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
+}
+
+/** 100 means due today: only a task past its date goes higher, apart from the run-up to a hard deadline or birthday. */
+function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
+  const score = pressure(o, categories, today, hour)
+  const pastDue = Boolean(o.due_date) && o.due_date! < today
+  const capped = pastDue ? score : Math.min(score, DUE_DAY_SCORE)
+  return Math.max(capped, deadlineScore(o, categories, today) ?? capped)
 }
 
 /** A subtask scores like its task, on its own date if it has one. Delaying the task holds its subtasks back too. */
@@ -200,11 +209,11 @@ export function taskScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'na
   return Math.max(...left.map((s) => subtaskScore(o, s, categories, today, hour)))
 }
 
-/** Highest score first; on a tie, whatever has been waiting longest. */
-export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour?: number): T[] {
+/** Highest score first; on a tie, whichever is more pressing underneath, then whatever has been waiting longest. */
+export function byScore<T extends Scorable>(items: T[], categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour = new Date().getHours()): T[] {
   return items
-    .map((item) => ({ item, score: taskScore(item, categories, today, hour) }))
-    .sort((a, b) => b.score - a.score || (a.item.created_at ?? '').localeCompare(b.item.created_at ?? '') || compareOccurrences(a.item, b.item))
+    .map((item) => ({ item, score: taskScore(item, categories, today, hour), pressure: pressure(item, categories, today, hour) }))
+    .sort((a, b) => b.score - a.score || b.pressure - a.pressure || (a.item.created_at ?? '').localeCompare(b.item.created_at ?? '') || compareOccurrences(a.item, b.item))
     .map(({ item }) => item)
 }
 
