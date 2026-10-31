@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, MessageSquarePlus, Plus, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, MessageSquarePlus, Plus, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { ErrorState, ListSkeleton } from '@/components/states'
@@ -187,10 +187,9 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
   )
 }
 
-/**
- * The open tasks that most need doing: the top five, then everything else in
- * score order on request.
- */
+const JOBS_PER_STEP = 5
+
+/** The open tasks that most need doing, in score order, five more at a time on request. */
 function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; onToggleAdding: () => void; onMessage: () => void }) {
   const { me, partner } = useHousehold()
   const views = useViewOptions()
@@ -202,11 +201,14 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   // Tasks open in place, so editing one doesn't leave Home.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
-  const [showMore, setShowMore] = useState(false)
+  const [shown, setShown] = useState(JOBS_PER_STEP)
+  const pickWho = (view: string) => {
+    setWho(view)
+    setShown(JOBS_PER_STEP)
+  }
   const today = todayISO()
   const ranked = topJobs(items ?? [], categories, today, Infinity)
-  const top = ranked.slice(0, 5)
-  const more = ranked.slice(5)
+  const visible = ranked.slice(0, shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -238,26 +240,31 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
       </CardHeader>
       <CardContent className="px-2 sm:px-3">
         {partner ? (
-          <Segmented aria-label="Whose top jobs" size="sm" className="mx-1 mb-2 sm:mx-2" value={who} onChange={setWho} options={views} />
+          <Segmented aria-label="Whose top jobs" size="sm" className="mx-1 mb-2 sm:mx-2" value={who} onChange={pickWho} options={views} />
         ) : null}
         {open.isPending ? (
           <ListSkeleton rows={5} className="px-2" />
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
-        ) : !top.length ? (
+        ) : !visible.length ? (
           <p className="flex items-center gap-2 px-2 pb-2 text-sm text-muted-foreground">
             <CheckCircle2 className="size-4 text-success" /> Nothing to do
           </p>
         ) : (
-          renderRows(top)
+          renderRows(visible)
         )}
-        {showMore ? renderRows(more) : null}
-        {more.length ? (
-          <Button variant="ghost" className="mt-1 w-full" aria-expanded={showMore} onClick={() => setShowMore(!showMore)}>
-            <ChevronDown className={cn('transition-transform', showMore && 'rotate-180')} />
-            {showMore ? 'Show fewer jobs' : 'Show more jobs'}
-          </Button>
-        ) : null}
+        <div className="mt-1 flex">
+          {ranked.length > shown ? (
+            <Button variant="ghost" className="flex-1" onClick={() => setShown(shown + JOBS_PER_STEP)}>
+              <ChevronDown /> Show more jobs
+            </Button>
+          ) : null}
+          {shown > JOBS_PER_STEP ? (
+            <Button variant="ghost" className="flex-1" onClick={() => setShown(JOBS_PER_STEP)}>
+              <ChevronUp /> Show fewer jobs
+            </Button>
+          ) : null}
+        </div>
       </CardContent>
       <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
       {opener.dialogs}
