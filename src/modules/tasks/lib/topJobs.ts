@@ -123,9 +123,12 @@ function urgencyScore(o: Scorable, today: ISODate) {
   return cycle ? cycleUrgency(days, cycle) : repeatingUrgency(days)
 }
 
-/** Nothing talks a one-off task below 100 once its day has come. */
+/** Nothing talks a one-off below 100 on its day, or any task below 100 plus its days late once it's missed. */
 function dueDayFloor(o: Scorable, today: ISODate) {
-  return !o.task.recurrence && o.due_date && o.due_date <= today ? DUE_DAY_SCORE : null
+  if (!o.due_date || o.due_date > today) return null
+  const late = daysBetween(o.due_date, today)
+  if (late > 0) return DUE_DAY_SCORE + late
+  return o.task.recurrence ? null : DUE_DAY_SCORE
 }
 
 function isDailyAndDue(o: Scorable, today: ISODate) {
