@@ -213,6 +213,38 @@ describe('the morning weigh-in', () => {
   })
 })
 
+describe('zero', () => {
+  const repeating = { recurrence: { freq: 'monthly', interval: 6 } }
+  const done = (due: string, task = {}) => ({ ...occ('Rotate the mattress', due, task), generated_from: 'earlier' })
+
+  it('gives a job just done, or in the first half of its cycle, a score of 0', () => {
+    expect(taskScore(done('2027-04-20', repeating), categories, today, 10)).toBe(0)
+    expect(taskScore(done('2027-02-01', repeating), categories, today, 10)).toBe(0)
+  })
+  it('counts a hand-set last done date as done', () => {
+    const task = occ('Rotate the mattress', '2027-04-20', { ...repeating, last_done_on: '2026-10-20' } as object)
+    expect(taskScore(task, categories, today, 10)).toBe(0)
+  })
+  it('never scores a job that has never been done at 0', () => {
+    expect(taskScore(occ('Rotate the mattress', '2027-04-20', repeating), categories, today, 10)).toBe(1)
+  })
+  it('never scores a one-off at 0, however far off', () => {
+    expect(taskScore(occ('Book the venue', '2028-08-01'), categories, today, 10)).toBe(1)
+  })
+  it('still orders tasks tied on 1 by date', () => {
+    const items = [occ('Book the florist', '2028-08-01'), occ('Book the venue', '2027-01-01')]
+    expect(titles(byScore(items, categories, today, 10))[0]).toBe('Book the venue')
+  })
+  it('never goes below 0', () => {
+    const task = done('2027-01-01', { ...repeating, priority: 'low', importance_votes: -9 })
+    expect(taskScore(task, categories, today, 10)).toBe(0)
+  })
+  it('drops a daily task to 0 once done until it next comes due', () => {
+    const task = done('2026-10-31', { recurrence: { freq: 'daily', afterDone: true } })
+    expect(taskScore(task, categories, today, 10)).toBe(0)
+  })
+})
+
 describe('the 100 cap', () => {
   const score = (due: string, task = {}) => taskScore(occ('Pay the bill', due, task), categories, today, 10)
 
@@ -251,19 +283,21 @@ describe('due dates', () => {
   it('adds importance on top', () => {
     expect(taskScore(occ('Pay the bill', '2026-11-03'), categories, today, 10)).toBe(90)
   })
-  it('lowers a task the further off it is', () => {
-    expect(['2026-11-20', '2026-12-25', '2027-01-30', '2027-04-30'].map((d) => score(d))).toEqual([4, -20, -30, -45])
+  it('settles a distant task at 1, not below', () => {
+    expect(['2026-11-20', '2026-12-25', '2027-01-30', '2027-04-30'].map((d) => score(d))).toEqual([4, 1, 1, 1])
   })
   it('puts a nearer task above a distant one, whatever its wording', () => {
     const items = [occ('Confirm timings and final payments with suppliers', '2028-08-01'), occ('Book the venue', '2027-01-01')]
     expect(titles(topJobs(items, categories, today))[0]).toBe('Book the venue')
   })
   it('scores a repeating job on how far through its cycle it is', () => {
-    const everyThreeWeeks = { recurrence: { freq: 'weekly', interval: 3 } }
-    expect(['2026-11-20', '2026-11-09', '2026-10-31', today, '2026-10-20'].map((d) => score(d, everyThreeWeeks))).toEqual([-11, 14, 78, 85, 110])
+    const fourWeekly = { recurrence: { freq: 'weekly', interval: 4 } }
+    expect(['2026-11-27', '2026-11-13', '2026-11-06', '2026-10-31', today].map((d) => score(d, fourWeekly))).toEqual([1, 1, 10, 71, 85])
   })
   it('does not let a six-monthly job climb weeks ahead', () => {
-    expect(score('2026-11-19', { recurrence: { freq: 'monthly', interval: 6 } })).toBe(-11)
+    const task = { recurrence: { freq: 'monthly', interval: 6 } }
+    expect(score('2027-03-01', task)).toBe(1)
+    expect(score('2026-11-19', task)).toBeLessThan(score('2026-11-03'))
   })
   it('counts a longer cycle further along than a short one with the same days left', () => {
     expect(score('2026-11-02', { recurrence: { freq: 'monthly', interval: 2 } })).toBeGreaterThan(score('2026-11-02', { recurrence: { freq: 'weekly' } }))

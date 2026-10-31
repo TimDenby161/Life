@@ -19,7 +19,7 @@ import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
 import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
-import { isOutOfHours, topJobs } from '@/modules/tasks/lib/topJobs'
+import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 
@@ -207,7 +207,8 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
     setShown(JOBS_PER_STEP)
   }
   const today = todayISO()
-  const ranked = topJobs(items ?? [], categories, today, Infinity)
+  // A score of 0 means nothing needs doing yet, so it stays off the list.
+  const ranked = topJobs(items ?? [], categories, today, Infinity).filter((o) => taskScore(o, categories, today) > 0)
   const visible = ranked.slice(0, shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>

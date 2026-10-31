@@ -8,9 +8,10 @@ type Subtask = { is_done: boolean; due_date?: string | null }
 type Scorable = {
   created_at?: string
   delay_count?: number
+  generated_from?: string | null
   due_date: string | null
   due_time: string | null
-  task: { subtasks?: Subtask[]; title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null }
+  task: { subtasks?: Subtask[]; title: string; description?: string | null; priority: string; category_id: string | null; recurrence?: unknown; importance_votes?: number; deadline?: string | null; last_done_on?: string | null }
 }
 
 // How important a task sounds, from its words. Each tier counts once however many words match.
@@ -40,7 +41,6 @@ const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
 const WEIGH_IN_FROM = 7
 const WEIGH_IN_SCORE = 250
 const DUE_DAY_SCORE = 100
-const MAX_CYCLE_RUN_UP_DAYS = 14
 const CYCLE_DAYS: Record<string, number> = { weekly: 7, monthly: 30, yearly: 365 }
 const FAR_OFF_POINTS_PER_MONTH = 5
 const DUE_RUN_UP_DAYS = 7
@@ -108,20 +108,32 @@ function cycleDays(recurrence: unknown) {
 }
 
 /**
- * How far through its cycle a job is: just done is 0, and it reaches 100 when it
- * comes due. Long cycles only count their last fortnight, so a six-monthly job
+ * How far through its cycle a job is: nothing for the first half, then a climb
+ * that starts slowly and reaches 100 when it comes due, so a six-monthly job
  * doesn't look pressing weeks ahead.
  */
 function cycleUrgency(days: number, cycle: number) {
   if (days < 0) return DUE_DAY_SCORE + Math.min(-days, 14)
-  const runUp = Math.min(cycle, MAX_CYCLE_RUN_UP_DAYS)
-  return days <= runUp ? Math.round(DUE_DAY_SCORE * (1 - days / runUp)) : farOffUrgency(days)
+  if (days > cycle) return farOffUrgency(days)
+  const secondHalf = Math.max(0, (1 - days / cycle - 0.5) * 2)
+  return Math.round(DUE_DAY_SCORE * secondHalf * secondHalf)
+}
+
+function isEveryDay(recurrence: unknown) {
+  const rule = recurrence as { freq?: string; interval?: number } | null | undefined
+  return rule?.freq === 'daily' && (rule.interval ?? 1) === 1
+}
+
+/** Only something that has been done can have no urgency at all. */
+function hasBeenDone(o: Scorable) {
+  return Boolean(o.task.recurrence) && (Boolean(o.generated_from) || Boolean(o.task.last_done_on))
 }
 
 function urgencyScore(o: Scorable, today: ISODate) {
   if (!o.due_date) return 0
   const days = daysBetween(today, o.due_date)
   if (!o.task.recurrence) return oneOffUrgency(days)
+  if (days > 0 && isEveryDay(o.task.recurrence)) return 0
   const cycle = cycleDays(o.task.recurrence)
   return cycle ? cycleUrgency(days, cycle) : repeatingUrgency(days)
 }
@@ -202,7 +214,7 @@ function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], 
   const score = pressure(o, categories, today, hour)
   const pastDue = Boolean(o.due_date) && o.due_date! < today
   const capped = pastDue ? score : Math.min(score, DUE_DAY_SCORE)
-  return Math.max(capped, deadlineScore(o, categories, today) ?? capped)
+  return Math.max(capped, deadlineScore(o, categories, today) ?? capped, hasBeenDone(o) ? 0 : 1)
 }
 
 /** A subtask scores like its task, on its own date if it has one. Delaying the task holds its subtasks back too. */
