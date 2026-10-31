@@ -196,6 +196,23 @@ describe('ties', () => {
   })
 })
 
+describe('the morning weigh-in', () => {
+  const weighIn = (due: string) => occ('Weigh In', due, { recurrence: { freq: 'daily', afterDone: true } })
+
+  it('tops the list from 7am until it is done', () => {
+    const items = [occ('Pay the bill', '2026-10-01', { priority: 'urgent' }), weighIn(today)]
+    expect(titles(byScore(items, categories, today, 7))[0]).toBe('Weigh In')
+    expect(titles(byScore(items, categories, today, 21))[0]).toBe('Weigh In')
+  })
+  it('stays hidden before 7am', () => {
+    expect(isOutOfHours(weighIn(today).task, categories, 6, today)).toBe(true)
+    expect(isOutOfHours(weighIn(today).task, categories, 7, today)).toBe(false)
+  })
+  it('goes back down once done and next due tomorrow', () => {
+    expect(taskScore(weighIn('2026-10-31'), categories, today, 8)).toBeLessThan(100)
+  })
+})
+
 describe('the 100 cap', () => {
   const score = (due: string, task = {}) => taskScore(occ('Pay the bill', due, task), categories, today, 10)
 

@@ -1,4 +1,5 @@
 import { daysBetween, type ISODate, parseISODate, todayISO } from '@/lib/dates'
+import { isWeighIn } from '@/modules/health/lib/metrics'
 import type { TaskCategory } from '../api'
 import { compareOccurrences, delayDays } from './format'
 
@@ -36,6 +37,8 @@ const DEADLINE_POINTS_PER_DAY = 20
 const BIRTHDAY_RUN_UP_DAYS = 14
 const BIRTHDAY_POINTS_PER_DAY = 14
 const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
+const WEIGH_IN_FROM = 7
+const WEIGH_IN_SCORE = 250
 const DUE_DAY_SCORE = 100
 const MAX_CYCLE_RUN_UP_DAYS = 14
 const CYCLE_DAYS: Record<string, number> = { weekly: 7, monthly: 30, yearly: 365 }
@@ -165,8 +168,9 @@ function timeOfDayScore(task: Scorable['task'], categories: Pick<TaskCategory, '
   return (!category || LUNCH_CATEGORIES.test(category)) && within(LUNCH_HOURS, hour) ? LUNCH_POINTS : 0
 }
 
-/** Work jobs stay out of sight evenings and weekends. */
+/** Work jobs stay out of sight evenings and weekends, and the weigh-in until 7am. */
 export function isOutOfHours(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour = new Date().getHours(), today = todayISO()) {
+  if (isWeighIn(task.title)) return hour < WEIGH_IN_FROM
   return WORK_CATEGORY.test(categoryName(task, categories)) && !isWorkTime(hour, today)
 }
 
@@ -191,8 +195,10 @@ function pressure(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], 
   return Math.max(score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
 }
 
-/** 100 means due today: only a task past its date goes higher, apart from the run-up to a hard deadline or birthday. */
+/** 100 means due today: only a task past its date goes higher, apart from the weigh-in and the run-up to a hard deadline or birthday. */
 function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
+  // First thing every morning, ahead of everything else.
+  if (isWeighIn(o.task.title) && o.due_date && o.due_date <= today && hour >= WEIGH_IN_FROM) return WEIGH_IN_SCORE
   const score = pressure(o, categories, today, hour)
   const pastDue = Boolean(o.due_date) && o.due_date! < today
   const capped = pastDue ? score : Math.min(score, DUE_DAY_SCORE)
