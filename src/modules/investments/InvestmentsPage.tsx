@@ -126,7 +126,7 @@ export default function InvestmentsPage() {
             </div>
           ) : null}
 
-          <p className="text-xs text-muted-foreground">A plan from Claude, not regulated financial advice. Share prices go down as well as up.</p>
+          <p className="text-xs text-muted-foreground">Worked out from your own targets and choices; not regulated financial advice. Share prices go down as well as up.</p>
         </div>
       )}
 
