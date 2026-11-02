@@ -1068,6 +1068,111 @@ export type Database = {
         }
         Relationships: []
       }
+      investment_holdings: {
+        Row: {
+          action: string
+          asset_class: string
+          created_at: string
+          household_id: string
+          id: string
+          in_pie: boolean
+          name: string
+          reason: string | null
+          target_pct: number | null
+          ticker: string
+          updated_at: string
+          user_id: string
+          value_minor: number
+        }
+        Insert: {
+          action?: string
+          asset_class?: string
+          created_at?: string
+          household_id: string
+          id?: string
+          in_pie?: boolean
+          name: string
+          reason?: string | null
+          target_pct?: number | null
+          ticker: string
+          updated_at?: string
+          user_id?: string
+          value_minor?: number
+        }
+        Update: {
+          action?: string
+          asset_class?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          in_pie?: boolean
+          name?: string
+          reason?: string | null
+          target_pct?: number | null
+          ticker?: string
+          updated_at?: string
+          user_id?: string
+          value_minor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_holdings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_holdings_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      investment_settings: {
+        Row: {
+          household_id: string
+          monthly_minor: number
+          updated_at: string
+          user_id: string
+          values_as_of: string | null
+          wedding_minor: number | null
+        }
+        Insert: {
+          household_id: string
+          monthly_minor?: number
+          updated_at?: string
+          user_id?: string
+          values_as_of?: string | null
+          wedding_minor?: number | null
+        }
+        Update: {
+          household_id?: string
+          monthly_minor?: number
+          updated_at?: string
+          user_id?: string
+          values_as_of?: string | null
+          wedding_minor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investment_settings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investment_settings_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       language_progress: {
         Row: {
           created_at: string

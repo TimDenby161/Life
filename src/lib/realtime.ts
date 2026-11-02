@@ -28,6 +28,8 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   health_periods: ['health'],
   language_study: ['languages'],
   language_progress: ['languages'],
+  investment_holdings: ['investments'],
+  investment_settings: ['investments'],
   calendar_integrations: ['calendar'],
   profiles: ['household'],
 }

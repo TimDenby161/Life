@@ -42,6 +42,8 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `health_periods` | `started_on`, optional `ended_on`. Tracker shown on the Health tab of a profile with `tracks_periods` (Sophie; set by migration, not client-writable). |
 | Languages | `language_study` | Per person and language (`zh`, `es`); `active` says who learns what (stopping keeps settings and progress): words/characters a day, HSK start level, the jobs each part ticks off. |
 | | `language_progress` | One row per word or character a person has learned, keyed by its text; `due_on`/`interval_days` are the review schedule. The word lists themselves ship with the app. |
+| Investments | `investment_holdings` | One row per holding per person: value entered by hand (no price feed), whether it's in the Pie, shares/bonds/cash, target % of the long-term mix, verdict (keep/sell/review) and why. Owner writes, both read. |
+| | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 
 ## Functions (RPC)
 
