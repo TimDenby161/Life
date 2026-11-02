@@ -161,7 +161,7 @@ describe('time of day', () => {
   }
 
   it('raises work jobs from 8am until 5pm', () => {
-    expect([7, 8, 16, 17].map((h) => gain('c4', h))).toEqual([0, 40, 40, 0])
+    expect([7, 8, 16, 17].map((h) => gain('c4', h))).toEqual([0, 110, 110, 0])
   })
   it('raises cleaning, other and uncategorised jobs from 12 until 2pm', () => {
     expect([11, 12, 13, 14].map((h) => gain('cleaning', h))).toEqual([0, 30, 30, 0])
@@ -180,11 +180,19 @@ describe('time of day', () => {
     expect(isOutOfHours(task.task, categories, 10, '2026-11-02')).toBe(false)
     expect(taskScore(task, categories, saturday, 10)).toBeLessThan(taskScore(task, categories, today, 10))
   })
-  it('lifts a work job due today past the 100 cap, above a job a day late', () => {
+  it('puts a work job due today on 210 in work hours, above a daily task missed yesterday', () => {
     const monday = '2026-11-02'
-    const items = [occ('Clean the oven', '2026-10-30', { recurrence: { freq: 'monthly' } }), occ('Check dependencies', monday, { category_id: 'c4' })]
-    expect(taskScore(items[1], categories, monday, 9)).toBe(140)
+    const items = [occ('Stretch', '2026-11-01', { recurrence: { freq: 'daily', afterDone: true } }), occ('Check dependencies', monday, { category_id: 'c4' })]
+    expect(taskScore(items[1], categories, monday, 9)).toBe(210)
     expect(titles(byScore(items, categories, monday, 9))[0]).toBe('Check dependencies')
+  })
+  it('lets an important work job climb to 300, and no further', () => {
+    const monday = '2026-11-02'
+    const job = (task = {}) => taskScore(occ('Check dependencies', monday, { category_id: 'c4', ...task }), categories, monday, 9)
+    expect(job({ priority: 'urgent' })).toBe(260)
+    expect(job({ priority: 'urgent', importance_votes: 3 })).toBe(290)
+    expect(job({ priority: 'urgent', importance_votes: 5 })).toBe(300)
+    expect(job({ priority: 'urgent', importance_votes: 9 })).toBe(300)
   })
   it('hides work jobs outside work hours only', () => {
     const task = (category_id: string) => occ('Sort the loft', today, { category_id }).task
