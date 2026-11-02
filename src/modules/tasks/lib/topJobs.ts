@@ -41,6 +41,8 @@ const BIRTHDAY = /\b(birthdays?|presents?|gifts?)\b/i
 const WEIGH_IN_FROM = 7
 const WEIGH_IN_SCORE = 250
 const DUE_DAY_SCORE = 100
+const CYCLE_LATE_SCORE = 200
+const MAX_DAYS_PAST_CYCLE = 14
 const CYCLE_DAYS: Record<string, number> = { weekly: 7, monthly: 30, yearly: 365 }
 const FAR_OFF_POINTS_PER_MONTH = 5
 const DUE_RUN_UP_DAYS = 7
@@ -119,6 +121,20 @@ function cycleUrgency(days: number, cycle: number) {
   return Math.round(DUE_DAY_SCORE * secondHalf * secondHalf)
 }
 
+/** How many days a repeating task's cycle runs, daily ones included. */
+function repeatDays(recurrence: unknown) {
+  const rule = recurrence as { freq?: string; interval?: number } | null | undefined
+  return rule?.freq === 'daily' ? (rule.interval ?? 1) : cycleDays(recurrence)
+}
+
+/** A missed one-off climbs a point a day; a missed repeat reaches 200 a whole cycle late, then a little more each day. */
+function lateScore(o: Scorable, late: number) {
+  const cycle = repeatDays(o.task.recurrence)
+  if (!cycle) return DUE_DAY_SCORE + late
+  if (late <= cycle) return Math.round(DUE_DAY_SCORE + ((CYCLE_LATE_SCORE - DUE_DAY_SCORE) * late) / cycle)
+  return CYCLE_LATE_SCORE + Math.min(late - cycle, MAX_DAYS_PAST_CYCLE)
+}
+
 function isEveryDay(recurrence: unknown) {
   const rule = recurrence as { freq?: string; interval?: number } | null | undefined
   return rule?.freq === 'daily' && (rule.interval ?? 1) === 1
@@ -138,11 +154,11 @@ function urgencyScore(o: Scorable, today: ISODate) {
   return cycle ? cycleUrgency(days, cycle) : repeatingUrgency(days)
 }
 
-/** Nothing talks a one-off below 100 on its day, or any task below 100 plus its days late once it's missed. */
+/** Nothing talks a one-off below 100 on its day, or any task below its late score once it's missed. */
 function dueDayFloor(o: Scorable, today: ISODate) {
   if (!o.due_date || o.due_date > today) return null
   const late = daysBetween(o.due_date, today)
-  if (late > 0) return DUE_DAY_SCORE + late
+  if (late > 0) return lateScore(o, late)
   return o.task.recurrence ? null : DUE_DAY_SCORE
 }
 
@@ -173,10 +189,14 @@ function isWorkTime(hour: number, today: ISODate) {
   return day !== 0 && day !== 6 && within(WORK_HOURS, hour)
 }
 
-/** Work jobs matter in work hours; cleaning and anything uncategorised suit the lunch break. */
-function timeOfDayScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number, today: ISODate) {
+/** Work jobs matter in work hours, on top of the 100 cap. */
+function workScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number, today: ISODate) {
+  return WORK_CATEGORY.test(categoryName(task, categories)) && isWorkTime(hour, today) ? WORK_POINTS : 0
+}
+
+/** Cleaning and anything uncategorised suit the lunch break. */
+function lunchScore(task: Scorable['task'], categories: Pick<TaskCategory, 'id' | 'name'>[], hour: number) {
   const category = categoryName(task, categories)
-  if (WORK_CATEGORY.test(category)) return isWorkTime(hour, today) ? WORK_POINTS : 0
   return (!category || LUNCH_CATEGORIES.test(category)) && within(LUNCH_HOURS, hour) ? LUNCH_POINTS : 0
 }
 
@@ -203,17 +223,17 @@ function deadlineScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'
 
 /** Everything that makes a task pressing, before the cap. */
 function pressure(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
-  const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + timeOfDayScore(o.task, categories, hour, today)
+  const score = importanceScore(o.task, categories) + urgencyScore(o, today) + endOfDayScore(o, today, hour) + lunchScore(o.task, categories, hour)
   return Math.max(score, endOfDayFloor(o, today, hour) ?? score, dueDayFloor(o, today) ?? score)
 }
 
-/** 100 means due today: only a task past its date goes higher, apart from the weigh-in and the run-up to a hard deadline or birthday. */
+/** 100 means due today: only a task past its date goes higher, apart from the weigh-in, work jobs in work hours and the run-up to a hard deadline or birthday. */
 function ownScore(o: Scorable, categories: Pick<TaskCategory, 'id' | 'name'>[], today: ISODate, hour: number) {
   // First thing every morning, ahead of everything else.
   if (isWeighIn(o.task.title) && o.due_date && o.due_date <= today && hour >= WEIGH_IN_FROM) return WEIGH_IN_SCORE
   const score = pressure(o, categories, today, hour)
   const pastDue = Boolean(o.due_date) && o.due_date! < today
-  const capped = pastDue ? score : Math.min(score, DUE_DAY_SCORE)
+  const capped = (pastDue ? score : Math.min(score, DUE_DAY_SCORE)) + workScore(o.task, categories, hour, today)
   return Math.max(capped, deadlineScore(o, categories, today) ?? capped, hasBeenDone(o) ? 0 : 1)
 }
 

@@ -130,12 +130,13 @@ describe('end of the day', () => {
   })
   it('still counts a daily task left over from yesterday', () => {
     const task = occ('Sort the loft', '2026-10-29', daily)
-    expect(score(task, 22)).toBe(101)
+    expect(score(task, 22)).toBe(200)
   })
-  it('puts a daily task left undone past 100, climbing each day', () => {
+  it('puts a daily task missed yesterday on 200, then climbs a little each day', () => {
     const stretch = (due: string) => occ('Stretch', due, { recurrence: { freq: 'daily', afterDone: true } })
-    expect(score(stretch('2026-10-29'), 9)).toBe(101)
-    expect(score(stretch('2026-10-25'), 9)).toBe(105)
+    expect(score(stretch('2026-10-29'), 9)).toBe(200)
+    expect(score(stretch('2026-10-25'), 9)).toBe(204)
+    expect(score(stretch('2026-08-01'), 9)).toBe(214)
   })
   it('skips weekly tasks, every-other-day tasks and one-offs, and daily tasks due later', () => {
     const tasks = [
@@ -178,6 +179,12 @@ describe('time of day', () => {
     expect(isOutOfHours(task.task, categories, 10, sunday)).toBe(true)
     expect(isOutOfHours(task.task, categories, 10, '2026-11-02')).toBe(false)
     expect(taskScore(task, categories, saturday, 10)).toBeLessThan(taskScore(task, categories, today, 10))
+  })
+  it('lifts a work job due today past the 100 cap, above a job a day late', () => {
+    const monday = '2026-11-02'
+    const items = [occ('Clean the oven', '2026-10-30', { recurrence: { freq: 'monthly' } }), occ('Check dependencies', monday, { category_id: 'c4' })]
+    expect(taskScore(items[1], categories, monday, 9)).toBe(140)
+    expect(titles(byScore(items, categories, monday, 9))[0]).toBe('Check dependencies')
   })
   it('hides work jobs outside work hours only', () => {
     const task = (category_id: string) => occ('Sort the loft', today, { category_id }).task
@@ -302,8 +309,14 @@ describe('due dates', () => {
   it('counts a longer cycle further along than a short one with the same days left', () => {
     expect(score('2026-11-02', { recurrence: { freq: 'monthly', interval: 2 } })).toBeGreaterThan(score('2026-11-02', { recurrence: { freq: 'weekly' } }))
   })
-  it('puts a repeating job past its date over 100', () => {
-    expect(score('2026-10-29', { recurrence: { freq: 'weekly' } })).toBe(101)
+  it('takes a repeating job past its date to 200 once a whole cycle late', () => {
+    const weekly = { recurrence: { freq: 'weekly' } }
+    expect(['2026-10-29', '2026-10-27', '2026-10-23', '2026-10-16'].map((d) => score(d, weekly))).toEqual([114, 143, 200, 207])
+    const everyOtherDay = { recurrence: { freq: 'daily', interval: 2 } }
+    expect(['2026-10-29', '2026-10-28'].map((d) => score(d, everyOtherDay))).toEqual([150, 200])
+  })
+  it('keeps a one-off past its date climbing a point a day', () => {
+    expect(score('2026-10-29')).toBe(101)
   })
   it('still puts a one-off due today above a repeating job due today', () => {
     expect(score(today)).toBeGreaterThan(score(today, { recurrence: { freq: 'weekly' } }))
