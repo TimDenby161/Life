@@ -46,6 +46,7 @@ describe('what the model sees', () => {
     headline: '1 due today.',
     dueToday: 1,
     overdue: 0,
+    behind: 0,
     together: 0,
     deadlines: [{ task_id: 'secret-id', title: 'Passport', deadline: '2026-11-09' }],
     busy: [],

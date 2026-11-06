@@ -4,8 +4,8 @@
 // It doesn't rank tasks: Home's Top jobs does that live, by the hour. The
 // briefing is what needs memory or a wider view: what changed since yesterday,
 // deadlines and busy stretches ahead, and the suggestions that matter most.
-import { addDays, type ISODate, isoWeekKey, shortDay } from './dates.ts'
-import { effectiveCompletions, ownerOf, type PlanItem, type TaskManagerResult, type WorkloadSummary } from './taskManager.ts'
+import { addDays, daysBetween, type ISODate, isoWeekKey, shortDay } from './dates.ts'
+import { cycleDays, effectiveCompletions, ownerOf, type PlanItem, type TaskManagerResult, type WorkloadSummary } from './taskManager.ts'
 import type { BriefingDraft, Member, OpenTask, SuggestionDraft, TaskContext } from './types.ts'
 
 export const DEADLINE_DAYS = 14
@@ -19,7 +19,10 @@ export type BriefingContent = {
   date: ISODate
   headline: string
   dueToday: number
+  /** One-off tasks past their date. */
   overdue: number
+  /** Repeating jobs a whole cycle or more late (one day late is normal for a job). */
+  behind: number
   together: number
   deadlines: { task_id: string; title: string; deadline: ISODate }[]
   busy: { from: ISODate; to: ISODate; titles: string[] }[]
@@ -81,10 +84,11 @@ export function clashes(tasks: OpenTask[], today: ISODate): BriefingContent['cla
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
 }
 
-export function headline(c: Pick<BriefingContent, 'dueToday' | 'overdue' | 'deadlines' | 'busy' | 'date'>): string {
+export function headline(c: Pick<BriefingContent, 'dueToday' | 'overdue' | 'behind' | 'deadlines' | 'busy' | 'date'>): string {
   const parts: string[] = []
   if (c.dueToday) parts.push(`${c.dueToday} due today`)
   if (c.overdue) parts.push(`${c.overdue} overdue`)
+  if (c.behind) parts.push(`${c.behind} ${c.behind === 1 ? 'job' : 'jobs'} behind`)
   const next = c.deadlines[0]
   if (next) parts.push(`“${next.title}” has a deadline ${shortDay(next.deadline, c.date)}`)
   else if (c.busy[0]) parts.push(`a busy stretch from ${shortDay(c.busy[0].from, c.date)}`)
@@ -136,7 +140,8 @@ export function briefingFor(
     date: today,
     headline: '',
     dueToday: routine.filter((t) => t.due_date === today).length,
-    overdue: routine.filter((t) => t.due_date !== null && t.due_date < today).length,
+    overdue: routine.filter((t) => !t.recurrence && t.due_date !== null && t.due_date < today).length,
+    behind: routine.filter((t) => t.recurrence && t.due_date !== null && daysBetween(t.due_date, today) >= (cycleDays(t.recurrence) ?? 1)).length,
     together: mine.filter((t) => t.needs_both && t.due_date !== null && t.due_date <= today).length,
     deadlines,
     busy: busyStretches(mine, today),

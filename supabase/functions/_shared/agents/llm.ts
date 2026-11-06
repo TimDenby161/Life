@@ -53,6 +53,7 @@ export function summaryInput(name: string, c: BriefingContent): string {
     date: c.date,
     dueToday: c.dueToday,
     overdue: c.overdue,
+    repeatingJobsBehind: c.behind,
     togetherToday: c.together,
     deadlines: c.deadlines.map((d) => ({ title: d.title, date: d.deadline })),
     busyStretches: c.busy.map((b) => ({ from: b.from, to: b.to, count: b.titles.length })),

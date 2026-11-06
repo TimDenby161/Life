@@ -10,6 +10,19 @@ function brief(ctx: ReturnType<typeof context>, kind: 'daily' | 'weekly' = 'dail
 }
 
 describe('daily briefing', () => {
+  it('counts one-offs as overdue and repeats as behind only a whole cycle late', () => {
+    const ctx = context({
+      open: [
+        task({ due_date: '2026-11-05' }),
+        task({ due_date: '2026-11-05', recurrence: { freq: 'weekly' } }),
+        task({ due_date: '2026-10-28', recurrence: { freq: 'weekly' } }),
+        task({ due_date: '2026-11-04', recurrence: { freq: 'daily', interval: 2 } }),
+      ],
+    })
+    expect(brief(ctx).content).toMatchObject({ overdue: 1, behind: 2 })
+    expect(brief(ctx).content.headline).toBe('1 overdue, 2 jobs behind.')
+  })
+
   it('counts what is due and overdue in my view, leaving out the partner’s own and daily routines', () => {
     const ctx = context({
       open: [
@@ -95,7 +108,7 @@ describe('conflicts', () => {
 })
 
 describe('headline', () => {
-  const base = { date: '2026-11-06', dueToday: 0, overdue: 0, deadlines: [], busy: [] }
+  const base = { date: '2026-11-06', dueToday: 0, overdue: 0, behind: 0, deadlines: [], busy: [] }
   it('is calm when there is nothing', () => expect(headline(base)).toBe('Nothing due today.'))
   it('leads with what is due', () =>
     expect(headline({ ...base, dueToday: 2, overdue: 1, deadlines: [{ task_id: 't', title: 'Passport', deadline: '2026-11-09' }] })).toBe(
