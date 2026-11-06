@@ -78,3 +78,18 @@ describe('checking the output', () => {
     expect(cleanSummary('{"summary":"<script>"}')).toBeNull()
   })
 })
+
+describe('keeping other agents out of the AI sentence', () => {
+  it('passes only Task Manager suggestions, never money or health ones', () => {
+    const content = {
+      date: '2026-11-06', headline: '', dueToday: 0, overdue: 0, behind: 0, together: 0, deadlines: [], busy: [], clashes: [], partnerDone: null, added: [],
+      suggestions: [
+        { key: 'task:1', title: 'Hoover', severity: 1 },
+        { key: 'fin:position:2026-10-14', title: 'Net worth £312,875', severity: 1 },
+        { key: 'fitness:a:load', title: 'Rest day', severity: 1 },
+        { key: 'wedding:pay:1', title: 'Pay the florist £400', severity: 2 },
+      ],
+    } satisfies BriefingContent
+    expect(JSON.parse(summaryInput('Alex', content)).topSuggestions).toEqual(['Hoover'])
+  })
+})

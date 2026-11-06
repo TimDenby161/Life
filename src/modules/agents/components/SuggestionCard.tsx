@@ -31,6 +31,7 @@ const AGENT_PAGE: Record<string, { to: string; label: string }> = {
   language_coach: { to: '/languages', label: 'Languages' },
   health_coach: { to: '/health', label: 'Health' },
   household: { to: '/jobs', label: 'Jobs' },
+  finance: { to: '/finances', label: 'Finances' },
 }
 
 const DONE_MESSAGE: Record<string, string> = { create_task: 'Added to Tasks', move_due_date: 'Date moved', archive_task: 'Archived' }

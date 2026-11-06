@@ -6,6 +6,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { addDays } from '../_shared/agents/dates.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
+import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
 import type { Session } from '../_shared/agents/fitness.ts'
 import type { Progress, Study } from '../_shared/agents/languages.ts'
 import type { CompletionEvent, OpenTask, TaskContext } from '../_shared/agents/types.ts'
@@ -169,4 +170,33 @@ export async function loadSessions(db: SupabaseClient, householdId: string, toda
 
 export async function loadRooms(db: SupabaseClient, householdId: string): Promise<{ id: string; name: string }[]> {
   return check(await db.from('task_rooms').select('id, name').eq('household_id', householdId).order('sort_order'))
+}
+
+/**
+ * What net worth needs, as the Finances page works it out: accounts counted in
+ * net worth, their recorded balances, and transactions as account, date and
+ * amount only (no description, category or kind: Finance never looks at spending).
+ */
+export async function loadFinance(db: SupabaseClient, householdId: string): Promise<{ accounts: FinAccount[]; snapshots: FinSnapshot[]; transactions: FinTx[] }> {
+  const accounts = check(
+    await db
+      .from('financial_accounts')
+      .select('id, account_type, ownership, owner_id, opening_balance_minor, opening_date')
+      .eq('household_id', householdId)
+      .is('archived_at', null)
+      .eq('include_in_net_worth', true)
+      .eq('currency', 'GBP'),
+  ) as FinAccount[]
+  const ids = accounts.map((a) => a.id)
+  if (!ids.length) return { accounts: [], snapshots: [], transactions: [] }
+  const [snapshots, transactions] = await Promise.all([
+    db.from('account_balance_history').select('account_id, as_of, balance_minor, source, created_at').eq('household_id', householdId).in('account_id', ids).limit(20000),
+    db.from('financial_transactions').select('account_id, occurred_on, amount_minor, created_at').eq('household_id', householdId).in('account_id', ids).limit(100000),
+  ])
+  const n = <T extends object>(rows: T[], key: keyof T) => rows.map((r) => ({ ...r, [key]: Number(r[key]) }))
+  return {
+    accounts: n(accounts, 'opening_balance_minor'),
+    snapshots: n(check(snapshots) as FinSnapshot[], 'balance_minor'),
+    transactions: n(check(transactions) as FinTx[], 'amount_minor'),
+  }
 }

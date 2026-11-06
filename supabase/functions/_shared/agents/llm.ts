@@ -46,6 +46,9 @@ export const SYSTEM_PROMPT = [
   'British English, warm but plain, at most 30 words, no emoji, no lists.',
 ].join(' ')
 
+/** Task Manager suggestions only: other agents' titles can hold health details or money. */
+export const TASK_SUGGESTION = /^(task|duplicate|repeat|workload|automate):/
+
 /** The facts the model sees: titles, counts and dates only. */
 export function summaryInput(name: string, c: BriefingContent): string {
   return JSON.stringify({
@@ -59,7 +62,7 @@ export function summaryInput(name: string, c: BriefingContent): string {
     busyStretches: c.busy.map((b) => ({ from: b.from, to: b.to, count: b.titles.length })),
     partnerFinished: c.partnerDone ? { name: c.partnerDone.name, count: c.partnerDone.count } : null,
     newTasksForYou: c.added.length,
-    topSuggestions: c.suggestions.map((s) => s.title),
+    topSuggestions: c.suggestions.filter((s) => TASK_SUGGESTION.test(s.key)).map((s) => s.title),
   })
 }
 

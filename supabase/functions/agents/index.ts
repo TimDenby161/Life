@@ -23,6 +23,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
+import { analyseFinance } from '../_shared/agents/finance.ts'
 import { analyseFitness, HISTORY_DAYS, parseFitnessGoals } from '../_shared/agents/fitness.ts'
 import { analyseHousehold } from '../_shared/agents/household.ts'
 import { analyseLanguages } from '../_shared/agents/languages.ts'
@@ -33,7 +34,7 @@ import { analyseTasks } from '../_shared/agents/taskManager.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { type AgentPrefs, loadContext, loadLanguages, loadPrefs, loadRooms, loadSessions, loadWedding } from './context.ts'
+import { type AgentPrefs, loadContext, loadFinance, loadLanguages, loadPrefs, loadRooms, loadSessions, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
@@ -86,6 +87,8 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       )
     case 'household':
       return analyseHousehold(ctx, await loadRooms(db, householdId), enabled)
+    case 'finance':
+      return analyseFinance({ today: ctx.today, members: ctx.members, ...(await loadFinance(db, householdId)) }, enabled)
     default:
       throw new Error(`No runner for ${agentId}`)
   }

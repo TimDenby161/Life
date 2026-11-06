@@ -1,6 +1,6 @@
 # AI agents: status
 
-_Last updated 6 November 2026._ Six of the ten agents are built. **Live since 6 November 2026**: migrations applied, `agents` function deployed, the hourly job running (first run: all six succeeded), AI Hub deployed.
+_Last updated 6 November 2026._ Seven of the ten agents are built (Finance added after go-live; not yet deployed). **Live since 6 November 2026**: migrations applied, `agents` function deployed, the hourly job running (first run: all six succeeded), AI Hub deployed.
 
 ## Working
 
@@ -20,6 +20,8 @@ _Last updated 6 November 2026._ Six of the ten agents are built. **Live since 6 
 | Month-only wedding date; per-person fitness goals | migrations `0200`, `0300`; `FitnessGoals.tsx`, Wedding settings | Vitest, pgTAP, and entered through the UI at phone width locally |
 | AI Hub (`/ai`): Overview, Suggestions, Agents, History | `src/modules/agents` | browser (desktop), typecheck, build |
 | Service-role code only reads its own household and only writes agent tables | `src/test/agents-guard.test.ts` | Vitest |
+| Finance (overall position only) | `_shared/agents/finance.ts`, `loadFinance` | 21 Vitest cases; on local data its net worth matched `account_balance_on` to the pound; guard checks it reads no budgets, goals, categories or transaction details |
+| AI sentence sees Task Manager suggestions only (no money or health titles) | `llm.ts` `TASK_SUGGESTION` | Vitest |
 | Briefing notifications (Web Push, off by default) | migration `0400`, `_shared/push.ts`, `agents/notify.ts`, `public/push-sw.js`, AI Hub → Agents | 9 Vitest cases (encryption decrypted on the browser side, VAPID signature verified, gone devices); pgTAP `17_push_notifications.test.sql` (14); locally the scheduled briefing sent through FCM, which rejected the fake device, and the function forgot it |
 
 ## Known issue (CI only)
@@ -35,7 +37,7 @@ On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, an
 
 ## Planned
 
-Finance, Travel, Career and Life Admin show in the AI Hub as "Not built yet", each with what it's waiting on (see [architecture.md](architecture.md#the-ten-agents)).
+Travel, Career and Life Admin show in the AI Hub as "Not built yet", each with what it's waiting on (see [architecture.md](architecture.md#the-ten-agents)).
 
 ## Decisions for you
 
@@ -43,4 +45,4 @@ Finance, Travel, Career and Life Admin show in the AI Hub as "Not built yet", ea
 2. **Defaults.** Both agents are on for both of you until switched off (they only read what you can already see and change nothing without approval). Say if you'd rather they start off.
 3. **AI sentence.** Worth an Anthropic key? It's the only part that costs money or sends data out.
 4. **Wedding date and fitness goals after going live.** Set "Month only: September 2028" in Wedding settings, and the goals (6 active days; table tennis 1×, padel 1×, run 1× optional) in AI Hub → Agents → Fitness Coach. Both were tested locally only.
-5. **The blocked four.** Each needs a decision: a bills list or statement import (Finance), email/calendar access (Life Admin), trips and a price source (Travel), goals and a job source (Career).
+5. **The blocked three.** Each needs a decision: a renewals list or email/calendar access (Life Admin), trips and a price source (Travel), goals and a job source (Career).

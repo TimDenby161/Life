@@ -28,10 +28,19 @@ describe('agents Edge Function', () => {
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
+      'financial_accounts', 'account_balance_history', 'financial_transactions',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
     }
+  })
+
+  it('reads finances only for net worth: no budgets, goals, categories, or transaction details', () => {
+    for (const { f, text } of [...fn, ...shared]) expect(text, f).not.toMatch(/budgets|finance_categories|savings_goals/)
+    const ctx = fn.find((x) => x.f === 'context.ts')!.text
+    expect(ctx).toContain(".from('financial_transactions').select('account_id, occurred_on, amount_minor, created_at')")
+    expect(ctx).toContain(".select('id, account_type, ownership, owner_id, opening_balance_minor, opening_date')")
+    expect(ctx).toContain(".select('account_id, as_of, balance_minor, source, created_at')")
   })
 
   it('selects no contact details, free-text notes, task descriptions or comments', () => {
@@ -45,7 +54,7 @@ describe('agents Edge Function', () => {
 
   it('never gives the LLM anything but the task briefing', () => {
     const llm = shared.find((x) => x.f === 'llm.ts')!.text
-    expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem/)
+    expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth/i)
   })
 
   it('writes only through agent_claim_run, agent_finish_run and push_subscriptions_gone', () => {
