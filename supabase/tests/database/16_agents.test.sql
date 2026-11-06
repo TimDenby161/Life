@@ -23,9 +23,9 @@ select set_config('t.out', '33333333-3333-3333-3333-333333333333', true);
 select set_config('t.hh', (select household_id::text from household_members where user_id = current_setting('t.tim')::uuid), true);
 select set_config('t.joint', (select id::text from task_lists where household_id = current_setting('t.hh')::uuid and kind = 'joint'), true);
 
-delete from agent_runs where household_id = current_setting('t.hh')::uuid;
-delete from agent_suggestions where household_id = current_setting('t.hh')::uuid;
-delete from agent_briefings where household_id = current_setting('t.hh')::uuid;
+delete from agent_runs;
+delete from agent_suggestions;
+delete from agent_briefings;
 delete from agent_settings where household_id = current_setting('t.hh')::uuid;
 
 -- A suggestion payload in the shape the Edge Function sends.

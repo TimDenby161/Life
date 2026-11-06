@@ -35,6 +35,7 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   agent_runs: ['agents'],
   agent_suggestions: ['agents'],
   agent_briefings: ['agents'],
+  renewals: ['agents'],
   profiles: ['household'],
 }
 

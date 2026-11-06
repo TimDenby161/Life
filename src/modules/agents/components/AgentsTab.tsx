@@ -20,6 +20,7 @@ import {
 } from '../api'
 import { pushSupport } from '../push'
 import { FitnessGoals } from './FitnessGoals'
+import { Renewals } from './Renewals'
 import { RunStatus } from './HistoryTab'
 
 function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | undefined }) {
@@ -54,6 +55,7 @@ function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | un
         <p className="text-sm">{agent.runs}</p>
       )}
       {agent.id === 'health_coach' ? <FitnessGoals key={row ? 'saved' : 'new'} row={row} /> : null}
+      {agent.id === 'life_admin' ? <Renewals /> : null}
       <dl className="grid gap-1 text-sm sm:grid-cols-[8rem_1fr]">
         <dt className="text-muted-foreground">Reads</dt>
         <dd>{agent.reads.join(', ')}</dd>

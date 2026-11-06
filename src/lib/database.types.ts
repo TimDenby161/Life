@@ -1730,6 +1730,60 @@ export type Database = {
           },
         ]
       }
+      renewals: {
+        Row: {
+          created_at: string
+          created_by: string
+          every_months: number | null
+          expires_on: string
+          household_id: string
+          id: string
+          name: string
+          owner_id: string | null
+          updated_at: string
+          warn_days: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          every_months?: number | null
+          expires_on: string
+          household_id: string
+          id?: string
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+          warn_days?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          every_months?: number | null
+          expires_on?: string
+          household_id?: string
+          id?: string
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+          warn_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewals_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewals_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       savings_goals: {
         Row: {
           account_id: string | null

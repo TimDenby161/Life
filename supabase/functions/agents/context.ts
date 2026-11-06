@@ -8,6 +8,7 @@ import { addDays } from '../_shared/agents/dates.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
 import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
 import type { Session } from '../_shared/agents/fitness.ts'
+import type { Renewal } from '../_shared/agents/lifeAdmin.ts'
 import type { Progress, Study } from '../_shared/agents/languages.ts'
 import type { CompletionEvent, OpenTask, TaskContext } from '../_shared/agents/types.ts'
 import type { WeddingInput } from '../_shared/agents/wedding.ts'
@@ -199,4 +200,8 @@ export async function loadFinance(db: SupabaseClient, householdId: string): Prom
     snapshots: n(check(snapshots) as FinSnapshot[], 'balance_minor'),
     transactions: n(check(transactions) as FinTx[], 'amount_minor'),
   }
+}
+
+export async function loadRenewals(db: SupabaseClient, householdId: string): Promise<Renewal[]> {
+  return check(await db.from('renewals').select('id, name, owner_id, expires_on, warn_days, every_months').eq('household_id', householdId).limit(500))
 }

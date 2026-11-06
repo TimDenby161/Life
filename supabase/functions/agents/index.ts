@@ -27,6 +27,7 @@ import { analyseFinance } from '../_shared/agents/finance.ts'
 import { analyseFitness, HISTORY_DAYS, parseFitnessGoals } from '../_shared/agents/fitness.ts'
 import { analyseHousehold } from '../_shared/agents/household.ts'
 import { analyseLanguages } from '../_shared/agents/languages.ts'
+import { analyseLifeAdmin } from '../_shared/agents/lifeAdmin.ts'
 import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
 import { agentById, LIVE_AGENTS } from '../_shared/agents/registry.ts'
 import { agentDue, chiefOfStaffDue, manualKey } from '../_shared/agents/schedule.ts'
@@ -34,7 +35,7 @@ import { analyseTasks } from '../_shared/agents/taskManager.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { type AgentPrefs, loadContext, loadFinance, loadLanguages, loadPrefs, loadRooms, loadSessions, loadWedding } from './context.ts'
+import { type AgentPrefs, loadContext, loadFinance, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
@@ -87,6 +88,8 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       )
     case 'household':
       return analyseHousehold(ctx, await loadRooms(db, householdId), enabled)
+    case 'life_admin':
+      return analyseLifeAdmin(ctx.today, await loadRenewals(db, householdId), ctx.open, enabled)
     case 'finance':
       return analyseFinance({ today: ctx.today, members: ctx.members, ...(await loadFinance(db, householdId)) }, enabled)
     default:

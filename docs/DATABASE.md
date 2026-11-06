@@ -48,6 +48,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `agent_suggestions` | What agents noticed or propose: kind, why, severity, optional action, `recipients`, status (pending/snoozed/approved/dismissed/expired), dedupe key. Recipients only. |
 | | `agent_briefings` | Daily/weekly briefing JSON per person, optional AI sentence. Recipient only. |
 | | `agent_actions` | Append-only log of approve/dismiss/snooze and the task it created or changed. |
+| | `renewals` | Things that expire (passport, MOT, insurance, contracts): name, owner (null = joint), expiry date, days of warning, months between renewals. Household-shared; read by Life Admin. |
 | | `push_subscriptions` | Devices a person allowed briefing notifications on (Web Push endpoint and keys). Endpoint must be a browser push service. Owner only; `user_preferences.briefing_push` is the on/off switch (off by default). |
 | | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 

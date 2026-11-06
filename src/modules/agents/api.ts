@@ -174,3 +174,26 @@ export const useSetBriefingPush = () => {
 }
 
 export const useSendTestPush = () => useAgentMutation(async () => callAgents<RunResult>({ mode: 'push-test' }))
+
+export type RenewalRow = Tables<'renewals'>
+
+/** The household's renewals, soonest first (Life Admin reads the same list). */
+export const useRenewals = () =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'renewals'],
+    queryFn: async () => unwrap(await supabase.from('renewals').select('*').order('expires_on')),
+  })
+
+export type RenewalInput = Pick<RenewalRow, 'name' | 'owner_id' | 'expires_on' | 'warn_days' | 'every_months'>
+
+export const useSaveRenewal = () =>
+  useAgentMutation(async (householdId, r: RenewalInput & { id?: string }) => {
+    const { id, ...fields } = r
+    if (id) unwrap(await supabase.from('renewals').update(fields).eq('id', id))
+    else unwrap(await supabase.from('renewals').insert({ ...fields, household_id: householdId }))
+  })
+
+export const useDeleteRenewal = () =>
+  useAgentMutation(async (_h, id: string) => {
+    unwrap(await supabase.from('renewals').delete().eq('id', id))
+  })
