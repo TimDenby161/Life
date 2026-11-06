@@ -13,8 +13,8 @@ import { agentById } from '../../../../supabase/functions/_shared/agents/registr
 import { OBSERVATION_KINDS } from '../../../../supabase/functions/_shared/agents/types.ts'
 import { type Suggestion, useAgentRuns, useLatestBriefing, useRunAgent, useSuggestions } from '../api'
 import type { PageAgent } from '../pageAgents'
-import { BriefingCard } from './BriefingCard'
 import { SuggestionCard } from './SuggestionCard'
+import { TodayCalendar } from './TodayCalendar'
 
 /** Something to know rather than something to do. */
 const isNote = (s: Suggestion) => !s.action && OBSERVATION_KINDS.has(s.kind)
@@ -36,7 +36,7 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      {scope.extra === 'briefing' ? <BriefingCard onOpenTask={setOpenTaskId} /> : null}
+      {scope.extra === 'today' ? <TodayCalendar /> : null}
       {scope.extra === 'calendar' ? <CalendarCard /> : null}
 
       <QueryState query={suggestions}>
@@ -126,7 +126,7 @@ function CalendarCard() {
 function AgentsFooter({ scope }: { scope: PageAgent }) {
   const runs = useAgentRuns()
   const run = useRunAgent()
-  const ids = scope.extra === 'briefing' ? (['chief_of_staff'] as const) : scope.agents
+  const ids = scope.extra === 'today' ? (['chief_of_staff'] as const) : scope.agents
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       {ids.map((id) => {

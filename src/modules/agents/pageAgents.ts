@@ -10,8 +10,8 @@ export type PageAgent = {
   agents: AgentId[]
   /** Only these kinds (from any of the agents above); all kinds when absent. */
   kinds?: string[]
-  /** Extra agent output shown above the suggestions. */
-  extra?: 'briefing' | 'calendar'
+  /** Extra agent output shown above the suggestions: the rest of today's calendar (live), or today and packed days from the briefing. */
+  extra?: 'today' | 'calendar'
   /** Cap on suggestions shown (Home shows the top few). */
   limit?: number
   /** No visible title or description (Home keeps it clean). */
@@ -21,7 +21,7 @@ export type PageAgent = {
 const ALL: AgentId[] = ['chief_of_staff', 'task_manager', 'wedding', 'language_coach', 'health_coach', 'household', 'finance', 'life_admin', 'travel', 'career']
 
 export const PAGE_AGENTS: Record<string, PageAgent> = {
-  home: { label: 'Briefing', description: 'Your morning briefing and the most important things the agents have noticed.', agents: ALL, extra: 'briefing', limit: 5, bare: true },
+  home: { label: 'Briefing', description: 'Your morning briefing and the most important things the agents have noticed.', agents: ALL, extra: 'today', limit: 5, bare: true },
   tasks: { label: 'Task Manager', description: 'Put-off and overdue tasks, deadline risks, duplicates and moves off packed days.', agents: ['task_manager'], kinds: ['overdue', 'put_off', 'deadline_risk', 'blocked', 'undated', 'duplicate', 'automate', 'packed_day', 'workload'] },
   jobs: { label: 'Household', description: 'Upkeep that’s easy to forget, rooms with nothing set up, and jobs that keep slipping.', agents: ['household', 'task_manager'], kinds: ['maintenance', 'empty_room', 'missed_repeat', 'repeat'] },
   calendar: { label: 'This week', description: 'Today’s calendar, packed days ahead, and jobs worth moving off them.', agents: ['chief_of_staff', 'task_manager'], kinds: ['packed_day'], extra: 'calendar' },
