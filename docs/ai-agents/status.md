@@ -1,6 +1,6 @@
 # AI agents: status
 
-_Last updated 6 November 2026._ Six of the ten agents are built. Built and tested locally. **Nothing is deployed, pushed or applied to the live database.**
+_Last updated 6 November 2026._ Six of the ten agents are built. **Live since 6 November 2026**: migrations applied, `agents` function deployed, the hourly job running (first run: all six succeeded), AI Hub deployed.
 
 ## Working
 
@@ -21,10 +21,13 @@ _Last updated 6 November 2026._ Six of the ten agents are built. Built and teste
 | AI Hub (`/ai`): Overview, Suggestions, Agents, History | `src/modules/agents` | browser (desktop), typecheck, build |
 | Service-role code only reads its own household and only writes agent tables | `src/test/agents-guard.test.ts` | Vitest |
 
+## Known issue (CI only)
+
+On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, any function call refused for lack of EXECUTE segfaults the server. The arm64 build (local Macs and the hosted project, which reports `aarch64`) doesn't. The pgTAP tests therefore check `has_function_privilege` instead of making refused calls. Don't add tests that call a function a role can't execute.
+
 ## Not verified
 
 - **The LLM call** (`functions/agents/summary.ts`). No API key was used, so it has never made a real request. Budget, cost, prompt and output checks are unit-tested; the code falls back to the rules headline on any failure.
-- **pg_cron calling the deployed function.** Needs the Vault secrets on the live project.
 - **Phone layout** of the AI Hub; it uses the same single-column patterns as other pages but wasn't looked at on a phone.
 - **Live data.** The noise caps were tuned on the local demo data, which is weeks stale (76 overdue). Real data may need the thresholds in `taskManager.ts` adjusted.
 
