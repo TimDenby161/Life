@@ -197,3 +197,54 @@ export const useDeleteRenewal = () =>
   useAgentMutation(async (_h, id: string) => {
     unwrap(await supabase.from('renewals').delete().eq('id', id))
   })
+
+export type TripRow = Tables<'trips'>
+export type TripInput = Pick<TripRow, 'name' | 'owner_id' | 'starts_on' | 'ends_on' | 'abroad' | 'transport' | 'stay' | 'insurance' | 'time_off'>
+
+/** Trips still to come or under way, soonest first. */
+export const useTrips = () =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'trips'],
+    queryFn: async () => unwrap(await supabase.from('trips').select('*').gte('ends_on', new Date().toISOString().slice(0, 10)).order('starts_on')),
+  })
+
+export const useSaveTrip = () =>
+  useAgentMutation(async (householdId, t: Partial<TripInput> & { id?: string }) => {
+    const { id, ...fields } = t
+    if (id) unwrap(await supabase.from('trips').update(fields).eq('id', id))
+    else unwrap(await supabase.from('trips').insert({ ...(fields as TripInput), household_id: householdId }))
+  })
+
+export const useDeleteTrip = () =>
+  useAgentMutation(async (_h, id: string) => {
+    unwrap(await supabase.from('trips').delete().eq('id', id))
+  })
+
+export type GoalRow = Tables<'career_goals'>
+
+/** Both of our goals (each person edits only their own). */
+export const useGoals = () =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'goals'],
+    queryFn: async () => unwrap(await supabase.from('career_goals').select('*').order('created_at')),
+  })
+
+export const useSaveGoal = () =>
+  useAgentMutation(
+    async (
+      householdId,
+      g: { id?: string; title?: string; target_date?: string | null; review_days?: number; last_reviewed_on?: string | null; done_at?: string | null },
+    ) => {
+      const { id, ...fields } = g
+      if (id) unwrap(await supabase.from('career_goals').update(fields).eq('id', id))
+      else {
+        const { done_at: _done, ...insert } = fields
+        unwrap(await supabase.from('career_goals').insert({ ...insert, title: insert.title ?? '', household_id: householdId }))
+      }
+    },
+  )
+
+export const useDeleteGoal = () =>
+  useAgentMutation(async (_h, id: string) => {
+    unwrap(await supabase.from('career_goals').delete().eq('id', id))
+  })

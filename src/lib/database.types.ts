@@ -549,6 +549,60 @@ export type Database = {
           },
         ]
       }
+      career_goals: {
+        Row: {
+          created_at: string
+          done_at: string | null
+          household_id: string
+          id: string
+          last_reviewed_on: string | null
+          review_days: number
+          target_date: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          done_at?: string | null
+          household_id: string
+          id?: string
+          last_reviewed_on?: string | null
+          review_days?: number
+          target_date?: string | null
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          done_at?: string | null
+          household_id?: string
+          id?: string
+          last_reviewed_on?: string | null
+          review_days?: number
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "career_goals_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "career_goals_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       feed_comments: {
         Row: {
           author_id: string
@@ -2500,6 +2554,72 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tasks"
             referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          abroad: boolean
+          created_at: string
+          created_by: string
+          ends_on: string
+          household_id: string
+          id: string
+          insurance: string
+          name: string
+          owner_id: string | null
+          starts_on: string
+          stay: string
+          time_off: string
+          transport: string
+          updated_at: string
+        }
+        Insert: {
+          abroad?: boolean
+          created_at?: string
+          created_by?: string
+          ends_on: string
+          household_id: string
+          id?: string
+          insurance?: string
+          name: string
+          owner_id?: string | null
+          starts_on: string
+          stay?: string
+          time_off?: string
+          transport?: string
+          updated_at?: string
+        }
+        Update: {
+          abroad?: boolean
+          created_at?: string
+          created_by?: string
+          ends_on?: string
+          household_id?: string
+          id?: string
+          insurance?: string
+          name?: string
+          owner_id?: string | null
+          starts_on?: string
+          stay?: string
+          time_off?: string
+          transport?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trips_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trips_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
           },
         ]
       }

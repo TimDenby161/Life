@@ -7,9 +7,11 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { addDays } from '../_shared/agents/dates.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
 import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
+import type { Goal } from '../_shared/agents/career.ts'
 import type { Session } from '../_shared/agents/fitness.ts'
 import type { Renewal } from '../_shared/agents/lifeAdmin.ts'
 import type { Progress, Study } from '../_shared/agents/languages.ts'
+import type { Trip } from '../_shared/agents/travel.ts'
 import type { CompletionEvent, OpenTask, TaskContext } from '../_shared/agents/types.ts'
 import type { WeddingInput } from '../_shared/agents/wedding.ts'
 
@@ -204,4 +206,25 @@ export async function loadFinance(db: SupabaseClient, householdId: string): Prom
 
 export async function loadRenewals(db: SupabaseClient, householdId: string): Promise<Renewal[]> {
   return check(await db.from('renewals').select('id, name, owner_id, expires_on, warn_days, every_months').eq('household_id', householdId).limit(500))
+}
+
+export async function loadTrips(db: SupabaseClient, householdId: string, today: string): Promise<Trip[]> {
+  return check(
+    await db
+      .from('trips')
+      .select('id, name, owner_id, starts_on, ends_on, abroad, transport, stay, insurance, time_off')
+      .eq('household_id', householdId)
+      .gte('starts_on', today)
+      .limit(200),
+  )
+}
+
+export async function loadGoals(db: SupabaseClient, householdId: string): Promise<Goal[]> {
+  return check(
+    await db
+      .from('career_goals')
+      .select('id, user_id, title, target_date, review_days, last_reviewed_on, created_at, done_at')
+      .eq('household_id', householdId)
+      .limit(200),
+  )
 }

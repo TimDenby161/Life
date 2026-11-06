@@ -86,7 +86,7 @@ export type BriefingDraft = {
 }
 
 /** Suggestions that are things to know, not things to do: no "Add as task". */
-export const OBSERVATION_KINDS = new Set(['workload', 'over_budget', 'wedding_summary', 'reviews_due', 'lang_stalled', 'training_load', 'rest_day', 'empty_room', 'fitness_week', 'fin_position', 'fin_debt', 'admin_start'])
+export const OBSERVATION_KINDS = new Set(['workload', 'over_budget', 'wedding_summary', 'reviews_due', 'lang_stalled', 'training_load', 'rest_day', 'empty_room', 'fitness_week', 'fin_position', 'fin_debt', 'admin_start', 'trip_passport_unknown', 'career_start', 'goal_late'])
 
 /** "£1,250" or "£12.50". */
 export function formatPounds(minor: number): string {

@@ -28,7 +28,7 @@ describe('agents Edge Function', () => {
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
-      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals',
+      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)

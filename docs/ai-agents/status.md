@@ -1,6 +1,6 @@
 # AI agents: status
 
-_Last updated 6 November 2026._ Eight of the ten agents are built. Finance is live; Life Admin is built locally and needs migration `0500` applied and the function redeployed. **Live since 6 November 2026**: migrations applied, `agents` function deployed, the hourly job running (first run: all six succeeded), AI Hub deployed.
+_Last updated 6 November 2026._ All ten agents are built. Travel and Career (migration `0600`) are local until it's applied and the function redeployed; the rest are live. **Live since 6 November 2026**: migrations applied, `agents` function deployed, the hourly job running (first run: all six succeeded), AI Hub deployed.
 
 ## Working
 
@@ -22,6 +22,7 @@ _Last updated 6 November 2026._ Eight of the ten agents are built. Finance is li
 | Service-role code only reads its own household and only writes agent tables | `src/test/agents-guard.test.ts` | Vitest |
 | Finance (overall position only) | `_shared/agents/finance.ts`, `loadFinance` | 21 Vitest cases; on local data its net worth matched `account_balance_on` to the pound; guard checks it reads no budgets, goals, categories or transaction details |
 | Life Admin (renewals) | migration `0500`, `_shared/agents/lifeAdmin.ts`, `Renewals.tsx` on the Life Admin card | 11 Vitest cases; pgTAP `18_renewals.test.sql` (9); run locally against a seeded renewal. The card itself hasn't been looked at in a browser yet |
+| Travel and Career | migration `0600`, `_shared/agents/{travel,career}.ts`, `Trips.tsx`, `CareerGoals.tsx` | 20 Vitest cases; pgTAP `19_trips_career_goals.test.sql` (12); both run locally against a seeded trip, passport and goal. The cards haven't been looked at in a browser yet |
 | AI sentence sees Task Manager suggestions only (no money or health titles) | `llm.ts` `TASK_SUGGESTION` | Vitest |
 | Briefing notifications (Web Push, off by default) | migration `0400`, `_shared/push.ts`, `agents/notify.ts`, `public/push-sw.js`, AI Hub → Agents | 9 Vitest cases (encryption decrypted on the browser side, VAPID signature verified, gone devices); pgTAP `17_push_notifications.test.sql` (14); locally the scheduled briefing sent through FCM, which rejected the fake device, and the function forgot it |
 
@@ -38,7 +39,7 @@ On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, an
 
 ## Planned
 
-Travel and Career show in the AI Hub as "Not built yet", each with what it's waiting on (see [architecture.md](architecture.md#the-ten-agents)).
+None: every agent in the registry is live.
 
 ## Decisions for you
 
@@ -46,4 +47,4 @@ Travel and Career show in the AI Hub as "Not built yet", each with what it's wai
 2. **Defaults.** Both agents are on for both of you until switched off (they only read what you can already see and change nothing without approval). Say if you'd rather they start off.
 3. **AI sentence.** Worth an Anthropic key? It's the only part that costs money or sends data out.
 4. **Wedding date and fitness goals after going live.** Set "Month only: September 2028" in Wedding settings, and the goals (6 active days; table tennis 1×, padel 1×, run 1× optional) in AI Hub → Agents → Fitness Coach. Both were tested locally only.
-5. **The blocked two.** Each needs a decision: trips and a price source (Travel), goals and a job source (Career).
+5. **Outside sources** (prices for Travel, job boards for Career) were left out on purpose; each would need your go-ahead.

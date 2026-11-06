@@ -33,6 +33,8 @@ const AGENT_PAGE: Record<string, { to: string; label: string }> = {
   household: { to: '/jobs', label: 'Jobs' },
   finance: { to: '/finances', label: 'Finances' },
   life_admin: { to: '/ai?tab=agents', label: 'Renewals' },
+  travel: { to: '/ai?tab=agents', label: 'Trips' },
+  career: { to: '/ai?tab=agents', label: 'Goals' },
 }
 
 const DONE_MESSAGE: Record<string, string> = { create_task: 'Added to Tasks', move_due_date: 'Date moved', archive_task: 'Archived' }

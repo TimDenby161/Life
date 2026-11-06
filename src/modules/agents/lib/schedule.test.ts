@@ -55,7 +55,7 @@ describe('schedule', () => {
 describe('registry', () => {
   it('has the ten agents, with only the built ones live and the Task Manager first to run', () => {
     expect(AGENTS).toHaveLength(10)
-    expect(LIVE_AGENTS.map((a) => a.id)).toEqual(['chief_of_staff', 'task_manager', 'wedding', 'language_coach', 'health_coach', 'household', 'finance', 'life_admin'])
+    expect(LIVE_AGENTS.map((a) => a.id)).toEqual(['chief_of_staff', 'task_manager', 'wedding', 'language_coach', 'health_coach', 'household', 'finance', 'life_admin', 'travel', 'career'])
     expect(LIVE_AGENTS.filter((a) => a.cadence).map((a) => a.id)[0]).toBe('task_manager')
   })
 

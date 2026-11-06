@@ -19,8 +19,10 @@ import {
   useSetBriefingPush,
 } from '../api'
 import { pushSupport } from '../push'
+import { CareerGoals } from './CareerGoals'
 import { FitnessGoals } from './FitnessGoals'
 import { Renewals } from './Renewals'
+import { Trips } from './Trips'
 import { RunStatus } from './HistoryTab'
 
 function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | undefined }) {
@@ -56,6 +58,8 @@ function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | un
       )}
       {agent.id === 'health_coach' ? <FitnessGoals key={row ? 'saved' : 'new'} row={row} /> : null}
       {agent.id === 'life_admin' ? <Renewals /> : null}
+      {agent.id === 'travel' ? <Trips /> : null}
+      {agent.id === 'career' ? <CareerGoals /> : null}
       <dl className="grid gap-1 text-sm sm:grid-cols-[8rem_1fr]">
         <dt className="text-muted-foreground">Reads</dt>
         <dd>{agent.reads.join(', ')}</dd>
@@ -187,7 +191,9 @@ export function AgentsTab() {
       ))}
       <Notifications />
       <AiSummaries />
-      <h2 className="mt-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Not built yet</h2>
+      {AGENTS.some((a) => a.status === 'planned') ? (
+        <h2 className="mt-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Not built yet</h2>
+      ) : null}
       {AGENTS.filter((a) => a.status === 'planned').map((a) => (
         <Card key={a.id} className="grid gap-1 p-4 opacity-80">
           <div className="flex items-center gap-2">

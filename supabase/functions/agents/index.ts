@@ -23,6 +23,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
+import { analyseCareer } from '../_shared/agents/career.ts'
 import { analyseFinance } from '../_shared/agents/finance.ts'
 import { analyseFitness, HISTORY_DAYS, parseFitnessGoals } from '../_shared/agents/fitness.ts'
 import { analyseHousehold } from '../_shared/agents/household.ts'
@@ -32,10 +33,11 @@ import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
 import { agentById, LIVE_AGENTS } from '../_shared/agents/registry.ts'
 import { agentDue, chiefOfStaffDue, manualKey } from '../_shared/agents/schedule.ts'
 import { analyseTasks } from '../_shared/agents/taskManager.ts'
+import { analyseTravel } from '../_shared/agents/travel.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { type AgentPrefs, loadContext, loadFinance, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadWedding } from './context.ts'
+import { type AgentPrefs, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
@@ -90,6 +92,12 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       return analyseHousehold(ctx, await loadRooms(db, householdId), enabled)
     case 'life_admin':
       return analyseLifeAdmin(ctx.today, await loadRenewals(db, householdId), ctx.open, enabled)
+    case 'travel': {
+      const [trips, renewals] = await Promise.all([loadTrips(db, householdId, ctx.today), loadRenewals(db, householdId)])
+      return analyseTravel(ctx.today, trips, renewals, ctx.open, enabled)
+    }
+    case 'career':
+      return analyseCareer(ctx.today, await loadGoals(db, householdId), enabled)
     case 'finance':
       return analyseFinance({ today: ctx.today, members: ctx.members, ...(await loadFinance(db, householdId)) }, enabled)
     default:

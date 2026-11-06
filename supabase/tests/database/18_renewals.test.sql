@@ -17,6 +17,8 @@ select set_config('t.sophie', '22222222-2222-2222-2222-222222222222', true);
 select set_config('t.out', '33333333-3333-3333-3333-333333333333', true);
 select set_config('t.hh', (select household_id::text from household_members where user_id = current_setting('t.tim')::uuid), true);
 
+delete from renewals;
+
 select pg_temp.as_user(current_setting('t.tim')::uuid);
 select lives_ok(format($$insert into renewals (household_id, name, owner_id, expires_on, warn_days, every_months)
   values (%L, 'Passport', %L, '2030-05-12', 180, 120), (%L, 'Car insurance', null, '2026-11-30', 28, 12)$$,
