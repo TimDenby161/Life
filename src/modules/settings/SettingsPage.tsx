@@ -162,7 +162,7 @@ function CalendarSection() {
     onSuccess: () => { invalidate(); setCalendarId(''); setEmbedUrl(''); toast.success('Calendar added') },
   })
   const update = useMutation({
-    mutationFn: async (a: { id: string; patch: { enabled?: boolean; hidden_event_titles?: string[]; owner_id?: string | null } }) =>
+    mutationFn: async (a: { id: string; patch: { enabled?: boolean; hidden_event_titles?: string[]; owner_id?: string | null; use_for_agents?: boolean } }) =>
       unwrap(await supabase.from('calendar_integrations').update(a.patch).eq('id', a.id)),
     onSuccess: invalidate,
   })
@@ -200,6 +200,19 @@ function CalendarSection() {
                   <Switch checked={i.enabled} onCheckedChange={(v) => update.mutate({ id: i.id, patch: { enabled: v } })} aria-label={`Show ${i.name}`} />
                   <Button variant="ghost" size="icon-sm" aria-label={`Remove ${i.name}`} onClick={() => remove.mutate(i.id)}><Trash2 /></Button>
                 </div>
+                {i.mode === 'service_account' ? (
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span>
+                      Plan around it
+                      <span className="block text-xs text-muted-foreground">Briefings and packed-day checks use it. Turn off for one like Birthdays.</span>
+                    </span>
+                    <Switch
+                      checked={i.use_for_agents}
+                      onCheckedChange={(v) => update.mutate({ id: i.id, patch: { use_for_agents: v } })}
+                      aria-label={`Plan around ${i.name}`}
+                    />
+                  </label>
+                ) : null}
                 {i.mode === 'service_account' ? (
                   <HiddenTitles titles={i.hidden_event_titles ?? []} onChange={(titles) => update.mutate({ id: i.id, patch: { hidden_event_titles: titles } })} />
                 ) : null}

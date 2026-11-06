@@ -150,7 +150,7 @@ Context for each run is loaded with narrow selects (open occurrences with task f
 
 ## Calendar awareness
 
-The Task Manager and Chief of Staff read the household's connected Google Calendars (the same service account as the Calendar page, `_shared/google-calendar.ts`) from yesterday to a week ahead, keeping only times, titles and whose calendar it is (`calendar_integrations.owner_id`, set in Settings; empty = shared, counts for both). Titles hidden in Settings stay hidden. A day is packed with 3+ timed events or 4+ booked hours (`_shared/agents/calendar.ts`).
+The Task Manager and Chief of Staff read the household's connected Google Calendars (the same service account as the Calendar page, `_shared/google-calendar.ts`) from yesterday to a week ahead, keeping only times, titles and whose calendar it is (`calendar_integrations.owner_id`, set in Settings; empty = shared, counts for both). Titles hidden in Settings stay hidden, and a calendar with "Plan around it" off (`use_for_agents`, e.g. Birthdays) is ignored. A day is packed with 3+ timed events or 4+ booked hours (`_shared/agents/calendar.ts`).
 
 - Briefing: today's events, the count in the headline ("2 events"), and packed days in the next six.
 - Task Manager: a job due on a packed day in the coming week is suggested a move to the nearest clearer day within three, never past its deadline. Someone's own job moves if their day is packed; a joint one only if everyone's is, or either's if it needs you both. Timed tasks and daily jobs stay put. Up to three a person.

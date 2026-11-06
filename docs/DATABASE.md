@@ -35,7 +35,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | view `financial_account_balances` | `security_invoker` view of current balances. |
 | Feed | `feed_posts`, `feed_comments`, `feed_reads` | Messages, replies, read receipts. Only authors edit text; anyone can pin. |
 | | `feed_sources` | External provider config (no secrets). |
-| Calendar | `calendar_integrations` | Google calendar ID or embed URL per household (no credentials); `owner_id` says whose calendar it is (empty = shared), for the agents. |
+| Calendar | `calendar_integrations` | Google calendar ID or embed URL per household (no credentials); `owner_id` says whose calendar it is (empty = shared) and `use_for_agents` whether the agents plan around it. |
 | Health | `health_metric_definitions` | Built-in metrics; only `weight` remains. Not client-writable. |
 | | `health_measurements` | Value + unit + time; import fields. |
 | | `health_exercise_sessions` | Free-text `description`, `started_at`, `duration_minutes` |

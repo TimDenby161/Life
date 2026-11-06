@@ -509,6 +509,7 @@ export type Database = {
           owner_id: string | null
           provider: string
           updated_at: string
+          use_for_agents: boolean
         }
         Insert: {
           color?: string
@@ -525,6 +526,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           updated_at?: string
+          use_for_agents?: boolean
         }
         Update: {
           color?: string
@@ -541,6 +543,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           updated_at?: string
+          use_for_agents?: boolean
         }
         Relationships: [
           {

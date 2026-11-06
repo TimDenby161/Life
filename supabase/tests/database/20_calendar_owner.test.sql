@@ -1,8 +1,9 @@
--- Whose calendar: a member can set it to someone in the household, or both.
+-- Whose calendar: a member can set it to someone in the household, or both,
+-- and switch the agents' planning around it off.
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(4);
+select plan(5);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -19,6 +20,7 @@ select pg_temp.as_user(current_setting('t.tim')::uuid);
 select lives_ok(format($$insert into calendar_integrations (household_id, name, google_calendar_id, owner_id) values (%L, 'Tim', 'tim@example.com', %L)$$,
   current_setting('t.hh'), current_setting('t.tim')), 'a member adds a calendar as theirs');
 select lives_ok($$update calendar_integrations set owner_id = null where name = 'Tim'$$, 'and can make it shared');
+select lives_ok($$update calendar_integrations set use_for_agents = false where name = 'Tim'$$, 'and can stop the agents planning around it');
 select throws_ok(format($$update calendar_integrations set owner_id = %L where name = 'Tim'$$, current_setting('t.out')),
   '23503', null, 'it cannot belong to someone outside the household');
 

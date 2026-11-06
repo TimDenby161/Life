@@ -236,7 +236,8 @@ const titleKey = (title: string) => title.trim().replace(/\s+/g, ' ').toLowerCas
 /**
  * The household's connected calendars from yesterday to a week ahead: times,
  * titles and whose calendar only (descriptions and locations are dropped
- * here). Titles hidden in Settings stay hidden. Empty when none is connected.
+ * here). Titles hidden in Settings stay hidden, as do calendars switched off
+ * for planning (e.g. Birthdays). Empty when none is connected.
  */
 export async function loadCalendar(db: SupabaseClient, householdId: string, today: string): Promise<CalEvent[]> {
   const serviceAccount = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
@@ -247,6 +248,7 @@ export async function loadCalendar(db: SupabaseClient, householdId: string, toda
       .select('google_calendar_id, owner_id, hidden_event_titles')
       .eq('household_id', householdId)
       .eq('enabled', true)
+      .eq('use_for_agents', true)
       .eq('mode', 'service_account'),
   ) as { google_calendar_id: string; owner_id: string | null; hidden_event_titles: string[] | null }[]
   if (!rows.length) return []
