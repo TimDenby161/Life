@@ -7,6 +7,7 @@ import { EmptyState, QueryState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
+import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
@@ -15,12 +16,29 @@ import { type Suggestion, useAgentRuns, useLatestBriefing, useRunAgent, useSugge
 import type { PageAgent } from '../pageAgents'
 import { SuggestionCard } from './SuggestionCard'
 import { TodayCalendar } from './TodayCalendar'
+import { TopNews } from './TopNews'
 
 /** Something to know rather than something to do. */
 const isNote = (s: Suggestion) => !s.action && OBSERVATION_KINDS.has(s.kind)
 
 /** A page's agent view: what its agents noticed and suggest, then when they last looked. */
 export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDetails: () => void }) {
+  if (scope.extra === 'today') return <HomeToday />
+  return <AgentSuggestions scope={scope} onDetails={onDetails} />
+}
+
+/** Home: the rest of today's calendar, the jobs I can do today (AI-picked, home or out), and the news. Nothing else. */
+function HomeToday() {
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      <TodayCalendar />
+      <TopJobsCard title="Tasks I can do today" />
+      <TopNews />
+    </div>
+  )
+}
+
+function AgentSuggestions({ scope, onDetails }: { scope: PageAgent; onDetails: () => void }) {
   const suggestions = useSuggestions()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const mine = (suggestions.data ?? [])
@@ -36,7 +54,6 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      {scope.extra === 'today' ? <TodayCalendar /> : null}
       {scope.extra === 'calendar' ? <CalendarCard /> : null}
 
       <QueryState query={suggestions}>
@@ -126,7 +143,7 @@ function CalendarCard() {
 function AgentsFooter({ scope }: { scope: PageAgent }) {
   const runs = useAgentRuns()
   const run = useRunAgent()
-  const ids = scope.extra === 'today' ? (['chief_of_staff'] as const) : scope.agents
+  const ids = scope.agents
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       {ids.map((id) => {

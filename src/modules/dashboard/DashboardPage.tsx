@@ -11,8 +11,8 @@ import { addDaysISO, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
-import { useLatestBriefing } from '@/modules/agents/api'
-import { aiFirst } from '@/modules/agents/lib/aiOrder'
+import { useAiPicks } from '@/modules/agents/api'
+import { aiFirst, canDoAnywhere } from '@/modules/agents/lib/aiOrder'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -24,7 +24,6 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
-import type { BriefingContent } from '../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
 function useOccurrencesFor(view: string) {
@@ -193,7 +192,39 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
 const JOBS_PER_STEP = 5
 
 /** The open tasks that most need doing, in score order, five more at a time on request. */
-function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; onToggleAdding: () => void; onMessage: () => void }) {
+/** Out today, remembered on this device until midnight. */
+function useOutToday(today: string): [boolean, (out: boolean) => void] {
+  const read = () => {
+    try {
+      return localStorage.getItem('life.out') === today
+    } catch {
+      return false
+    }
+  }
+  const [out, setOut] = useState(read)
+  const set = (v: boolean) => {
+    setOut(v)
+    try {
+      if (v) localStorage.setItem('life.out', today)
+      else localStorage.removeItem('life.out')
+    } catch {
+      // Private browsing: it just won't be remembered.
+    }
+  }
+  return [out && read(), set]
+}
+
+export function TopJobsCard({
+  title = 'Top jobs',
+  adding = false,
+  onToggleAdding,
+  onMessage,
+}: {
+  title?: string
+  adding?: boolean
+  onToggleAdding?: () => void
+  onMessage?: () => void
+}) {
   const { me, partner } = useHousehold()
   const views = useViewOptions()
   const [who, setWho] = useState(me.id)
@@ -211,17 +242,15 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   }
   const today = todayISO()
   // A score of 0 means nothing needs doing yet, so it stays off the list.
-  // Today's AI picks (mine only: briefings are private) go first, then the usual score order.
-  const briefing = useLatestBriefing()
-  const content = briefing.data?.content as BriefingContent | undefined
+  // This tab's AI picks for today go first, then the usual score order.
+  const picks = useAiPicks(today).data?.get(who)
+  const [out, setOut] = useOutToday(today)
   const scored = topJobs(items ?? [], categories, today, Infinity)
-  const ai = aiFirst(
-    scored,
-    who === me.id ? content?.top : undefined,
-    content?.date,
-    today,
-  )
-  const ranked = ai.items.filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
+  const ai = aiFirst(scored, picks)
+  const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
+  const ranked = ai.items
+    .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
+    .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const visible = ranked.slice(0, shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
@@ -243,14 +272,28 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Top jobs</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <div className="flex items-center gap-2">
-          <Button size="icon-sm" variant="outline" aria-label="Message" title="Message" onClick={onMessage}>
-            <MessageSquarePlus />
-          </Button>
-          <Button size="icon-sm" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={onToggleAdding}>
-            {adding ? <X /> : <Plus />}
-          </Button>
+          <Segmented
+            aria-label="Where I am"
+            size="sm"
+            value={out ? 'out' : 'home'}
+            onChange={(v) => setOut(v === 'out')}
+            options={[
+              { value: 'home', label: 'At home' },
+              { value: 'out', label: 'Out' },
+            ]}
+          />
+          {onMessage ? (
+            <Button size="icon-sm" variant="outline" aria-label="Message" title="Message" onClick={onMessage}>
+              <MessageSquarePlus />
+            </Button>
+          ) : null}
+          {onToggleAdding ? (
+            <Button size="icon-sm" aria-label={adding ? 'Close add task' : 'Add task'} aria-expanded={adding} onClick={onToggleAdding}>
+              {adding ? <X /> : <Plus />}
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="px-2 sm:px-3">

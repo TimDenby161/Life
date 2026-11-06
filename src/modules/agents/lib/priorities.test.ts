@@ -1,11 +1,10 @@
 import { busyBlocks, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { candidatesFor, cleanPicks, MAX_PICKS, prioritiesInput } from '../../../../supabase/functions/_shared/agents/priorities.ts'
-import { aiFirst } from './aiOrder'
+import { candidatesFor, cleanPicks, MAX_PICKS, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
+import { aiFirst, canDoAnywhere } from './aiOrder'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
 
 const TODAY = '2026-11-06'
 const alex = { id: ALEX, name: 'Alex' }
-const sam = { id: SAM, name: 'Sam' }
 const ev = (title: string, start: string, end: string, owner_id: string | null = ALEX): CalEvent => ({ owner_id, title, start, end, allDay: false })
 
 describe('AI priorities: the shortlist', () => {
@@ -19,10 +18,12 @@ describe('AI priorities: the shortlist', () => {
         task({ title: 'Voted up', importance_votes: 2 }),
         task({ title: 'Sam’s own', list_id: SAM_LIST, due_date: TODAY }),
         task({ title: 'Mine', list_id: ALEX_LIST, due_date: TODAY }),
+        task({ title: 'Together job', due_date: TODAY, needs_both: true }),
       ],
     })
     const c = candidatesFor(ctx, alex)
     expect(c.map((x) => x.title)).toEqual(['Late', 'Mine', 'Due Monday', 'Deadline soon', 'Voted up'])
+    expect(candidatesFor(ctx, TOGETHER).map((x) => x.title)).toEqual(['Together job'])
     expect(c[0]).toMatchObject({ ref: 'J1', who: 'joint', late: 5 })
     expect(c[1].who).toBe('mine')
   })
@@ -36,19 +37,26 @@ describe('AI priorities: the shortlist', () => {
 
 describe('AI priorities: what Claude sees', () => {
   it('gets refs, titles and dates, busy times without event titles, and no ids', () => {
-    const t = task({ title: 'Book boiler service', due_date: TODAY, needs_both: true })
+    const t = task({ title: 'Book boiler service', due_date: TODAY })
     const ctx = context({
       open: [t],
       calendar: [ev('Secret dentist', '2026-11-06T10:00:00Z', '2026-11-06T11:00:00Z'), ev('Sam’s gym', '2026-11-06T18:00:00Z', '2026-11-06T19:00:00Z', SAM)],
     })
-    const input = prioritiesInput(ctx, alex, sam, candidatesFor(ctx, alex), '06:05')
+    const input = prioritiesInput(ctx, alex, candidatesFor(ctx, alex), '06:05')
     const data = JSON.parse(input)
     expect(data).toMatchObject({ person: 'Alex', partner: 'Sam', weekday: 'Friday', time: '06:05' })
     expect(data.busyToday).toEqual([{ from: '10:00', to: '11:00' }])
     expect(data.partnerBusyToday).toEqual([{ from: '18:00', to: '19:00' }])
-    expect(data.jobs[0]).toMatchObject({ ref: 'J1', title: 'Book boiler service', who: 'together' })
+    expect(data.jobs[0]).toMatchObject({ ref: 'J1', title: 'Book boiler service', who: 'joint' })
     expect(input).not.toContain(t.task_id)
     expect(input).not.toContain('dentist')
+  })
+
+  it('names the Together tab after both of you, with both busy times', () => {
+    const ctx = context({ open: [task({ title: 'Big shop', due_date: TODAY, needs_both: true })], calendar: [ev('Gym', '2026-11-06T18:00:00Z', '2026-11-06T19:00:00Z', SAM)] })
+    const data = JSON.parse(prioritiesInput(ctx, TOGETHER, candidatesFor(ctx, TOGETHER), '06:05'))
+    expect(data).toMatchObject({ person: 'Alex and Sam, together', partner: null, busyToday: [], partnerBusyToday: [{ from: '18:00', to: '19:00' }] })
+    expect(data.jobs[0]).toMatchObject({ title: 'Big shop', who: 'together' })
   })
 
   it('keeps all-day events out of busy times', () => {
@@ -61,19 +69,20 @@ describe('AI priorities: checking the answer', () => {
   const c = candidatesFor(ctx, alex)
 
   it('keeps picks from the shortlist, in order, with their reasons', () => {
-    const picks = cleanPicks(JSON.stringify({ picks: [{ ref: 'J2', why: 'Due today' }, { ref: 'J1', why: 'Quick win' }] }), c)
+    const picks = cleanPicks(JSON.stringify({ picks: [{ ref: 'J2', why: 'Due today', where: 'anywhere' }, { ref: 'J1', why: 'Quick win', where: 'home' }] }), c)
     expect(picks).toEqual([
-      { task_id: c[1].task_id, title: 'B', why: 'Due today' },
-      { task_id: c[0].task_id, title: 'A', why: 'Quick win' },
+      { task_id: c[1].task_id, title: 'B', why: 'Due today', where: 'anywhere' },
+      { task_id: c[0].task_id, title: 'A', why: 'Quick win', where: 'home' },
     ])
+    expect(cleanPicks(JSON.stringify({ picks: [{ ref: 'J1', why: 'x', where: 'moon' }] }), c)?.[0].where).toBe('home')
   })
 
   it('drops invented jobs, repeats, odd reasons and anything past the limit', () => {
     const many = Array.from({ length: 8 }, () => ({ ref: 'J1', why: 'x' }))
     expect(cleanPicks(JSON.stringify({ picks: [{ ref: 'J9', why: 'made up' }, ...many] }), c)).toHaveLength(1)
-    expect(cleanPicks(JSON.stringify({ picks: [{ ref: 'J1', why: 'See https://example.com' }] }), c)).toEqual([{ task_id: c[0].task_id, title: 'A', why: '' }])
+    expect(cleanPicks(JSON.stringify({ picks: [{ ref: 'J1', why: 'See https://example.com' }] }), c)).toEqual([{ task_id: c[0].task_id, title: 'A', why: '', where: 'home' }])
     expect(cleanPicks(JSON.stringify({ picks: [{ ref: 'J1', why: 'x'.repeat(101) }] }), c)?.[0].why).toBe('')
-    const big = context({ open: Array.from({ length: 9 }, (_, i) => task({ title: `T${i}`, due_date: TODAY })) })
+    const big = context({ open: Array.from({ length: 12 }, (_, i) => task({ title: `T${i}`, due_date: TODAY })) })
     const bc = candidatesFor(big, alex)
     expect(cleanPicks(JSON.stringify({ picks: bc.map((x) => ({ ref: x.ref, why: 'ok' })) }), bc)).toHaveLength(MAX_PICKS)
   })
@@ -87,13 +96,30 @@ describe('AI priorities: checking the answer', () => {
 describe('AI priorities: Top jobs order', () => {
   const rows = [{ task_id: 'a' }, { task_id: 'b' }, { task_id: 'c' }]
 
-  it('puts today’s picks first in the AI’s order, then the rest as they were', () => {
-    const { items, notes } = aiFirst(rows, [{ task_id: 'c', why: 'Deadline Friday' }, { task_id: 'gone', why: 'x' }, { task_id: 'b', why: '' }], TODAY, TODAY)
+  it('puts the tab’s picks first in the AI’s order, then the rest as they were', () => {
+    const { items, notes, where } = aiFirst(rows, [{ task_id: 'c', why: 'Deadline Friday', where: 'anywhere' }, { task_id: 'gone', why: 'x' }, { task_id: 'b', why: '' }])
     expect(items.map((r) => r.task_id)).toEqual(['c', 'b', 'a'])
     expect(notes).toEqual(new Map([['c', 'Deadline Friday'], ['b', '']]))
+    expect(where).toEqual(new Map([['c', 'anywhere'], ['b', 'home']]))
   })
 
-  it('ignores yesterday’s picks', () => {
-    expect(aiFirst(rows, [{ task_id: 'c', why: '' }], '2026-11-05', TODAY).items).toBe(rows)
+  it('leaves the order alone with no picks', () => {
+    expect(aiFirst(rows, undefined).items).toBe(rows)
+  })
+})
+
+describe('out and about', () => {
+  it('goes by the AI’s tag when there is one', () => {
+    expect(canDoAnywhere('Vacuum the hall', null, 'anywhere')).toBe(true)
+    expect(canDoAnywhere('Learn two Spanish words', 'Spanish', 'home')).toBe(false)
+  })
+
+  it('otherwise keeps language practice, calls and online admin, not housework', () => {
+    expect(canDoAnywhere('Learn two Spanish words', 'Spanish')).toBe(true)
+    expect(canDoAnywhere('Review Mandarin characters', null)).toBe(true)
+    expect(canDoAnywhere('Call the council about bins', null)).toBe(true)
+    expect(canDoAnywhere('Book boiler service', 'Admin & bills')).toBe(true)
+    expect(canDoAnywhere('Vacuum the hall', 'Cleaning')).toBe(false)
+    expect(canDoAnywhere('Change the towels', null)).toBe(false)
   })
 })

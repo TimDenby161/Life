@@ -25,7 +25,7 @@
 // VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications, PRIORITIES_SECRET for the
 // morning Claude routine.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { type BriefingContent, briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
+import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
 import { analyseCareer } from '../_shared/agents/career.ts'
 import { analyseFinance } from '../_shared/agents/finance.ts'
@@ -45,7 +45,7 @@ import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import { type AgentPrefs, loadCalendar, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
-import { routineInput, routineSave } from './routine.ts'
+import { routineInput, routineSave, savePicks, tabsFor } from './routine.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -162,33 +162,12 @@ async function runAgent(
         .eq('status', 'pending')
       if (pending.error) throw new Error(pending.error.message)
       const kind = options.kind ?? (isoWeekday(date) === 1 ? 'weekly' : 'daily')
-      // Today's AI picks (from the API below or the morning routine) survive a refresh.
-      const earlier = await db.from('agent_briefings').select('recipient_id, day:content->>date, top:content->top').eq('household_id', household.id)
-      if (earlier.error) throw new Error(earlier.error.message)
-      const keptTop = new Map(
-        (earlier.data as { recipient_id: string; day: string | null; top: unknown }[])
-          .filter((b) => b.day === date && Array.isArray(b.top))
-          .map((b) => [b.recipient_id, b.top as NonNullable<BriefingContent['top']>]),
-      )
       const budget = { spent: await llmSpentThisMonth(db, household.id, now), limit: monthlyBudgetMicroUsd(Deno.env.get('AGENT_LLM_MONTHLY_BUDGET_USD')) }
       for (const member of ctx.members) {
         if (!prefs.enabled('chief_of_staff').includes(member.id)) continue
         if (options.onlyFor && options.onlyFor !== member.id) continue
         if (kind === 'daily' && !options.onlyFor && prefs.schedule('chief_of_staff', member.id) !== 'daily') continue
         const briefing = briefingFor(ctx, tm, member, kind, now, pending.data as PendingSuggestion[])
-        const kept = keptTop.get(member.id)
-        if (kept) (briefing.content as BriefingContent).top = kept
-        if (prefs.aiPriorities.has(member.id) && !kept && Deno.env.get('ANTHROPIC_API_KEY')) {
-          const candidates = candidatesFor(ctx, member)
-          const local = localNow(now, household.timezone)
-          const input = prioritiesInput(ctx, member, ctx.members.find((m) => m.id !== member.id), candidates, `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`)
-          const result = await pickPriorities(input, candidates, budget)
-          if (result.picks?.length) (briefing.content as BriefingContent).top = result.picks
-          usage.input_tokens += result.usage.input_tokens
-          usage.output_tokens += result.usage.output_tokens
-          usage.cost_micro_usd += result.usage.cost_micro_usd
-          budget.spent += result.usage.cost_micro_usd
-        }
         if (prefs.aiSummaries.has(member.id)) {
           const result = await writeSummary(member.name, briefing.content as Parameters<typeof writeSummary>[1], budget)
           briefing.ai_summary = result.summary
@@ -198,6 +177,21 @@ async function runAgent(
           budget.spent += result.usage.cost_micro_usd
         }
         briefings.push(briefing)
+      }
+      // With an API key (instead of the morning routine), the scheduled run picks each tab's top jobs.
+      if (trigger === 'scheduled' && Deno.env.get('ANTHROPIC_API_KEY')) {
+        const local = localNow(now, household.timezone)
+        const time = `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`
+        for (const tab of tabsFor(ctx, prefs)) {
+          const candidates = candidatesFor(ctx, tab)
+          if (!candidates.length) continue
+          const result = await pickPriorities(prioritiesInput(ctx, tab, candidates, time), budget)
+          if (result.raw) await savePicks(db, household.id, ctx, tab, result.raw, candidates)
+          usage.input_tokens += result.usage.input_tokens
+          usage.output_tokens += result.usage.output_tokens
+          usage.cost_micro_usd += result.usage.cost_micro_usd
+          budget.spent += result.usage.cost_micro_usd
+        }
       }
     }
 

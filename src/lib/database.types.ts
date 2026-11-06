@@ -439,6 +439,38 @@ export type Database = {
           },
         ]
       }
+      ai_picks: {
+        Row: {
+          created_at: string
+          day: string
+          household_id: string
+          picks: Json
+          view: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          household_id: string
+          picks: Json
+          view: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          household_id?: string
+          picks?: Json
+          view?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_picks_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budgets: {
         Row: {
           amount_minor: number
@@ -3002,6 +3034,15 @@ export type Database = {
           p_run_id: string
           p_suggestions?: Json
           p_usage?: Json
+        }
+        Returns: undefined
+      }
+      agent_save_picks: {
+        Args: {
+          p_day: string
+          p_household_id: string
+          p_picks: Json
+          p_view: string
         }
         Returns: undefined
       }

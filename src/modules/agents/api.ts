@@ -6,6 +6,7 @@ import { useUserId } from '@/modules/auth/AuthProvider'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { AgentSchedule } from '../../../supabase/functions/_shared/agents/registry.ts'
 import { fromB64url } from '../../../supabase/functions/_shared/push.ts'
+import type { AiPick } from './lib/aiOrder'
 import { thisDeviceEndpoint, workerRegistration } from './push'
 
 export type AgentSetting = Tables<'agent_settings'>
@@ -263,4 +264,14 @@ export const useSaveGoal = () =>
 export const useDeleteGoal = () =>
   useAgentMutation(async (_h, id: string) => {
     unwrap(await supabase.from('career_goals').delete().eq('id', id))
+  })
+
+/** Today's AI picks for every Top jobs tab (a member's id, or 'together'). */
+export const useAiPicks = (day: string) =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'picks', day],
+    queryFn: async () => {
+      const rows = unwrap(await supabase.from('ai_picks').select('view, picks').eq('day', day))
+      return new Map(rows.map((r) => [r.view, r.picks as AiPick[]]))
+    },
   })
