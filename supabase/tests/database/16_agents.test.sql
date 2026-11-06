@@ -37,14 +37,16 @@ $$;
 grant execute on all functions in schema pg_temp to authenticated, service_role, anon;
 
 -- Only the service role runs agents --------------------------------------------------
+-- Checked as privileges rather than by calling them: on the x86-64 build of the
+-- Supabase Postgres 17.11 image (GitHub CI), any refused function call segfaults
+-- the server. The arm64 build (local and the hosted project) doesn't.
+select ok(not has_function_privilege('authenticated', 'public.agent_claim_run(uuid, text, text, text, uuid)', 'execute'),
+  'members cannot start agent runs');
+select ok(not has_function_privilege('authenticated', 'public.agent_finish_run(uuid, text, jsonb, jsonb, jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.agent_finish_run(uuid, text, jsonb, jsonb, jsonb)', 'execute'),
+  'members cannot record agent results');
+select ok(not has_function_privilege('authenticated', 'public.agents_dispatch()', 'execute'), 'members cannot trigger the dispatcher');
 select pg_temp.as_user(current_setting('t.tim')::uuid);
-select throws_ok(
-  format('select agent_claim_run(%L, %L, %L, %L)', current_setting('t.hh'), 'task_manager', 'daily:x', 'scheduled'),
-  '42501', null, 'members cannot start agent runs');
-select throws_ok(
-  format('select agent_finish_run(%L)', gen_random_uuid()),
-  '42501', null, 'members cannot record agent results');
-select throws_ok('select agents_dispatch()', '42501', null, 'members cannot trigger the dispatcher');
 
 -- Claiming: dedupe, retries, stuck runs -----------------------------------------------
 select pg_temp.as_service();
