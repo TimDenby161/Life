@@ -40,6 +40,12 @@ export function formatDay(value: ISODate, now = new Date()): string {
   return format(date, 'd MMM')
 }
 
+/** formatDay for the middle of a sentence: "today", "tomorrow", otherwise unchanged ("Mon 3 Nov"). */
+export function formatDayInline(value: ISODate, now = new Date()): string {
+  const label = formatDay(value, now)
+  return /^(Today|Tomorrow|Yesterday)$/.test(label) ? label.toLowerCase() : label
+}
+
 export function formatTime(value: string | null | undefined): string {
   if (!value) return ''
   // "HH:MM:SS" -> "HH:MM"

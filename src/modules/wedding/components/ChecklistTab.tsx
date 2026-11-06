@@ -32,7 +32,11 @@ export function ChecklistTab() {
   const missing = missingStarterTasks(tasks.data, weddingDate ?? ASSUMED_WEDDING_DATE, today)
   const addUsual = () =>
     addMany.mutate(missing, { onSuccess: () => toast.success(`Added ${missing.length} tasks`), onError })
-  const datesFrom = weddingDate ? 'counting back from your wedding date' : 'counting back from 1 September 2028 until you set the exact date'
+  const datesFrom = !weddingDate
+    ? 'counting back from 1 September 2028 until you set the exact date'
+    : settings.data?.wedding_date_approx
+      ? 'counting back from the start of your wedding month'
+      : 'counting back from your wedding date'
 
   return (
     <div className="grid grid-cols-1 gap-3">

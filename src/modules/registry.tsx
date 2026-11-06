@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   MessagesSquare,
   Settings,
+  Sparkles,
   TrendingUp,
   Wallet,
 } from 'lucide-react'
@@ -41,6 +42,7 @@ export const modules: AppModule[] = [
   { id: 'feed', label: 'Feed', path: '/feed', icon: MessagesSquare, component: lazy(() => import('./feed/FeedPage')) },
   { id: 'languages', label: 'Languages', path: '/languages', icon: Languages, component: lazy(() => import('./languages/LanguagesPage')) },
   { id: 'health', label: 'Health', path: '/health', icon: HeartPulse, component: lazy(() => import('./health/HealthPage')) },
+  { id: 'ai', label: 'AI Hub', path: '/ai', icon: Sparkles, component: lazy(() => import('./agents/AiHubPage')) },
   { id: 'stats', label: 'Statistics', path: '/stats', icon: BarChart3, component: lazy(() => import('./stats/StatsPage')) },
   { id: 'settings', label: 'Settings', path: '/settings', icon: Settings, component: lazy(() => import('./settings/SettingsPage')) },
 ]

@@ -95,6 +95,350 @@ export type Database = {
           },
         ]
       }
+      agent_actions: {
+        Row: {
+          action_type: string | null
+          actor_id: string
+          agent_id: string
+          created_at: string
+          household_id: string
+          id: string
+          response: string
+          suggestion_id: string
+          task_id: string | null
+          title: string
+        }
+        Insert: {
+          action_type?: string | null
+          actor_id: string
+          agent_id: string
+          created_at?: string
+          household_id: string
+          id?: string
+          response: string
+          suggestion_id: string
+          task_id?: string | null
+          title: string
+        }
+        Update: {
+          action_type?: string | null
+          actor_id?: string
+          agent_id?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          response?: string
+          suggestion_id?: string
+          task_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_actions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_actions_suggestion_id_household_id_fkey"
+            columns: ["suggestion_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "agent_suggestions"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      agent_briefings: {
+        Row: {
+          ai_summary: string | null
+          content: Json
+          created_at: string
+          household_id: string
+          id: string
+          kind: string
+          period_key: string
+          recipient_id: string
+          run_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          content: Json
+          created_at?: string
+          household_id: string
+          id?: string
+          kind: string
+          period_key: string
+          recipient_id: string
+          run_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          content?: Json
+          created_at?: string
+          household_id?: string
+          id?: string
+          kind?: string
+          period_key?: string
+          recipient_id?: string
+          run_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_briefings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_briefings_household_id_recipient_id_fkey"
+            columns: ["household_id", "recipient_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "agent_briefings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string
+          attempts: number
+          briefings_count: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          household_id: string
+          id: string
+          llm_cost_micro_usd: number
+          llm_input_tokens: number
+          llm_output_tokens: number
+          requested_by: string | null
+          run_key: string
+          started_at: string | null
+          status: string
+          suggestions_count: number
+          trigger: string
+        }
+        Insert: {
+          agent_id: string
+          attempts?: number
+          briefings_count?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          household_id: string
+          id?: string
+          llm_cost_micro_usd?: number
+          llm_input_tokens?: number
+          llm_output_tokens?: number
+          requested_by?: string | null
+          run_key: string
+          started_at?: string | null
+          status?: string
+          suggestions_count?: number
+          trigger: string
+        }
+        Update: {
+          agent_id?: string
+          attempts?: number
+          briefings_count?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          household_id?: string
+          id?: string
+          llm_cost_micro_usd?: number
+          llm_input_tokens?: number
+          llm_output_tokens?: number
+          requested_by?: string | null
+          run_key?: string
+          started_at?: string | null
+          status?: string
+          suggestions_count?: number
+          trigger?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_settings: {
+        Row: {
+          agent_id: string
+          config: Json
+          enabled: boolean
+          household_id: string
+          schedule: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          enabled?: boolean
+          household_id: string
+          schedule?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          enabled?: boolean
+          household_id?: string
+          schedule?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_settings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_settings_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      agent_suggestions: {
+        Row: {
+          action: Json | null
+          agent_id: string
+          created_at: string
+          dedupe_key: string
+          first_run_id: string | null
+          household_id: string
+          id: string
+          kind: string
+          last_run_id: string | null
+          reason: string
+          recipients: string[]
+          responded_at: string | null
+          responded_by: string | null
+          severity: number
+          snoozed_until: string | null
+          status: string
+          task_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action?: Json | null
+          agent_id: string
+          created_at?: string
+          dedupe_key: string
+          first_run_id?: string | null
+          household_id: string
+          id?: string
+          kind: string
+          last_run_id?: string | null
+          reason: string
+          recipients: string[]
+          responded_at?: string | null
+          responded_by?: string | null
+          severity?: number
+          snoozed_until?: string | null
+          status?: string
+          task_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          action?: Json | null
+          agent_id?: string
+          created_at?: string
+          dedupe_key?: string
+          first_run_id?: string | null
+          household_id?: string
+          id?: string
+          kind?: string
+          last_run_id?: string | null
+          reason?: string
+          recipients?: string[]
+          responded_at?: string | null
+          responded_by?: string | null
+          severity?: number
+          snoozed_until?: string | null
+          status?: string
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_suggestions_first_run_id_fkey"
+            columns: ["first_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_suggestions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_suggestions_last_run_id_fkey"
+            columns: ["last_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_suggestions_responded_by_fkey"
+            columns: ["responded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_suggestions_task_id_household_id_fkey"
+            columns: ["task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
       budgets: {
         Row: {
           amount_minor: number
@@ -2062,6 +2406,7 @@ export type Database = {
       }
       user_preferences: {
         Row: {
+          ai_summaries: boolean
           default_task_list_id: string | null
           settings: Json
           theme: string
@@ -2070,6 +2415,7 @@ export type Database = {
           week_starts_on: number
         }
         Insert: {
+          ai_summaries?: boolean
           default_task_list_id?: string | null
           settings?: Json
           theme?: string
@@ -2078,6 +2424,7 @@ export type Database = {
           week_starts_on?: number
         }
         Update: {
+          ai_summaries?: boolean
           default_task_list_id?: string | null
           settings?: Json
           theme?: string
@@ -2228,6 +2575,7 @@ export type Database = {
           task_category_id: string | null
           updated_at: string
           wedding_date: string | null
+          wedding_date_approx: boolean
         }
         Insert: {
           household_id: string
@@ -2235,6 +2583,7 @@ export type Database = {
           task_category_id?: string | null
           updated_at?: string
           wedding_date?: string | null
+          wedding_date_approx?: boolean
         }
         Update: {
           household_id?: string
@@ -2242,6 +2591,7 @@ export type Database = {
           task_category_id?: string | null
           updated_at?: string
           wedding_date?: string | null
+          wedding_date_approx?: boolean
         }
         Relationships: [
           {
@@ -2397,6 +2747,27 @@ export type Database = {
         Args: { p_account_id: string; p_date: string }
         Returns: number
       }
+      agent_claim_run: {
+        Args: {
+          p_agent_id: string
+          p_household_id: string
+          p_requested_by?: string
+          p_run_key: string
+          p_trigger: string
+        }
+        Returns: string
+      }
+      agent_finish_run: {
+        Args: {
+          p_briefings?: Json
+          p_error?: string
+          p_run_id: string
+          p_suggestions?: Json
+          p_usage?: Json
+        }
+        Returns: undefined
+      }
+      agents_dispatch: { Args: never; Returns: undefined }
       apply_sheet_balances: {
         Args: { p_balances: Json; p_error?: string; p_source_id: string }
         Returns: Json
@@ -2505,6 +2876,14 @@ export type Database = {
       replace_sheet_links: {
         Args: { p_household_id: string; p_links: Json }
         Returns: undefined
+      }
+      respond_agent_suggestion: {
+        Args: {
+          p_response: string
+          p_snooze_until?: string
+          p_suggestion_id: string
+        }
+        Returns: string
       }
       set_task_occurrence_completed_by: {
         Args: {

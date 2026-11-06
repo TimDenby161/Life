@@ -43,6 +43,11 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | Languages | `language_study` | Per person and language (`zh`, `es`); `active` says who learns what (stopping keeps settings and progress): words/characters a day, HSK start level, the jobs each part ticks off. |
 | | `language_progress` | One row per word or character a person has learned, keyed by its text; `due_on`/`interval_days` are the review schedule. The word lists themselves ship with the app. |
 | Investments | `investment_holdings` | One row per holding per person: value entered by hand (no price feed), whether it's in the Pie, shares/bonds/cash, target % of the long-term mix, verdict (keep/sell/review) and why. Owner writes, both read. |
+| AI agents | `agent_settings` | Per person per agent: on/off, briefing schedule, `config` JSON (e.g. fitness goals). Owner only. |
+| | `agent_runs` | Execution history: trigger, run key (unique per agent), status, attempts, counts, LLM tokens and estimated cost, error. Read by both; written only by the service role. |
+| | `agent_suggestions` | What agents noticed or propose: kind, why, severity, optional action, `recipients`, status (pending/snoozed/approved/dismissed/expired), dedupe key. Recipients only. |
+| | `agent_briefings` | Daily/weekly briefing JSON per person, optional AI sentence. Recipient only. |
+| | `agent_actions` | Append-only log of approve/dismiss/snooze and the task it created or changed. |
 | | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 
 ## Functions (RPC)
@@ -55,6 +60,8 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | `create_transfer(from, to, amount, date, description, to_amount?, notes?)` | member (invoker) | Inserts both legs atomically. |
 | `account_balance_on(account, date)` | member | Balance at a date (RLS applies). |
 | `recurrence_next_date(rule, anchor, after)` | any | Pure recurrence maths. |
+| `respond_agent_suggestion(id, response, snooze_until?)` | recipient | approve / dismiss / snooze; approving applies the action (create task, move date, archive) as the caller. |
+| `agent_claim_run(...)`, `agent_finish_run(...)` | **service role only** | Start a run (refused if its key is done) and record its results. Used by the `agents` Edge Function. |
 | `bootstrap_household(name, members jsonb)` | **admin only** | Creates the household, lists and default categories. |
 
 ## RLS summary

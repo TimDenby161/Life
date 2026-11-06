@@ -84,6 +84,10 @@ The Investments page (`src/modules/investments`) lists each person's holdings an
 
 Spanish has no open graded list like HSK, so `node scripts/build-spanish.mjs` combines the 50,000 most common words in film and TV subtitles (hermitdave/FrequencyWords, MIT) with English meanings from Wiktionary (kaikki.org extract, CC BY-SA 4.0). Verb forms count towards their infinitive, a form shared by two verbs counts for neither, meanings used only in Spain or only in one or two countries are dropped or put last, and a few grammar words have hand-written meanings. The result is the 5,000 most common words in six bands (top 250 … 3,501–5,000).
 
+## AI agents
+
+Rules-based helpers in the AI Hub (`/ai`), run hourly by `pg_cron` → the `agents` Edge Function (service role), after task completions, or on demand. They read tasks and history, write only agent tables, and change application data only when a person approves a suggestion (`respond_agent_suggestion`, as that person). An optional one-sentence AI summary is off by default. Design, setup and status: [docs/ai-agents/](ai-agents/architecture.md).
+
 ## Charts
 
 Recharts with shared building blocks in `components/charts.tsx`. The categorical palette is the validated dataviz reference palette (`--chart-1…6` in `index.css`, separate light/dark steps). A person always has the same colour. Every chart has a table view, there's a legend whenever there are 2+ series, marks are thin and gridlines recessive, and calculated series are dashed.

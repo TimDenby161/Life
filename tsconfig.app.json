@@ -23,5 +23,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"],
-  "exclude": ["src/test/security.test.ts"]
+  "exclude": ["src/test/security.test.ts", "src/test/agents-guard.test.ts"]
 }

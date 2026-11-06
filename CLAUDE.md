@@ -29,6 +29,7 @@ Local logins (seed only): `tim@life.local`, `sophie@life.local`, `outsider@life.
 - Recurrence logic exists twice (SQL `recurrence_next_date` and `tasks/lib/recurrence.ts`); change both and the shared vectors in `supabase/tests/fixtures/recurrence-cases.json`.
 - Money is integer minor units (`bigint` in SQL, `number` in TS). Never use floats for amounts; parse with `parseMoney`. Transfers are two legs with `kind = 'transfer'` and never count as income or spending.
 - Health data: owner-only writes, except exercise, which either member can log for the other (`logged_by` records who; the logger can also delete it). Both household members can read all of it (no privacy settings, by request). Never put health data or amounts in `feed_events`, logs or analytics.
+- AI agents (`supabase/functions/agents`, logic in `supabase/functions/_shared/agents`, UI in `src/modules/agents`) only suggest. The service-role function reads one household at a time and writes only via `agent_claim_run`/`agent_finish_run`; real changes happen in `respond_agent_suggestion` as the approving person (`src/test/agents-guard.test.ts` enforces this). See `docs/ai-agents/`.
 - No secrets in the frontend. `VITE_*` values are public. Google/API keys are Edge Function secrets.
 - Don't present mock or estimated data as real: label sample feed data, and dash/label calculated balances.
 - Match the existing style: small modules, TanStack Query hooks per module, invalidate by module root key (`['tasks']`, `['finances']`…), shadcn-style components, semantic colour tokens.

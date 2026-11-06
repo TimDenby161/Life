@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format, parseISO } from 'date-fns'
+import { differenceInCalendarDays, differenceInCalendarMonths, format, parseISO } from 'date-fns'
 import { Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, NativeSelect } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
+import { Segmented, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
 import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { useBalances, usePots } from '@/modules/finances/hooks'
@@ -37,7 +37,9 @@ export default function WeddingPage() {
   const today = todayISO()
 
   const date = settings.data?.wedding_date
+  const approx = settings.data?.wedding_date_approx ?? false
   const daysToGo = date ? differenceInCalendarDays(parseISO(date), parseISO(today)) : null
+  const monthsToGo = date ? differenceInCalendarMonths(parseISO(date), parseISO(today)) : null
   const totals = budgetTotals(budget.data ?? [])
   const people = guestCounts(guests.data ?? [])
   const checklist = taskCounts(tasks.data ?? [], today)
@@ -55,9 +57,11 @@ export default function WeddingPage() {
       <PageHeader
         title="Wedding"
         description={
-          date
-            ? `${format(parseISO(date), 'EEEE d MMMM yyyy')}${daysToGo !== null && daysToGo >= 0 ? ` · ${daysToGo === 0 ? 'today!' : `${daysToGo} days to go`}` : ''}`
-            : 'Set the date in wedding settings.'
+          date && approx
+            ? `Around ${format(parseISO(date), 'MMMM yyyy')}${monthsToGo !== null && monthsToGo > 0 ? ` · about ${monthsToGo} months to go` : ''}`
+            : date
+              ? `${format(parseISO(date), 'EEEE d MMMM yyyy')}${daysToGo !== null && daysToGo >= 0 ? ` · ${daysToGo === 0 ? 'today!' : `${daysToGo} days to go`}` : ''}`
+              : 'Set the date in wedding settings.'
         }
         actions={<Button variant="outline" onClick={() => setEditing(true)}><Settings2 /> Settings</Button>}
       />
@@ -95,6 +99,8 @@ function SettingsDialog({ settings, onClose }: { settings: WeddingSettings | nul
   const pots = usePots()
   const save = useSaveWeddingSettings()
   const [date, setDate] = useState(settings?.wedding_date ?? '')
+  // Month only: stored as the 1st of the month, shown as "around September 2028".
+  const [approx, setApprox] = useState(settings?.wedding_date_approx ?? false)
   const [goalId, setGoalId] = useState(settings?.pot_goal_id ?? '')
   const potName = (id: string | null) => pots.data?.pots.find((p) => p.id === id)?.name ?? ''
 
@@ -105,11 +111,29 @@ function SettingsDialog({ settings, onClose }: { settings: WeddingSettings | nul
           className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            save.mutate({ wedding_date: date || null, pot_goal_id: goalId || null }, { onSuccess: onClose, onError: (err) => toast.error(getErrorMessage(err)) })
+            const weddingDate = date ? (approx ? `${date.slice(0, 7)}-01` : date) : null
+            save.mutate(
+              { wedding_date: weddingDate, wedding_date_approx: Boolean(weddingDate) && approx, pot_goal_id: goalId || null },
+              { onSuccess: onClose, onError: (err) => toast.error(getErrorMessage(err)) },
+            )
           }}
         >
           <Field label="Wedding date" htmlFor="w-date">
-            <Input id="w-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <div className="grid gap-2">
+              <Segmented
+                aria-label="How exact"
+                size="sm"
+                className="w-fit"
+                value={approx ? 'month' : 'day'}
+                onChange={(v) => setApprox(v === 'month')}
+                options={[{ value: 'day', label: 'Exact day' }, { value: 'month', label: 'Month only' }]}
+              />
+              {approx ? (
+                <Input id="w-date" type="month" value={date.slice(0, 7)} onChange={(e) => setDate(e.target.value ? `${e.target.value}-01` : '')} />
+              ) : (
+                <Input id="w-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              )}
+            </div>
           </Field>
           <Field label="Paid for by" htmlFor="w-goal" hint="This pot item's target always equals the budget total once the budget has items.">
             <NativeSelect id="w-goal" value={goalId} onChange={(e) => setGoalId(e.target.value)}>

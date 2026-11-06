@@ -44,3 +44,6 @@ Only notable events are logged (shared or for-someone-else tasks, completions, g
 
 ## ADR 12: Native `<select>` and bottom-sheet dialogs
 On phones, native selects give the OS picker and better accessibility than custom listboxes. Dialogs become bottom sheets under `sm`. Radix primitives (via shadcn-style wrappers) cover the rest.
+
+## ADR 13: AI agents are rules first, advise only, and run from pg_cron
+The agents are plain TypeScript rules shared between the `agents` Edge Function and Vitest (`supabase/functions/_shared/agents`), not an agent framework or an LLM loop: the work is a handful of checks over task data, which rules do reliably, cheaply and testably. An LLM writes at most one optional sentence per briefing, behind an opt-in, a key and a monthly budget. Scheduling is pg_cron → pg_net → Edge Function because GitHub Pages can't run anything and Supabase is the only always-on piece; run keys made unique in Postgres stop duplicate runs. The function uses the service role (there is no user at 6am), so it only writes through two SQL functions that touch agent tables, and every change to real data goes through `respond_agent_suggestion`, run as the person who approved it.

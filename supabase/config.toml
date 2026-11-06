@@ -414,3 +414,8 @@ verify_jwt = true
 
 [functions.finance-sheet-sync]
 verify_jwt = true
+
+# pg_cron calls this with a shared secret, not a user JWT, so the gateway check is
+# off; the function checks the secret (scheduled) or the JWT (on demand) itself.
+[functions.agents]
+verify_jwt = false

@@ -60,7 +60,7 @@ async function saveSupplier(h: string, { id, ...fields }: Row<'wedding_suppliers
 }
 
 export const useSaveWeddingSettings = () =>
-  useWeddingMutation(async (h, input: { wedding_date?: string | null; pot_goal_id?: string | null; task_category_id?: string | null }) => {
+  useWeddingMutation(async (h, input: { wedding_date?: string | null; wedding_date_approx?: boolean; pot_goal_id?: string | null; task_category_id?: string | null }) => {
     const existing = unwrap(await supabase.from('wedding_settings').select('household_id').maybeSingle())
     if (existing) unwrap(await supabase.from('wedding_settings').update(input).eq('household_id', h))
     else unwrap(await supabase.from('wedding_settings').insert({ ...input, household_id: h }))

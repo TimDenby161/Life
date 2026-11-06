@@ -31,6 +31,10 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   investment_holdings: ['investments'],
   investment_settings: ['investments'],
   calendar_integrations: ['calendar'],
+  agent_settings: ['agents'],
+  agent_runs: ['agents'],
+  agent_suggestions: ['agents'],
+  agent_briefings: ['agents'],
   profiles: ['household'],
 }
 
