@@ -35,7 +35,7 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
       />
       {view === 'agent' ? (
         <div>
-          <PageHeader title={title} description={scope.description} />
+          {scope.bare ? <h1 className="sr-only">{title}</h1> : <PageHeader title={title} description={scope.description} />}
           <Suspense fallback={<ListSkeleton rows={3} />}>
             <AgentView scope={scope} onDetails={() => setView('details')} />
           </Suspense>

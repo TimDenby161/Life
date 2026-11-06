@@ -36,6 +36,19 @@ describe('AgentShell', () => {
     expect(await screen.findByText('agent suggestions')).toBeInTheDocument()
   })
 
+  it('keeps Home bare: no visible title or description', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<AgentShell scope={PAGE_AGENTS.home} base="/" title="Home" page={Page} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('agent suggestions')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Home' })).toHaveClass('sr-only')
+    expect(screen.queryByText(PAGE_AGENTS.home.description)).not.toBeInTheDocument()
+  })
+
   it('goes straight to the page for a link into it', () => {
     at('/finances?account=abc')
     expect(screen.getByText('finance page?account=abc')).toBeInTheDocument()
