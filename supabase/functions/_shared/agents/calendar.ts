@@ -69,3 +69,18 @@ export function loadText(load: DayLoad): string {
   const hours = Math.round(load.minutes / 60)
   return `${load.timed} ${load.timed === 1 ? 'event' : 'events'}${hours ? `, about ${hours} ${hours === 1 ? 'hour' : 'hours'}` : ''}`
 }
+
+/** One person's busy times on a day, as "HH:MM" ranges with no titles (for the AI). All-day events don't block time. */
+export function busyBlocks(events: CalEvent[], person: string, date: ISODate, timeZone: string): { from: string; to: string }[] {
+  const out: { from: string; to: string }[] = []
+  for (const e of events) {
+    if (e.allDay || (e.owner_id !== null && e.owner_id !== person)) continue
+    const start = localNow(new Date(e.start), timeZone)
+    const end = localNow(new Date(e.end), timeZone)
+    if (start.date > date || end.date < date) continue
+    const from = start.date === date ? hhmm(start) : '00:00'
+    const to = end.date === date ? hhmm(end) : '24:00'
+    if (to > from) out.push({ from, to })
+  }
+  return out.sort((a, b) => a.from.localeCompare(b.from))
+}
