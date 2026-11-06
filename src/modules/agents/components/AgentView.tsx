@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { EmptyState, QueryState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatDayInline as day } from '@/lib/dates'
+import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
@@ -92,7 +92,7 @@ function CalendarCard() {
   if (!c?.calendar && !c?.packed?.length) return null
   return (
     <Card>
-      <CardHeader><CardTitle>Today</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{todayLabel()}</CardTitle></CardHeader>
       <CardContent className="grid gap-3 text-sm">
         {c.calendar?.length ? (
           <ul className="grid gap-0.5">

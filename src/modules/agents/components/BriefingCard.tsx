@@ -5,7 +5,7 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/misc'
-import { formatDayInline as day } from '@/lib/dates'
+import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { formatMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { useLatestBriefing, useRunAgent } from '../api'
@@ -32,7 +32,7 @@ export function BriefingCard({ onOpenTask }: { onOpenTask: (taskId: string) => v
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{b?.kind === 'weekly' ? 'This week' : 'Today'}</CardTitle>
+        <CardTitle>{b?.kind === 'weekly' ? 'This week' : todayLabel()}</CardTitle>
         <Button size="icon-sm" variant="outline" aria-label="Refresh briefing" title="Refresh briefing" onClick={refresh} disabled={run.isPending}>
           <RefreshCw className={run.isPending ? 'animate-spin' : undefined} />
         </Button>

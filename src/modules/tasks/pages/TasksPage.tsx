@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
-import { todayISO } from '@/lib/dates'
+import { todayISO, todayLabel } from '@/lib/dates'
 import { cn, groupBy } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory } from '../api'
@@ -132,7 +132,7 @@ function TaskListView() {
       ? groupByCategory(visible, shownCategories)
       : SECTION_ORDER.filter((s) => sections[s]?.length).map((s) => ({
           key: s,
-          label: SECTION_LABELS[s],
+          label: s === 'today' ? todayLabel() : SECTION_LABELS[s],
           danger: s === 'overdue',
           items: sections[s],
           subgroups: categorySubgroups(sections[s], allCategories),

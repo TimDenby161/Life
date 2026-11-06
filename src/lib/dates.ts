@@ -28,10 +28,15 @@ export function isISODate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && isValid(parseISODate(value))
 }
 
-/** "Today", "Tomorrow", "Yesterday", "Mon 3 Nov", "3 Nov 2027". */
+/** "Today (Friday)". */
+export function todayLabel(now = new Date()): string {
+  return `Today (${format(now, 'EEEE')})`
+}
+
+/** "Today (Friday)", "Tomorrow", "Yesterday", "Mon 3 Nov", "3 Nov 2027". */
 export function formatDay(value: ISODate, now = new Date()): string {
   const diff = differenceInCalendarDays(parseISODate(value), now)
-  if (diff === 0) return 'Today'
+  if (diff === 0) return todayLabel(now)
   if (diff === 1) return 'Tomorrow'
   if (diff === -1) return 'Yesterday'
   const date = parseISODate(value)
@@ -43,7 +48,7 @@ export function formatDay(value: ISODate, now = new Date()): string {
 /** formatDay for the middle of a sentence: "today", "tomorrow", otherwise unchanged ("Mon 3 Nov"). */
 export function formatDayInline(value: ISODate, now = new Date()): string {
   const label = formatDay(value, now)
-  return /^(Today|Tomorrow|Yesterday)$/.test(label) ? label.toLowerCase() : label
+  return /^(Today|Tomorrow|Yesterday)\b/.test(label) ? `${label[0].toLowerCase()}${label.slice(1)}` : label
 }
 
 export function formatTime(value: string | null | undefined): string {
