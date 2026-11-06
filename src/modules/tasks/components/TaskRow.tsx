@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Lock, Repeat } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Clock, Flag, ListChecks, Lock, Repeat, Sparkles } from 'lucide-react'
 import { Checkbox } from '@/components/ui/misc'
 import { colorOf } from '@/lib/colors'
 import { todayISO } from '@/lib/dates'
@@ -170,6 +170,7 @@ export function TaskRow({
   onComplete,
   onReopen,
   done = false,
+  aiNote,
 }: {
   occurrence: OccurrenceWithTask
   lists: TaskList[]
@@ -181,6 +182,8 @@ export function TaskRow({
   onComplete?: (completedBy: string, alsoCompletedBy: string | null) => void
   onReopen?: () => void
   done?: boolean
+  /** Why the AI put it in today's top jobs ("" when it gave no reason). */
+  aiNote?: string
 }) {
   const { member } = useHousehold()
   const task = occurrence.task
@@ -233,6 +236,13 @@ export function TaskRow({
             {task.title}
           </button>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
+            {aiNote !== undefined ? (
+              <span className="inline-flex min-w-0 items-center gap-1 text-primary" title="Picked by AI for today">
+                <Sparkles className="size-3 shrink-0" />
+                <span className="sr-only">Picked by AI for today{aiNote ? ': ' : ''}</span>
+                {aiNote ? <span className="truncate">{aiNote}</span> : null}
+              </span>
+            ) : null}
             {done && completer ? (
               <span>
                 Done by {completer.display_name}

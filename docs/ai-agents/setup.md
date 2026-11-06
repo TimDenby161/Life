@@ -33,13 +33,21 @@ npm run dev                             # then open /ai
    The job `agents-hourly` (minute 5 of every hour) then starts working. Check it with `select * from cron.job_run_details order by start_time desc limit 5;`.
 5. **Push `main`** to deploy the AI Hub page.
 
+### AI priorities and the AI sentence
+
+Both need the Anthropic key; each person then turns on "AI picks my top jobs" and/or "AI sentence on my briefing" in AI Hub → Agents.
+
+```bash
+supabase secrets set ANTHROPIC_API_KEY=<key>
+```
+
 ### Optional: the AI sentence on briefings
 
 Off unless both of these are true: the key is set, and a person turns on "AI sentence on my briefing" in AI Hub → Agents.
 
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=<key>
-supabase secrets set AGENT_LLM_MONTHLY_BUDGET_USD=1      # default 1; 0 turns it off for everyone
+supabase secrets set AGENT_LLM_MONTHLY_BUDGET_USD=3      # default 3; 0 turns AI off for everyone
 supabase secrets set AGENT_LLM_MODEL=claude-opus-5-5      # default; claude-haiku-5-5 is cheaper
 ```
 

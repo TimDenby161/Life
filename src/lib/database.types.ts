@@ -2638,6 +2638,7 @@ export type Database = {
       }
       user_preferences: {
         Row: {
+          ai_priorities: boolean
           ai_summaries: boolean
           briefing_push: boolean
           default_task_list_id: string | null
@@ -2648,6 +2649,7 @@ export type Database = {
           week_starts_on: number
         }
         Insert: {
+          ai_priorities?: boolean
           ai_summaries?: boolean
           briefing_push?: boolean
           default_task_list_id?: string | null
@@ -2658,6 +2660,7 @@ export type Database = {
           week_starts_on?: number
         }
         Update: {
+          ai_priorities?: boolean
           ai_summaries?: boolean
           briefing_push?: boolean
           default_task_list_id?: string | null

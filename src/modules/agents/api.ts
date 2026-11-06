@@ -98,6 +98,22 @@ export const useSaveAgentSetting = () =>
     else unwrap(inserted)
   })
 
+export const useAiPriorities = () => {
+  const userId = useUserId()
+  return useQuery({
+    queryKey: [...agentKeys.prefs, 'priorities'],
+    queryFn: async () =>
+      unwrap(await supabase.from('user_preferences').select('ai_priorities').eq('user_id', userId).maybeSingle())?.ai_priorities ?? false,
+  })
+}
+
+export const useSetAiPriorities = () => {
+  const userId = useUserId()
+  return useAgentMutation(async (_h, on: boolean) => {
+    unwrap(await supabase.from('user_preferences').update({ ai_priorities: on }).eq('user_id', userId))
+  })
+}
+
 export const useSetAiSummaries = () => {
   const userId = useUserId()
   return useAgentMutation(async (_h, on: boolean) => {

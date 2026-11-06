@@ -11,6 +11,8 @@ import { addDaysISO, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
+import { useLatestBriefing } from '@/modules/agents/api'
+import { aiFirst } from '@/modules/agents/lib/aiOrder'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -22,6 +24,7 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
+import type { BriefingContent } from '../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
 function useOccurrencesFor(view: string) {
@@ -208,7 +211,17 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
   }
   const today = todayISO()
   // A score of 0 means nothing needs doing yet, so it stays off the list.
-  const ranked = topJobs(items ?? [], categories, today, Infinity).filter((o) => taskScore(o, categories, today) > 0)
+  // Today's AI picks (mine only: briefings are private) go first, then the usual score order.
+  const briefing = useLatestBriefing()
+  const content = briefing.data?.content as BriefingContent | undefined
+  const scored = topJobs(items ?? [], categories, today, Infinity)
+  const ai = aiFirst(
+    scored,
+    who === me.id ? content?.top : undefined,
+    content?.date,
+    today,
+  )
+  const ranked = ai.items.filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
   const visible = ranked.slice(0, shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
@@ -220,6 +233,7 @@ function TopJobsCard({ adding, onToggleAdding, onMessage }: { adding: boolean; o
           categories={categories}
           showList
           showVotes
+          aiNote={ai.notes.get(o.task_id)}
           onOpen={() => opener.open(o)}
           onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />

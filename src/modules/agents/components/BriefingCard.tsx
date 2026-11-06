@@ -61,6 +61,23 @@ export function BriefingCard({ onOpenTask }: { onOpenTask: (taskId: string) => v
               <p className="text-xs text-muted-foreground">Written {formatDistanceToNow(new Date(b.updated_at), { addSuffix: true })}</p>
             </div>
 
+            {c.top?.length ? (
+              <Section title="Top today">
+                <ol className="grid gap-1 text-sm">
+                  {c.top.map((p, i) => (
+                    <li key={p.task_id} className="flex gap-2">
+                      <span className="w-4 shrink-0 text-muted-foreground tabular">{i + 1}</span>
+                      <span className="min-w-0">
+                        <button className="text-left hover:underline" onClick={() => onOpenTask(p.task_id)}>{p.title}</button>
+                        {p.why ? <span className="block text-xs text-muted-foreground">{p.why}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground"><Sparkles className="size-3" /> Picked by AI this morning</p>
+              </Section>
+            ) : null}
+
             {c.calendar?.length ? (
               <Section title="Calendar">
                 <ul className="grid gap-0.5 text-sm">

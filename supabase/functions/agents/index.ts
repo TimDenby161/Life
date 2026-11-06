@@ -22,7 +22,7 @@
 // (the calendar, shared with calendar-events), and VAPID_PUBLIC_KEY,
 // VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
+import { type BriefingContent, briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
 import { analyseCareer } from '../_shared/agents/career.ts'
 import { analyseFinance } from '../_shared/agents/finance.ts'
@@ -31,6 +31,7 @@ import { analyseHousehold } from '../_shared/agents/household.ts'
 import { analyseLanguages } from '../_shared/agents/languages.ts'
 import { analyseLifeAdmin } from '../_shared/agents/lifeAdmin.ts'
 import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
+import { candidatesFor, prioritiesInput } from '../_shared/agents/priorities.ts'
 import { agentById, LIVE_AGENTS } from '../_shared/agents/registry.ts'
 import { agentDue, chiefOfStaffDue, manualKey } from '../_shared/agents/schedule.ts'
 import { analyseTasks } from '../_shared/agents/taskManager.ts'
@@ -40,6 +41,7 @@ import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import { type AgentPrefs, loadCalendar, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
+import { pickPriorities } from './priorities.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -162,6 +164,17 @@ async function runAgent(
         if (options.onlyFor && options.onlyFor !== member.id) continue
         if (kind === 'daily' && !options.onlyFor && prefs.schedule('chief_of_staff', member.id) !== 'daily') continue
         const briefing = briefingFor(ctx, tm, member, kind, now, pending.data as PendingSuggestion[])
+        if (prefs.aiPriorities.has(member.id)) {
+          const candidates = candidatesFor(ctx, member)
+          const local = localNow(now, household.timezone)
+          const input = prioritiesInput(ctx, member, ctx.members.find((m) => m.id !== member.id), candidates, `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`)
+          const result = await pickPriorities(input, candidates, budget)
+          if (result.picks?.length) (briefing.content as BriefingContent).top = result.picks
+          usage.input_tokens += result.usage.input_tokens
+          usage.output_tokens += result.usage.output_tokens
+          usage.cost_micro_usd += result.usage.cost_micro_usd
+          budget.spent += result.usage.cost_micro_usd
+        }
         if (prefs.aiSummaries.has(member.id)) {
           const result = await writeSummary(member.name, briefing.content as Parameters<typeof writeSummary>[1], budget)
           briefing.ai_summary = result.summary

@@ -173,3 +173,9 @@ Every page with an agent opens on that agent's view, with the page itself under 
 | Statistics | Workload |
 
 Feed, Settings and the AI Hub have no agent view. A link into a page (any query such as `?lang=zh`, or a sub-path) opens Details directly, so task and language deep links work as before; `?view=agent` / `?view=details` choose explicitly.
+
+## AI priorities (Claude picks the top jobs)
+
+Per person, off by default (`user_preferences.ai_priorities`, the "AI picks my top jobs" switch in AI Hub → Agents). In the Chief of Staff's morning run (and Refresh), the function builds a shortlist of up to 40 jobs the person could do (late, due within a week, a deadline within three weeks, or voted / high priority; never ones waiting on another), and sends Claude the titles, categories, dates, flags and today's busy times for them and their partner, with no event titles, ids, health data or amounts (`_shared/agents/priorities.ts`). Claude returns up to five refs with a short reason; anything not on the shortlist is dropped. The picks are stored on the briefing (`content.top`) and go first in Home's Top jobs on the person's own tab that day, marked ✦ with the reason; everything else keeps the usual score order. No key, over budget, an error or an odd answer all mean no picks, and Top jobs stays as it was.
+
+Model `AGENT_LLM_MODEL` (default claude-opus-5-5), effort medium. About 3,000 tokens in and a few hundred out: roughly $0.02 a call, so about $1–2 a month for two people with the odd refresh. It shares the monthly cap with the AI sentence (`AGENT_LLM_MONTHLY_BUDGET_USD`, default now $3).

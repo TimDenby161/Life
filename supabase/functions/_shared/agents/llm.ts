@@ -6,7 +6,7 @@
 import type { BriefingContent } from './chiefOfStaff.ts'
 
 export const DEFAULT_MODEL = 'claude-opus-5-5'
-export const DEFAULT_MONTHLY_BUDGET_USD = 1
+export const DEFAULT_MONTHLY_BUDGET_USD = 3
 export const MAX_OUTPUT_TOKENS = 2000
 export const MAX_SUMMARY_CHARS = 300
 

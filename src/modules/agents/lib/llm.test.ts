@@ -19,12 +19,12 @@ describe('cost', () => {
     expect(costMicroUsd('some-new-model', 1000, 0)).toBeGreaterThan(costMicroUsd('claude-opus-5-5', 1000, 0))
   })
 
-  it('reads the monthly budget, defaulting to $1', () => {
-    expect(monthlyBudgetMicroUsd(undefined)).toBe(1_000_000)
-    expect(monthlyBudgetMicroUsd('')).toBe(1_000_000)
+  it('reads the monthly budget, defaulting to $3', () => {
+    expect(monthlyBudgetMicroUsd(undefined)).toBe(3_000_000)
+    expect(monthlyBudgetMicroUsd('')).toBe(3_000_000)
     expect(monthlyBudgetMicroUsd('0.5')).toBe(500_000)
     expect(monthlyBudgetMicroUsd('0')).toBe(0)
-    expect(monthlyBudgetMicroUsd('lots')).toBe(1_000_000)
+    expect(monthlyBudgetMicroUsd('lots')).toBe(3_000_000)
   })
 
   it('refuses a call whose worst case would go over the budget', () => {

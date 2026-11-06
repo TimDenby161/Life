@@ -39,6 +39,8 @@ export type BriefingContent = {
   eventsToday?: number
   /** Packed days in the six days after today. */
   packed?: { date: ISODate; load: string; titles: string[] }[]
+  /** Today's most important jobs as Claude picked them, in order (only when AI priorities are on and it answered). */
+  top?: { task_id: string; title: string; why: string }[]
 }
 
 const isEveryDay = (t: OpenTask) => t.recurrence?.freq === 'daily' && (t.recurrence.interval ?? 1) === 1

@@ -10,11 +10,13 @@ import {
   type AgentRun,
   useAgentRuns,
   useAgentSettings,
+  useAiPriorities,
   useAiSummaries,
   usePushSettings,
   useRunAgent,
   useSaveAgentSetting,
   useSendTestPush,
+  useSetAiPriorities,
   useSetAiSummaries,
   useSetBriefingPush,
 } from '../api'
@@ -89,6 +91,32 @@ function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | un
         >
           <Play /> Run now
         </Button>
+      </div>
+    </Card>
+  )
+}
+
+function AiPriorities() {
+  const on = useAiPriorities()
+  const set = useSetAiPriorities()
+  return (
+    <Card className="grid gap-2 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">AI picks my top jobs</h3>
+          <p className="text-sm text-muted-foreground">
+            Each morning Claude chooses your most important jobs for the day from what’s due, late, important or close to a deadline, fitting
+            them around your calendar. They go first in Top jobs, marked ✦ with the reason. It sends Anthropic your job titles, categories and
+            dates and today’s busy times (not what the events are). Needs the API key on the server; stops at the monthly spending cap, and
+            Top jobs falls back to the usual order.
+          </p>
+        </div>
+        <Switch
+          checked={on.data ?? false}
+          onCheckedChange={(v) => set.mutate(v, { onError: (e) => toast.error(getErrorMessage(e)) })}
+          aria-label="AI picks my top jobs"
+          disabled={on.isPending}
+        />
       </div>
     </Card>
   )
@@ -189,6 +217,7 @@ export function AgentsTab() {
       {AGENTS.filter((a) => a.status === 'live').map((a) => (
         <LiveAgent key={a.id} agent={a} lastRun={lastRun(a.id)} />
       ))}
+      <AiPriorities />
       <Notifications />
       <AiSummaries />
       {AGENTS.some((a) => a.status === 'planned') ? (
