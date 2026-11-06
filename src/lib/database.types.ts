@@ -3005,6 +3005,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_set_top_picks: {
+        Args: {
+          p_date: string
+          p_household_id: string
+          p_top: Json
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       agents_dispatch: { Args: never; Returns: undefined }
       apply_sheet_balances: {
         Args: { p_balances: Json; p_error?: string; p_source_id: string }

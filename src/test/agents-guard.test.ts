@@ -28,7 +28,7 @@ describe('agents Edge Function', () => {
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
-      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations',
+      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations', 'agent_briefings',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -70,10 +70,10 @@ describe('agents Edge Function', () => {
     expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth/i)
   })
 
-  it('writes only through agent_claim_run, agent_finish_run and push_subscriptions_gone', () => {
+  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone and agent_set_top_picks', () => {
     for (const { f, text } of fn) {
       expect(text, f).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone'], f).toContain(rpc)
+      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_set_top_picks'], f).toContain(rpc)
     }
   })
 

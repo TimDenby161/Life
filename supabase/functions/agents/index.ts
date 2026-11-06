@@ -7,6 +7,8 @@
 //              JWT, from "Run now" in the AI Hub. Rate-limited to one run per
 //              agent per household per ten minutes.
 //   -> { status: 'ok' | 'recent' | 'error', message? }
+//   Routine    POST {"mode":"priorities-input"|"priorities-save"} with header
+//              x-priorities-secret, from the morning Claude routine (routine.ts).
 //   Push       POST {"mode":"push-key"} or {"mode":"push-test"} with the person's
 //              JWT: the public key their browser subscribes with, and a test
 //              notification to their own devices.
@@ -20,7 +22,8 @@
 // AGENT_CRON_SECRET, and optionally ANTHROPIC_API_KEY, AGENT_LLM_MODEL,
 // AGENT_LLM_MONTHLY_BUDGET_USD, ALLOWED_ORIGINS, GOOGLE_SERVICE_ACCOUNT_JSON
 // (the calendar, shared with calendar-events), and VAPID_PUBLIC_KEY,
-// VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications.
+// VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications, PRIORITIES_SECRET for the
+// morning Claude routine.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { type BriefingContent, briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
@@ -42,6 +45,7 @@ import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import { type AgentPrefs, loadCalendar, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
+import { routineInput, routineSave } from './routine.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -158,13 +162,23 @@ async function runAgent(
         .eq('status', 'pending')
       if (pending.error) throw new Error(pending.error.message)
       const kind = options.kind ?? (isoWeekday(date) === 1 ? 'weekly' : 'daily')
+      // Today's AI picks (from the API below or the morning routine) survive a refresh.
+      const earlier = await db.from('agent_briefings').select('recipient_id, day:content->>date, top:content->top').eq('household_id', household.id)
+      if (earlier.error) throw new Error(earlier.error.message)
+      const keptTop = new Map(
+        (earlier.data as { recipient_id: string; day: string | null; top: unknown }[])
+          .filter((b) => b.day === date && Array.isArray(b.top))
+          .map((b) => [b.recipient_id, b.top as NonNullable<BriefingContent['top']>]),
+      )
       const budget = { spent: await llmSpentThisMonth(db, household.id, now), limit: monthlyBudgetMicroUsd(Deno.env.get('AGENT_LLM_MONTHLY_BUDGET_USD')) }
       for (const member of ctx.members) {
         if (!prefs.enabled('chief_of_staff').includes(member.id)) continue
         if (options.onlyFor && options.onlyFor !== member.id) continue
         if (kind === 'daily' && !options.onlyFor && prefs.schedule('chief_of_staff', member.id) !== 'daily') continue
         const briefing = briefingFor(ctx, tm, member, kind, now, pending.data as PendingSuggestion[])
-        if (prefs.aiPriorities.has(member.id)) {
+        const kept = keptTop.get(member.id)
+        if (kept) (briefing.content as BriefingContent).top = kept
+        if (prefs.aiPriorities.has(member.id) && !kept && Deno.env.get('ANTHROPIC_API_KEY')) {
           const candidates = candidatesFor(ctx, member)
           const local = localNow(now, household.timezone)
           const input = prioritiesInput(ctx, member, ctx.members.find((m) => m.id !== member.id), candidates, `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`)
@@ -254,6 +268,18 @@ Deno.serve(async (req) => {
     try {
       const ran = await runScheduled(serviceClient(), now)
       return json(req, { status: 'ok', ran })
+    } catch (e) {
+      return json(req, { status: 'error', message: safeError(e) }, 500)
+    }
+  }
+
+  if (body.mode === 'priorities-input' || body.mode === 'priorities-save') {
+    const secret = Deno.env.get('PRIORITIES_SECRET')
+    const given = req.headers.get('x-priorities-secret') ?? ''
+    if (!secret || !sameSecret(given, secret)) return json(req, { status: 'error', message: 'Not authorised.' }, 401)
+    try {
+      const db = serviceClient()
+      return json(req, body.mode === 'priorities-input' ? await routineInput(db, now) : await routineSave(db, body as { key?: unknown; picks?: unknown }, now))
     } catch (e) {
       return json(req, { status: 'error', message: safeError(e) }, 500)
     }
