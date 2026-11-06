@@ -107,8 +107,8 @@ function AiPriorities() {
           <p className="text-sm text-muted-foreground">
             Each morning Claude chooses your most important jobs for the day from what’s due, late, important or close to a deadline, fitting
             them around your calendar. They go first in Top jobs, marked ✦ with the reason. It sends Anthropic your job titles, categories and
-            dates and today’s busy times (not what the events are). Needs the API key on the server; stops at the monthly spending cap, and
-            Top jobs falls back to the usual order.
+            dates and today’s busy times (not what the events are). Runs as a morning Claude routine on your Claude plan; if it doesn’t run,
+            Top jobs keeps the usual order.
           </p>
         </div>
         <Switch
