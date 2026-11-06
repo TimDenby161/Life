@@ -1,5 +1,6 @@
 // What the agents read and produce. The Edge Function loads a TaskContext with
 // narrow, household-scoped selects; the analysis functions are pure.
+import type { CalEvent } from './calendar.ts'
 import type { ISODate } from './dates.ts'
 
 export type Member = { id: string; name: string }
@@ -56,6 +57,10 @@ export type TaskContext = {
   open: OpenTask[]
   /** The last 180 days of the completion log. */
   events: CompletionEvent[]
+  /** The household's time zone (Europe/London if not given). */
+  timezone?: string
+  /** Calendar events from today for about a week; none when no calendar is connected. */
+  calendar?: CalEvent[]
 }
 
 export type Action =

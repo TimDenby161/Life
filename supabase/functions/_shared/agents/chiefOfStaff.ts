@@ -4,6 +4,7 @@
 // It doesn't rank tasks: Home's Top jobs does that live, by the hour. The
 // briefing is what needs memory or a wider view: what changed since yesterday,
 // deadlines and busy stretches ahead, and the suggestions that matter most.
+import { dayLoad, loadText, MAX_EVENTS_LISTED, packedDays } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekKey, shortDay } from './dates.ts'
 import { cycleDays, effectiveCompletions, ownerOf, type PlanItem, type TaskManagerResult, type WorkloadSummary } from './taskManager.ts'
 import type { BriefingDraft, Member, OpenTask, SuggestionDraft, TaskContext } from './types.ts'
@@ -32,6 +33,12 @@ export type BriefingContent = {
   suggestions: { key: string; title: string; severity: number }[]
   plan?: PlanItem[]
   workload?: WorkloadSummary | null
+  /** Today's calendar (time null = all day), when a calendar is connected. */
+  calendar?: { time: string | null; title: string }[]
+  /** Timed events today. */
+  eventsToday?: number
+  /** Packed days in the six days after today. */
+  packed?: { date: ISODate; load: string; titles: string[] }[]
 }
 
 const isEveryDay = (t: OpenTask) => t.recurrence?.freq === 'daily' && (t.recurrence.interval ?? 1) === 1
@@ -84,11 +91,12 @@ export function clashes(tasks: OpenTask[], today: ISODate): BriefingContent['cla
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
 }
 
-export function headline(c: Pick<BriefingContent, 'dueToday' | 'overdue' | 'behind' | 'deadlines' | 'busy' | 'date'>): string {
+export function headline(c: Pick<BriefingContent, 'dueToday' | 'overdue' | 'behind' | 'deadlines' | 'busy' | 'date' | 'eventsToday'>): string {
   const parts: string[] = []
   if (c.dueToday) parts.push(`${c.dueToday} due today`)
   if (c.overdue) parts.push(`${c.overdue} overdue`)
   if (c.behind) parts.push(`${c.behind} ${c.behind === 1 ? 'job' : 'jobs'} behind`)
+  if (c.eventsToday) parts.push(`${c.eventsToday} ${c.eventsToday === 1 ? 'event' : 'events'}`)
   const next = c.deadlines[0]
   if (next) parts.push(`“${next.title}” has a deadline ${shortDay(next.deadline, c.date)}`)
   else if (c.busy[0]) parts.push(`a busy stretch from ${shortDay(c.busy[0].from, c.date)}`)
@@ -155,6 +163,17 @@ export function briefingFor(
       .sort((a, b) => b.severity - a.severity)
       .slice(0, MAX_SUGGESTIONS)
       .map((s) => ({ key: s.dedupe_key, title: s.title, severity: s.severity })),
+  }
+  if (ctx.calendar?.length) {
+    const tz = ctx.timezone ?? 'Europe/London'
+    const day = dayLoad(ctx.calendar, member.id, today, tz)
+    content.calendar = day.events.slice(0, MAX_EVENTS_LISTED)
+    content.eventsToday = day.timed
+    content.packed = packedDays(ctx.calendar, member.id, addDays(today, 1), 6, tz).map((d) => ({
+      date: d.date,
+      load: loadText(d),
+      titles: d.events.filter((e) => e.time).map((e) => e.title).slice(0, 3),
+    }))
   }
   content.headline = headline(content)
   if (kind === 'weekly') {

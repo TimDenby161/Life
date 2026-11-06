@@ -138,7 +138,7 @@ function HouseholdSection() {
 }
 
 function CalendarSection() {
-  const { household } = useHousehold()
+  const { household, members } = useHousehold()
   const qc = useQueryClient()
   const integrations = useCalendarIntegrations()
   const [mode, setMode] = useState<'service_account' | 'embed'>('service_account')
@@ -162,7 +162,7 @@ function CalendarSection() {
     onSuccess: () => { invalidate(); setCalendarId(''); setEmbedUrl(''); toast.success('Calendar added') },
   })
   const update = useMutation({
-    mutationFn: async (a: { id: string; patch: { enabled?: boolean; hidden_event_titles?: string[] } }) =>
+    mutationFn: async (a: { id: string; patch: { enabled?: boolean; hidden_event_titles?: string[]; owner_id?: string | null } }) =>
       unwrap(await supabase.from('calendar_integrations').update(a.patch).eq('id', a.id)),
     onSuccess: invalidate,
   })
@@ -185,6 +185,18 @@ function CalendarSection() {
                     <span className="block truncate font-medium">{i.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">{i.mode === 'embed' ? 'Google embed (browser sign-in)' : i.google_calendar_id}</span>
                   </span>
+                  {i.mode === 'service_account' ? (
+                    // Whose day it fills, for the agents' busy-day checks.
+                    <NativeSelect
+                      aria-label={`Whose calendar is ${i.name}`}
+                      className="h-8 w-auto"
+                      value={i.owner_id ?? ''}
+                      onChange={(e) => update.mutate({ id: i.id, patch: { owner_id: e.target.value || null } })}
+                    >
+                      <option value="">Both</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+                    </NativeSelect>
+                  ) : null}
                   <Switch checked={i.enabled} onCheckedChange={(v) => update.mutate({ id: i.id, patch: { enabled: v } })} aria-label={`Show ${i.name}`} />
                   <Button variant="ghost" size="icon-sm" aria-label={`Remove ${i.name}`} onClick={() => remove.mutate(i.id)}><Trash2 /></Button>
                 </div>

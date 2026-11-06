@@ -506,6 +506,7 @@ export type Database = {
           id: string
           mode: string
           name: string
+          owner_id: string | null
           provider: string
           updated_at: string
         }
@@ -521,6 +522,7 @@ export type Database = {
           id?: string
           mode?: string
           name: string
+          owner_id?: string | null
           provider?: string
           updated_at?: string
         }
@@ -536,6 +538,7 @@ export type Database = {
           id?: string
           mode?: string
           name?: string
+          owner_id?: string | null
           provider?: string
           updated_at?: string
         }
@@ -546,6 +549,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "households"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_integrations_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
           },
         ]
       }

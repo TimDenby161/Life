@@ -28,7 +28,7 @@ describe('agents Edge Function', () => {
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
-      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals',
+      'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -50,6 +50,13 @@ describe('agents Edge Function', () => {
         if (/task:tasks/.test(cols)) expect(cols, f).not.toMatch(/\bdescription\b/)
       }
     }
+  })
+
+  it('keeps calendar descriptions and locations out of the agents', () => {
+    const ctx = fn.find((x) => x.f === 'context.ts')!.text
+    expect(ctx).not.toMatch(/e\.description|e\.location/)
+    const llm = shared.find((x) => x.f === 'llm.ts')!.text
+    expect(llm).not.toMatch(/c\.calendar|c\.packed/)
   })
 
   it('never gives the LLM anything but the task briefing', () => {

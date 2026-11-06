@@ -8,6 +8,7 @@
 //
 // Privacy: a suggestion about someone's own task (personal list or owned
 // category) goes to that person only. Workload only looks at joint tasks.
+import { type DayLoad, dayLoad, dayName, isPacked, loadText } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekday, nextWeekday, shortDay } from './dates.ts'
 import type { Action, Category, CompletionEvent, List, Member, OpenTask, Rule, Severity, SuggestionDraft, TaskContext } from './types.ts'
 
@@ -26,7 +27,9 @@ export const PLAN_DAYS = 7
 export const PLAN_DEADLINE_DAYS = 14
 export const PLAN_SIZE = 10
 /** At most this many of each kind per person per run, most pressing first, so a backlog doesn't become a flood. */
-export const KIND_LIMITS: Record<string, number> = { missed_repeat: 3, undated: 3, automate: 3, overdue: 5, put_off: 5, duplicate: 5 }
+export const KIND_LIMITS: Record<string, number> = { missed_repeat: 3, undated: 3, automate: 3, overdue: 5, put_off: 5, duplicate: 5, packed_day: 3 }
+/** How far a job may move to get off a packed day. */
+export const PACKED_MOVE_DAYS = 3
 
 // Mirrors WORK_CATEGORY in src/modules/tasks/lib/topJobs.ts.
 const WORK_CATEGORY = /^c4\b/i
@@ -481,6 +484,54 @@ export function weeklyPlan(ctx: TaskContext, member: Member): PlanItem[] {
     }))
 }
 
+/**
+ * Jobs due on a day the calendar has packed, in the week ahead: move to the
+ * nearest clearer day within three, if that's before any deadline. Someone's
+ * own job moves if their day is packed; a joint one only if everyone's is (one
+ * of you can still do it), or either's if it needs you both. Timed tasks and
+ * daily jobs stay put.
+ */
+export function packedDayFindings(ctx: TaskContext, skip: Set<string>): Draft[] {
+  const events = ctx.calendar ?? []
+  if (!events.length) return []
+  const tz = ctx.timezone ?? 'Europe/London'
+  const loads = new Map<string, DayLoad>()
+  const load = (person: string, date: ISODate) => {
+    const key = `${person}|${date}`
+    if (!loads.has(key)) loads.set(key, dayLoad(events, person, date, tz))
+    return loads.get(key)!
+  }
+  const open = new Set(ctx.open.map((t) => t.task_id))
+  const out: Draft[] = []
+  for (const t of ctx.open) {
+    if (!t.due_date || t.due_time || isEveryDay(t.recurrence) || skip.has(t.task_id)) continue
+    if (t.due_date <= ctx.today || t.due_date > addDays(ctx.today, 6)) continue
+    if (t.waiting_on_task_id && open.has(t.waiting_on_task_id)) continue
+    const owner = ownerOf(t, ctx.categories, ctx.lists)
+    const people = owner ? [owner] : ctx.members.map((m) => m.id)
+    const packed = (date: ISODate) =>
+      t.needs_both || owner ? people.some((p) => isPacked(load(p, date))) : people.every((p) => isPacked(load(p, date)))
+    if (!packed(t.due_date)) continue
+    const to = Array.from({ length: PACKED_MOVE_DAYS }, (_, i) => addDays(t.due_date!, i + 1)).find(
+      (d) => (!t.deadline || d <= t.deadline) && !packed(d),
+    )
+    if (!to) continue
+    const busiest = people.map((p) => load(p, t.due_date!)).sort((a, b) => b.minutes - a.minutes)[0]
+    const day = dayName(t.due_date, ctx.today)
+    out.push({
+      dedupe_key: `packed:${t.task_id}:${t.due_date}`,
+      kind: 'packed_day',
+      severity: 1,
+      title: `Move “${t.title}” to ${dayName(to, ctx.today)}?`,
+      reason: `${day[0].toUpperCase()}${day.slice(1)} is packed: ${loadText(busiest)} (${busiest.events.filter((e) => e.time).slice(0, 3).map((e) => e.title).join(', ')}). ${dayName(to, ctx.today)[0].toUpperCase()}${dayName(to, ctx.today).slice(1)} looks clearer.`,
+      task_id: t.task_id,
+      action: { type: 'move_due_date', due_date: to },
+      rank: busiest.minutes,
+    })
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // The run
 // ---------------------------------------------------------------------------
@@ -504,6 +555,9 @@ export function analyseTasks(ctx: TaskContext, enabled: string[]): TaskManagerRe
     if (!taken.has(draft.dedupe_key)) drafts.push({ draft, task: openByTask.get(draft.task_id!)! })
   }
   drafts.push(...duplicateFindings(ctx), ...repeatFindings(ctx, completions), ...automateFindings(ctx))
+  // A task with its own finding already has something to say about its date.
+  const withFinding = new Set(drafts.map((d) => d.draft.task_id).filter((id): id is string => Boolean(id)))
+  for (const draft of packedDayFindings(ctx, withFinding)) drafts.push({ draft, task: openByTask.get(draft.task_id!)! })
   const balance = workloadFinding(ctx, workload)
   if (balance) drafts.push({ draft: balance, task: null })
 

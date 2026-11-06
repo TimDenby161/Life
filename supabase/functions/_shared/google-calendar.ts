@@ -1,5 +1,5 @@
-// Google Calendar API (read-only).
-export { googleAccessToken } from '../_shared/google-auth.ts'
+// Google Calendar API (read-only), shared by calendar-events and the agents.
+export { googleAccessToken } from './google-auth.ts'
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
 

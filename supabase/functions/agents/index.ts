@@ -18,7 +18,8 @@
 //
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided by Supabase),
 // AGENT_CRON_SECRET, and optionally ANTHROPIC_API_KEY, AGENT_LLM_MODEL,
-// AGENT_LLM_MONTHLY_BUDGET_USD, ALLOWED_ORIGINS, and VAPID_PUBLIC_KEY,
+// AGENT_LLM_MONTHLY_BUDGET_USD, ALLOWED_ORIGINS, GOOGLE_SERVICE_ACCOUNT_JSON
+// (the calendar, shared with calendar-events), and VAPID_PUBLIC_KEY,
 // VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
@@ -37,7 +38,7 @@ import { analyseTravel } from '../_shared/agents/travel.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { type AgentPrefs, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
+import { type AgentPrefs, loadCalendar, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
@@ -133,6 +134,14 @@ async function runAgent(
   try {
     const { date, hour } = localNow(now, household.timezone)
     const ctx = await loadContext(db, household.id, date, hour)
+    ctx.timezone = household.timezone
+    // Only these two plan around the calendar. A calendar problem never stops the run.
+    if (agentId === 'task_manager' || agentId === 'chief_of_staff') {
+      ctx.calendar = await loadCalendar(db, household.id, date).catch(() => {
+        console.warn('agents: calendar unavailable')
+        return []
+      })
+    }
     const tm = analyseTasks(ctx, prefs.enabled('task_manager'))
     const briefings: BriefingDraft[] = []
     const usage: Usage = noUsage()

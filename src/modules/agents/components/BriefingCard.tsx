@@ -61,6 +61,19 @@ export function BriefingCard({ onOpenTask }: { onOpenTask: (taskId: string) => v
               <p className="text-xs text-muted-foreground">Written {formatDistanceToNow(new Date(b.updated_at), { addSuffix: true })}</p>
             </div>
 
+            {c.calendar?.length ? (
+              <Section title="Calendar">
+                <ul className="grid gap-0.5 text-sm">
+                  {c.calendar.map((e, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="w-11 shrink-0 text-muted-foreground tabular">{e.time ?? 'All day'}</span>
+                      <span className="truncate">{e.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
             {c.deadlines.length ? (
               <Section title="Deadlines">
                 <ul className="grid gap-0.5 text-sm">
@@ -74,9 +87,12 @@ export function BriefingCard({ onOpenTask }: { onOpenTask: (taskId: string) => v
               </Section>
             ) : null}
 
-            {c.busy.length || c.clashes.length ? (
+            {c.busy.length || c.clashes.length || c.packed?.length ? (
               <Section title="Busy">
                 <ul className="grid gap-0.5 text-sm">
+                  {c.packed?.map((x) => (
+                    <li key={x.date}>{day(x.date)}: {x.load}{x.titles.length ? ` (${x.titles.join(', ')})` : ''}</li>
+                  ))}
                   {c.busy.map((x) => (
                     <li key={x.from}>{day(x.from)} to {day(x.to)}: {x.titles.join(', ')}</li>
                   ))}

@@ -62,6 +62,8 @@ export function summaryInput(name: string, c: BriefingContent): string {
     busyStretches: c.busy.map((b) => ({ from: b.from, to: b.to, count: b.titles.length })),
     partnerFinished: c.partnerDone ? { name: c.partnerDone.name, count: c.partnerDone.count } : null,
     newTasksForYou: c.added.length,
+    // A count only: event titles never go to the model.
+    eventsToday: c.eventsToday ?? 0,
     topSuggestions: c.suggestions.filter((s) => TASK_SUGGESTION.test(s.key)).map((s) => s.title),
   })
 }

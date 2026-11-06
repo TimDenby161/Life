@@ -9,7 +9,7 @@
 //   GOOGLE_SERVICE_ACCOUNT_JSON  service-account key JSON (read-only use)
 //   ALLOWED_ORIGINS              optional, e.g. https://tim.github.io,http://localhost:5173
 import { json, TtlCache, userClient, corsHeaders } from '../_shared/http.ts'
-import { CALENDAR_SCOPE, type GoogleEvent, googleAccessToken, listEvents } from './google.ts'
+import { CALENDAR_SCOPE, type GoogleEvent, googleAccessToken, listEvents } from '../_shared/google-calendar.ts'
 
 type CalendarEvent = {
   id: string

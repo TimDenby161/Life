@@ -4,7 +4,9 @@
 // are selected: no task descriptions or comments, no contact details, and of
 // health data only exercise sessions (never weight or periods).
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
+import type { CalEvent } from '../_shared/agents/calendar.ts'
 import { addDays } from '../_shared/agents/dates.ts'
+import { CALENDAR_SCOPE, googleAccessToken, listEvents } from '../_shared/google-calendar.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
 import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
 import type { Goal } from '../_shared/agents/career.ts'
@@ -227,4 +229,43 @@ export async function loadGoals(db: SupabaseClient, householdId: string): Promis
       .eq('household_id', householdId)
       .limit(200),
   )
+}
+
+const titleKey = (title: string) => title.trim().replace(/\s+/g, ' ').toLowerCase()
+
+/**
+ * The household's connected calendars from yesterday to a week ahead: times,
+ * titles and whose calendar only (descriptions and locations are dropped
+ * here). Titles hidden in Settings stay hidden. Empty when none is connected.
+ */
+export async function loadCalendar(db: SupabaseClient, householdId: string, today: string): Promise<CalEvent[]> {
+  const serviceAccount = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+  if (!serviceAccount) return []
+  const rows = check(
+    await db
+      .from('calendar_integrations')
+      .select('google_calendar_id, owner_id, hidden_event_titles')
+      .eq('household_id', householdId)
+      .eq('enabled', true)
+      .eq('mode', 'service_account'),
+  ) as { google_calendar_id: string; owner_id: string | null; hidden_event_titles: string[] | null }[]
+  if (!rows.length) return []
+  const token = await googleAccessToken(serviceAccount, CALENDAR_SCOPE)
+  const timeMin = `${addDays(today, -1)}T00:00:00Z`
+  const timeMax = `${addDays(today, 8)}T00:00:00Z`
+  const lists = await Promise.all(
+    rows.map(async (row) => {
+      const hidden = new Set((row.hidden_event_titles ?? []).map(titleKey))
+      return (await listEvents(token, row.google_calendar_id, timeMin, timeMax))
+        .filter((e) => e.status !== 'cancelled' && !hidden.has(titleKey(e.summary ?? '')))
+        .map((e): CalEvent => ({
+          owner_id: row.owner_id,
+          title: e.summary?.trim() || '(No title)',
+          start: (e.start.dateTime ?? e.start.date)!,
+          end: (e.end.dateTime ?? e.end.date)!,
+          allDay: Boolean(e.start.date),
+        }))
+    }),
+  )
+  return lists.flat()
 }

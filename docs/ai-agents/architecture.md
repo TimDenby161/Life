@@ -135,8 +135,8 @@ Context for each run is loaded with narrow selects (open occurrences with task f
 
 | Agent | Status | Reads | Notes |
 |---|---|---|---|
-| Chief of Staff | Live | Tasks, history, every agent's pending suggestions | Daily briefing per person, Monday weekly plan, deadline clusters, changes since yesterday, the top suggestions from all agents. Live ranking stays with Top jobs on Home. |
-| Smart Task Manager | Live, daily + after completions | Tasks, 6 months of history | Put-off and overdue tasks, deadline risks, duplicates, one-offs that should be jobs, joint workload with effort estimates, automation candidates, weekly plan. |
+| Chief of Staff | Live | Tasks, history, every agent's pending suggestions, the person's calendar (times and titles) | Daily briefing per person, Monday weekly plan, deadline clusters, changes since yesterday, the top suggestions from all agents. Live ranking stays with Top jobs on Home. |
+| Smart Task Manager | Live, daily + after completions | Tasks, 6 months of history, calendars for the week ahead | Put-off and overdue tasks, deadline risks, duplicates, one-offs that should be jobs, joint workload with effort estimates, automation candidates, weekly plan. |
 | Wedding Planner | Live, daily | Wedding date (exact or month only), budget lines, supplier role and name, RSVP state, wedding-category tasks | Payments due in 30 days, budget lines with no supplier, overspends, RSVP chasing within 90 days of the date, monthly summary, a prompt to set the date. With only the month known it talks in months, skips RSVP timing and, within a year, asks for the exact day. Overdue checklist items are left to the Task Manager. |
 | Language Coach | Live, daily | The person's own `language_progress` | Review pile-ups (20+), words that keep slipping (lapses ≥ 2, still at a short interval), languages left alone 5+ days. Never adds new words, so nothing mastered comes back. |
 | Fitness Coach | Live, daily | The person's own exercise sessions (description, date, minutes); never weight or periods | Recovery after a week 1.5× the usual or 6 days in a row (and nothing that adds volume then), strength and mobility balance, one table tennis session a week rotating footwork / explosiveness / endurance, gaps for someone who usually trains. Says "nothing logged", never "you didn't exercise". With goals (`agent_settings.config`: active days a week, activities × times, optional ones) it nudges a required activity from Thursday, flags active days behind pace, reviews last week on Mondays, and moves the rest-day nudge to after seven in a row. |
@@ -147,3 +147,11 @@ Context for each run is loaded with narrow selects (open occurrences with task f
 | Life Admin | Live, daily | The `renewals` list (names, owners, dates); open task titles | A reminder when something enters its warning window (presets: passport 6 months, MOT a month, insurance 4 weeks, energy fix 7 weeks…), urgent in the last week and once expired; offers a task ("Compare car insurance quotes") unless an open task already mentions it. A personal renewal only reminds its owner. "Renewed" on the card moves a repeating one on by its period. No email or calendar access. |
 
 "Planned" agents appear in the AI Hub with a "Not built yet" badge and no switch, so nothing pretends to work.
+
+## Calendar awareness
+
+The Task Manager and Chief of Staff read the household's connected Google Calendars (the same service account as the Calendar page, `_shared/google-calendar.ts`) from yesterday to a week ahead, keeping only times, titles and whose calendar it is (`calendar_integrations.owner_id`, set in Settings; empty = shared, counts for both). Titles hidden in Settings stay hidden. A day is packed with 3+ timed events or 4+ booked hours (`_shared/agents/calendar.ts`).
+
+- Briefing: today's events, the count in the headline ("2 events"), and packed days in the next six.
+- Task Manager: a job due on a packed day in the coming week is suggested a move to the nearest clearer day within three, never past its deadline. Someone's own job moves if their day is packed; a joint one only if everyone's is, or either's if it needs you both. Timed tasks and daily jobs stay put. Up to three a person.
+- The AI sentence gets only the number of events. If the calendar can't be read, the run carries on without it.
