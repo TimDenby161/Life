@@ -70,6 +70,8 @@ export default defineConfig(({ mode }) => {
           navigateFallback: `${base}index.html`,
           navigateFallbackDenylist: [/^\/auth\//],
           runtimeCaching: [],
+          // Notification handling (public/push-sw.js).
+          importScripts: ['push-sw.js'],
         },
       }),
     ],

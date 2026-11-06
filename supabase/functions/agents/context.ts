@@ -85,6 +85,8 @@ export type AgentPrefs = {
   /** A person's own settings for an agent, e.g. fitness goals; {} when none. */
   config: (agentId: string, userId: string) => unknown
   aiSummaries: Set<string>
+  /** People who want their briefing as a phone notification. */
+  briefingPush: Set<string>
 }
 
 export async function loadPrefs(db: SupabaseClient, householdId: string): Promise<AgentPrefs> {
@@ -93,16 +95,18 @@ export async function loadPrefs(db: SupabaseClient, householdId: string): Promis
   const [settings, prefs] = await Promise.all([
     db.from('agent_settings').select('user_id, agent_id, enabled, schedule, config').eq('household_id', householdId),
     // user_preferences has no household_id; these ids are this household's members.
-    db.from('user_preferences').select('user_id, ai_summaries').in('user_id', ids),
+    db.from('user_preferences').select('user_id, ai_summaries, briefing_push').in('user_id', ids),
   ])
   const rows = check(settings) as { user_id: string; agent_id: string; enabled: boolean; schedule: AgentSchedule; config: unknown }[]
   const row = (agentId: string, userId: string) => rows.find((r) => r.agent_id === agentId && r.user_id === userId)
+  const prefRows = check(prefs) as { user_id: string; ai_summaries: boolean; briefing_push: boolean }[]
   return {
     members: ids,
     enabled: (agentId) => ids.filter((id) => row(agentId, id)?.enabled ?? true),
     schedule: (agentId, userId) => row(agentId, userId)?.schedule ?? 'daily',
     config: (agentId, userId) => row(agentId, userId)?.config ?? {},
-    aiSummaries: new Set((check(prefs) as { user_id: string; ai_summaries: boolean }[]).filter((p) => p.ai_summaries).map((p) => p.user_id)),
+    aiSummaries: new Set(prefRows.filter((p) => p.ai_summaries).map((p) => p.user_id)),
+    briefingPush: new Set(prefRows.filter((p) => p.briefing_push).map((p) => p.user_id)),
   }
 }
 

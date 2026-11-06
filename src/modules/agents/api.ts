@@ -5,6 +5,8 @@ import { unwrap } from '@/lib/utils'
 import { useUserId } from '@/modules/auth/AuthProvider'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { AgentSchedule } from '../../../supabase/functions/_shared/agents/registry.ts'
+import { fromB64url } from '../../../supabase/functions/_shared/push.ts'
+import { thisDeviceEndpoint, workerRegistration } from './push'
 
 export type AgentSetting = Tables<'agent_settings'>
 export type AgentRun = Tables<'agent_runs'>
@@ -20,6 +22,7 @@ export const agentKeys = {
   runs: ['agents', 'runs'] as const,
   actions: ['agents', 'actions'] as const,
   prefs: ['agents', 'prefs'] as const,
+  push: ['agents', 'push'] as const,
 }
 
 /** My settings, one row per agent I've changed (no row = on, daily). */
@@ -112,13 +115,62 @@ export const useRespond = () =>
 
 export type RunResult = { status: 'ok' | 'recent' | 'error'; message?: string }
 
-export const useRunAgent = () =>
-  useAgentMutation(async (_h, agentId: string): Promise<RunResult> => {
-    const { data, error } = await supabase.functions.invoke<RunResult>('agents', { body: { agent: agentId } })
-    if (error) {
-      // Non-2xx responses still carry our JSON body.
-      const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
-      return body?.status ? (body as RunResult) : { status: 'error', message: 'The agents service could not be reached.' }
-    }
-    return data ?? { status: 'error', message: 'No response.' }
+/** Calls the agents Edge Function as me. */
+async function callAgents<T extends RunResult>(body: Record<string, string>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>('agents', { body })
+  if (error) {
+    // Non-2xx responses still carry our JSON body.
+    const parsed = await (error as { context?: Response }).context?.json?.().catch(() => null)
+    return parsed?.status ? (parsed as T) : ({ status: 'error', message: 'The agents service could not be reached.' } as T)
+  }
+  return data ?? ({ status: 'error', message: 'No response.' } as T)
+}
+
+export const useRunAgent = () => useAgentMutation(async (_h, agentId: string) => callAgents<RunResult>({ agent: agentId }))
+
+/** Whether my briefing comes as a notification, my registered devices, and whether this browser is one of them. */
+export const usePushSettings = () => {
+  const userId = useUserId()
+  return useQuery({
+    queryKey: agentKeys.push,
+    queryFn: async () => {
+      const [prefs, devices, endpoint] = await Promise.all([
+        supabase.from('user_preferences').select('briefing_push').eq('user_id', userId).maybeSingle(),
+        supabase.from('push_subscriptions').select('endpoint'),
+        thisDeviceEndpoint().catch(() => null),
+      ])
+      const endpoints = unwrap(devices).map((d) => d.endpoint)
+      return { on: unwrap(prefs)?.briefing_push ?? false, devices: endpoints.length, thisDevice: !!endpoint && endpoints.includes(endpoint) }
+    },
   })
+}
+
+/**
+ * On: subscribe this browser and register it, then switch on. `permission` is
+ * requested in the tap handler itself, because iPhone only asks on a tap.
+ * Off: switch off and forget all my devices.
+ */
+export const useSetBriefingPush = () => {
+  const userId = useUserId()
+  return useAgentMutation(async (householdId, r: { on: boolean; permission?: Promise<NotificationPermission> }) => {
+    if (!r.on) {
+      unwrap(await supabase.from('user_preferences').update({ briefing_push: false }).eq('user_id', userId))
+      unwrap(await supabase.from('push_subscriptions').delete().eq('user_id', userId))
+      return
+    }
+    if ((await r.permission) !== 'granted') throw new Error('Notifications are blocked for Life. Allow them in Settings, then try again.')
+    const key = await callAgents<RunResult & { key?: string }>({ mode: 'push-key' })
+    if (key.status !== 'ok' || !key.key) throw new Error(key.message ?? 'Notifications aren’t set up on the server yet.')
+    const reg = await workerRegistration()
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: fromB64url(key.key) }))
+    const { endpoint, keys } = sub.toJSON()
+    if (!endpoint || !keys?.p256dh || !keys.auth) throw new Error('This browser didn’t give a notification address.')
+    unwrap(await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint))
+    unwrap(await supabase.from('push_subscriptions').insert({ household_id: householdId, endpoint, p256dh: keys.p256dh, auth: keys.auth }))
+    unwrap(await supabase.from('user_preferences').update({ briefing_push: true }).eq('user_id', userId))
+  })
+}
+
+export const useSendTestPush = () => useAgentMutation(async () => callAgents<RunResult>({ mode: 'push-test' }))

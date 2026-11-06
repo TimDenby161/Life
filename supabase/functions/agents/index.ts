@@ -7,14 +7,19 @@
 //              JWT, from "Run now" in the AI Hub. Rate-limited to one run per
 //              agent per household per ten minutes.
 //   -> { status: 'ok' | 'recent' | 'error', message? }
+//   Push       POST {"mode":"push-key"} or {"mode":"push-test"} with the person's
+//              JWT: the public key their browser subscribes with, and a test
+//              notification to their own devices.
 //
 // Agents only read (context.ts, always scoped by household) and write through
 // agent_claim_run / agent_finish_run, which touch agent tables only. Nothing
-// here changes tasks, money or anything else.
+// here changes tasks, money or anything else. After a scheduled briefing the
+// headline goes to the phones of people who turned notifications on (notify.ts).
 //
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided by Supabase),
 // AGENT_CRON_SECRET, and optionally ANTHROPIC_API_KEY, AGENT_LLM_MODEL,
-// AGENT_LLM_MONTHLY_BUDGET_USD, ALLOWED_ORIGINS.
+// AGENT_LLM_MONTHLY_BUDGET_USD, ALLOWED_ORIGINS, and VAPID_PUBLIC_KEY,
+// VAPID_PRIVATE_KEY, VAPID_SUBJECT for notifications.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
@@ -29,6 +34,7 @@ import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/age
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import { type AgentPrefs, loadContext, loadLanguages, loadPrefs, loadRooms, loadSessions, loadWedding } from './context.ts'
+import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -153,6 +159,10 @@ async function runAgent(
       p_usage: usage,
     })
     if (done.error) throw new Error(done.error.message)
+    // A briefing someone asked for in the app doesn't need to buzz their phone too.
+    if (trigger === 'scheduled' && briefings.length) {
+      await notifyBriefings(db, household.id, briefings, prefs.briefingPush, now).catch(() => console.warn('agents: notifications failed'))
+    }
   } catch (e) {
     await db.rpc('agent_finish_run', { p_run_id: runId, p_error: safeError(e) })
     console.warn(`agents: ${agentId} failed for a household`)
@@ -216,8 +226,6 @@ Deno.serve(async (req) => {
   // On demand, as a signed-in member.
   const client = await userClient(req)
   if (!client) return json(req, { status: 'error', message: 'Sign in again.' }, 401)
-  const agent = agentById(body.agent ?? '')
-  if (!agent || agent.status !== 'live') return json(req, { status: 'error', message: 'That agent isn’t available.' }, 400)
   const { data: user } = await client.auth.getUser()
   // RLS: this only returns the caller's own household.
   const { data: membership } = await client
@@ -228,6 +236,24 @@ Deno.serve(async (req) => {
   const household = (membership as { household: Household | null } | null)?.household
   if (!household) return json(req, { status: 'error', message: 'No household.' }, 403)
 
+  if (body.mode === 'push-key') {
+    const vapid = vapidFromEnv()
+    return vapid
+      ? json(req, { status: 'ok', key: vapid.publicKey })
+      : json(req, { status: 'error', message: 'Notifications aren’t set up on the server yet.' })
+  }
+  if (body.mode === 'push-test') {
+    try {
+      const sent = await notifyTest(serviceClient(), household.id, user.user!.id, now)
+      if (sent === null) return json(req, { status: 'error', message: 'Notifications aren’t set up on the server yet.' })
+      return json(req, sent ? { status: 'ok' } : { status: 'error', message: 'No device took it. Turn notifications off and on again on this device.' })
+    } catch (e) {
+      return json(req, { status: 'error', message: safeError(e) }, 500)
+    }
+  }
+
+  const agent = agentById(body.agent ?? '')
+  if (!agent || agent.status !== 'live') return json(req, { status: 'error', message: 'That agent isn’t available.' }, 400)
   const db = serviceClient()
   try {
     const prefs = await loadPrefs(db, household.id)

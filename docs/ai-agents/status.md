@@ -20,6 +20,7 @@ _Last updated 6 November 2026._ Six of the ten agents are built. **Live since 6 
 | Month-only wedding date; per-person fitness goals | migrations `0200`, `0300`; `FitnessGoals.tsx`, Wedding settings | Vitest, pgTAP, and entered through the UI at phone width locally |
 | AI Hub (`/ai`): Overview, Suggestions, Agents, History | `src/modules/agents` | browser (desktop), typecheck, build |
 | Service-role code only reads its own household and only writes agent tables | `src/test/agents-guard.test.ts` | Vitest |
+| Briefing notifications (Web Push, off by default) | migration `0400`, `_shared/push.ts`, `agents/notify.ts`, `public/push-sw.js`, AI Hub → Agents | 9 Vitest cases (encryption decrypted on the browser side, VAPID signature verified, gone devices); pgTAP `17_push_notifications.test.sql` (14); locally the scheduled briefing sent through FCM, which rejected the fake device, and the function forgot it |
 
 ## Known issue (CI only)
 
@@ -28,6 +29,7 @@ On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, an
 ## Not verified
 
 - **The LLM call** (`functions/agents/summary.ts`). No API key was used, so it has never made a real request. Budget, cost, prompt and output checks are unit-tested; the code falls back to the rules headline on any failure.
+- **A notification arriving on a real phone.** Needs the VAPID secrets on live and someone to turn it on; "Send a test" is the check.
 - **Phone layout** of the AI Hub; it uses the same single-column patterns as other pages but wasn't looked at on a phone.
 - **Live data.** The noise caps were tuned on the local demo data, which is weeks stale (76 overdue). Real data may need the thresholds in `taskManager.ts` adjusted.
 

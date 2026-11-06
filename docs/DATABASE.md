@@ -48,6 +48,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `agent_suggestions` | What agents noticed or propose: kind, why, severity, optional action, `recipients`, status (pending/snoozed/approved/dismissed/expired), dedupe key. Recipients only. |
 | | `agent_briefings` | Daily/weekly briefing JSON per person, optional AI sentence. Recipient only. |
 | | `agent_actions` | Append-only log of approve/dismiss/snooze and the task it created or changed. |
+| | `push_subscriptions` | Devices a person allowed briefing notifications on (Web Push endpoint and keys). Endpoint must be a browser push service. Owner only; `user_preferences.briefing_push` is the on/off switch (off by default). |
 | | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 
 ## Functions (RPC)
@@ -62,6 +63,7 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | `recurrence_next_date(rule, anchor, after)` | any | Pure recurrence maths. |
 | `respond_agent_suggestion(id, response, snooze_until?)` | recipient | approve / dismiss / snooze; approving applies the action (create task, move date, archive) as the caller. |
 | `agent_claim_run(...)`, `agent_finish_run(...)` | **service role only** | Start a run (refused if its key is done) and record its results. Used by the `agents` Edge Function. |
+| `push_subscriptions_gone(household_id, ids)` | **service role only** | Forget devices the push service says have unsubscribed. |
 | `bootstrap_household(name, members jsonb)` | **admin only** | Creates the household, lists and default categories. |
 
 ## RLS summary

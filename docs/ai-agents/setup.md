@@ -1,6 +1,6 @@
 # AI agents: setup and deployment
 
-Everything below is additive. Three migrations (`20261106000100` to `0300`) create new tables and functions, add columns to `user_preferences`, `agent_settings` and `wedding_settings`, a trigger on `task_completion_events` and an hourly cron job; they change no existing data.
+Everything below is additive. Four migrations (`20261106000100` to `0400`) create new tables and functions, add columns to `user_preferences`, `agent_settings` and `wedding_settings`, a trigger on `task_completion_events` and an hourly cron job; they change no existing data.
 
 ## Local
 
@@ -45,8 +45,26 @@ supabase secrets set AGENT_LLM_MODEL=claude-opus-5-5      # default; claude-haik
 
 It sends Anthropic only the briefing's task titles, counts and dates. At the default model a summary is roughly 600 tokens in and 60 out, about $0.004, so two people daily is around $0.25 a month. Before each call the function checks that even the worst case stays inside the month's budget; past it, briefings keep their rules-based headline.
 
+### Optional: the briefing as a phone notification
+
+Built but off: nothing is sent until the three VAPID secrets are set **and** a person turns on "Morning notification" in AI Hub → Agents. Then, after each scheduled briefing, their devices get the headline (e.g. "3 due today, 1 overdue."). Counts only; the message is encrypted to the device so Apple/Google can't read it. Free: Web Push costs nothing.
+
+1. Apply the migration `20261106000400_push_notifications.sql` (`supabase db push`).
+2. Make the keys and give them to the function. The private key goes straight from the file into Supabase and is never printed:
+   ```bash
+   node scripts/vapid-keys.mjs vapid.env
+   supabase secrets set --env-file vapid.env
+   rm vapid.env
+   supabase functions deploy agents
+   ```
+   Don't regenerate the keys later: every device would have to be turned on again.
+3. Push `main` (the service worker gets the notification handler).
+4. Each person, on each device: **iPhone** needs iOS 16.4 or later and Life added to the Home Screen (Share → Add to Home Screen); open it from there, AI Hub → Agents → Morning notification → Allow. Then "Send a test".
+
+Locally the service worker only exists in a production build (`npm run build && npx vite preview`), not in `npm run dev`. Add the three `VAPID_*` lines to the env file passed to `supabase functions serve`.
+
 ## Turning it off
 
-- Per person: AI Hub → Agents switches.
+- Per person: AI Hub → Agents switches (Morning notification off also forgets that person's devices).
 - Everyone: `select cron.unschedule('agents-hourly');` (Run now still works).
 - Remove the Vault secrets, and the cron job becomes a no-op.

@@ -27,7 +27,7 @@ describe('agents Edge Function', () => {
       'households', 'household_members', 'user_preferences', 'agent_settings', 'agent_runs', 'agent_suggestions',
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
-      'language_study', 'language_progress', 'health_exercise_sessions',
+      'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -48,11 +48,18 @@ describe('agents Edge Function', () => {
     expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem/)
   })
 
-  it('writes only through agent_claim_run and agent_finish_run', () => {
+  it('writes only through agent_claim_run, agent_finish_run and push_subscriptions_gone', () => {
     for (const { f, text } of fn) {
       expect(text, f).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run'], f).toContain(rpc)
+      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone'], f).toContain(rpc)
     }
+  })
+
+  it('puts nothing but the briefing headline in a notification', () => {
+    const notify = fn.find((x) => x.f === 'notify.ts')!.text
+    const calls = [...notify.matchAll(/briefingMessage\(.*/g)].map((m) => m[0])
+    expect(calls).toEqual(['briefingMessage(b.kind, (b.content as { headline: string }).headline)]),'])
+    expect(notify).not.toMatch(/suggestions|ai_summary|reason/)
   })
 
   it('keeps the shared agent logic pure, so the app and Deno can both import it', () => {

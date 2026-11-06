@@ -1685,6 +1685,51 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          household_id: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          household_id: string
+          id?: string
+          p256dh: string
+          user_id?: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          household_id?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       savings_goals: {
         Row: {
           account_id: string | null
@@ -2407,6 +2452,7 @@ export type Database = {
       user_preferences: {
         Row: {
           ai_summaries: boolean
+          briefing_push: boolean
           default_task_list_id: string | null
           settings: Json
           theme: string
@@ -2416,6 +2462,7 @@ export type Database = {
         }
         Insert: {
           ai_summaries?: boolean
+          briefing_push?: boolean
           default_task_list_id?: string | null
           settings?: Json
           theme?: string
@@ -2425,6 +2472,7 @@ export type Database = {
         }
         Update: {
           ai_summaries?: boolean
+          briefing_push?: boolean
           default_task_list_id?: string | null
           settings?: Json
           theme?: string
@@ -2837,6 +2885,10 @@ export type Database = {
           p_metadata?: Json
           p_summary: string
         }
+        Returns: undefined
+      }
+      push_subscriptions_gone: {
+        Args: { p_household_id: string; p_ids: string[] }
         Returns: undefined
       }
       recurrence_next_date: {

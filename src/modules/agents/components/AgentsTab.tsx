@@ -1,12 +1,24 @@
 import { formatDistanceToNow } from 'date-fns'
-import { Play } from 'lucide-react'
+import { Bell, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge, Segmented, Switch } from '@/components/ui/misc'
 import { getErrorMessage } from '@/lib/errors'
 import { AGENTS, type AgentDef, type AgentSchedule } from '../../../../supabase/functions/_shared/agents/registry.ts'
-import { type AgentRun, useAgentRuns, useAgentSettings, useAiSummaries, useRunAgent, useSaveAgentSetting, useSetAiSummaries } from '../api'
+import {
+  type AgentRun,
+  useAgentRuns,
+  useAgentSettings,
+  useAiSummaries,
+  usePushSettings,
+  useRunAgent,
+  useSaveAgentSetting,
+  useSendTestPush,
+  useSetAiSummaries,
+  useSetBriefingPush,
+} from '../api'
+import { pushSupport } from '../push'
 import { FitnessGoals } from './FitnessGoals'
 import { RunStatus } from './HistoryTab'
 
@@ -100,6 +112,68 @@ function AiSummaries() {
   )
 }
 
+const SUPPORT_NOTE = {
+  ready: null,
+  install: 'On iPhone: add Life to your Home Screen (Share, then Add to Home Screen), open it from there, and turn this on.',
+  unsupported: 'This browser can’t show notifications.',
+  blocked: 'Notifications are blocked for Life. Allow them in Settings, then come back.',
+} as const
+
+function Notifications() {
+  const push = usePushSettings()
+  const set = useSetBriefingPush()
+  const test = useSendTestPush()
+  const support = pushSupport()
+  const on = push.data?.on ?? false
+  const change = (v: boolean) =>
+    set.mutate(
+      // Asked here, inside the tap: iPhone only shows the prompt for one.
+      { on: v, permission: v ? Notification.requestPermission() : undefined },
+      { onSuccess: () => toast.success(v ? 'Notifications on for this device' : 'Notifications off'), onError: (e) => toast.error(getErrorMessage(e)) },
+    )
+  const note = SUPPORT_NOTE[support]
+  return (
+    <Card className="grid gap-2 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Morning notification</h3>
+          <p className="text-sm text-muted-foreground">
+            Your briefing’s headline on your phone when it’s ready, like “3 due today, 1 overdue.” Counts only, nothing else. Turn it on once on
+            each phone or computer.
+          </p>
+          {note && !on ? <p className="mt-1 text-sm">{note}</p> : null}
+        </div>
+        <Switch
+          checked={on}
+          onCheckedChange={change}
+          aria-label="Morning notification"
+          disabled={push.isPending || set.isPending || (!on && support !== 'ready')}
+        />
+      </div>
+      {on ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={test.isPending}
+            onClick={() =>
+              test.mutate(undefined, { onSuccess: (r) => (r.status === 'ok' ? toast.success('Sent') : toast.error(r.message)) })
+            }
+          >
+            <Bell /> Send a test
+          </Button>
+          {support === 'ready' && push.data && !push.data.thisDevice ? (
+            <Button size="sm" variant="outline" disabled={set.isPending} onClick={() => change(true)}>
+              Add this device
+            </Button>
+          ) : null}
+          <span className="text-sm text-muted-foreground">{push.data?.devices === 1 ? '1 device' : `${push.data?.devices ?? 0} devices`}</span>
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
 export function AgentsTab() {
   const runs = useAgentRuns()
   const lastRun = (id: string) => runs.data?.find((r) => r.agent_id === id)
@@ -109,6 +183,7 @@ export function AgentsTab() {
       {AGENTS.filter((a) => a.status === 'live').map((a) => (
         <LiveAgent key={a.id} agent={a} lastRun={lastRun(a.id)} />
       ))}
+      <Notifications />
       <AiSummaries />
       <h2 className="mt-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Not built yet</h2>
       {AGENTS.filter((a) => a.status === 'planned').map((a) => (
