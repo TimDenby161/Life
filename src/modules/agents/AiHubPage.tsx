@@ -127,7 +127,7 @@ function FocusCard() {
       <CardHeader>
         <CardTitle>Focus now</CardTitle>
         <Button size="sm" variant="ghost" asChild>
-          <Link to="/">Top jobs <ArrowRight /></Link>
+          <Link to="/?view=details">Top jobs <ArrowRight /></Link>
         </Button>
       </CardHeader>
       <CardContent>

@@ -27,11 +27,11 @@ export function approveLabel(s: Pick<Suggestion, 'action' | 'task_id' | 'kind'>)
 
 /** Where an agent's suggestions are about, for a link when there's no single task. */
 const AGENT_PAGE: Record<string, { to: string; label: string }> = {
-  wedding: { to: '/wedding', label: 'Wedding' },
-  language_coach: { to: '/languages', label: 'Languages' },
-  health_coach: { to: '/health', label: 'Health' },
-  household: { to: '/jobs', label: 'Jobs' },
-  finance: { to: '/finances', label: 'Finances' },
+  wedding: { to: '/wedding?view=details', label: 'Wedding' },
+  language_coach: { to: '/languages?view=details', label: 'Languages' },
+  health_coach: { to: '/health?view=details', label: 'Health' },
+  household: { to: '/jobs?view=details', label: 'Jobs' },
+  finance: { to: '/finances?view=details', label: 'Finances' },
   life_admin: { to: '/ai?tab=agents', label: 'Renewals' },
   travel: { to: '/ai?tab=agents', label: 'Trips' },
   career: { to: '/ai?tab=agents', label: 'Goals' },

@@ -155,3 +155,21 @@ The Task Manager and Chief of Staff read the household's connected Google Calend
 - Briefing: today's events, the count in the headline ("2 events"), and packed days in the next six.
 - Task Manager: a job due on a packed day in the coming week is suggested a move to the nearest clearer day within three, never past its deadline. Someone's own job moves if their day is packed; a joint one only if everyone's is, or either's if it needs you both. Timed tasks and daily jobs stay put. Up to three a person.
 - The AI sentence gets only the number of events. If the calendar can't be read, the run carries on without it.
+
+## Pages driven by the agents
+
+Every page with an agent opens on that agent's view, with the page itself under **Details** (`src/modules/agents/pageAgents.ts` maps pages to agents; `AgentShell` wraps the routes in `App.tsx`). The agent view shows the page title, what the agent noticed (observations) and suggests (with approve / snooze / dismiss), when each agent last ran with Run now, and a link to agent settings. Home's view is the morning briefing plus the top five suggestions from all agents; Calendar's is today's events and packed days from the briefing, plus moves off packed days.
+
+| Page | Agent view |
+|---|---|
+| Home | Chief of Staff briefing + top suggestions from every agent |
+| Tasks | Task Manager (overdue, put off, deadlines, duplicates, packed days) |
+| Jobs | Household Coordinator + the Task Manager's repeating-job findings |
+| Calendar | Today and packed days + moves off packed days |
+| Finances, Investments | Finance |
+| Wedding | Wedding Planner |
+| Languages | Language Coach |
+| Health | Fitness Coach |
+| Statistics | Workload |
+
+Feed, Settings and the AI Hub have no agent view. A link into a page (any query such as `?lang=zh`, or a sub-path) opens Details directly, so task and language deep links work as before; `?view=agent` / `?view=details` choose explicitly.

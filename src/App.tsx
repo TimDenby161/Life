@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { isConfigured } from '@/lib/env'
 import { createQueryClient } from '@/lib/queryClient'
 import { supabase } from '@/lib/supabase'
+import { AgentShell } from '@/modules/agents/components/AgentShell'
+import { PAGE_AGENTS } from '@/modules/agents/pageAgents'
 import { AuthLayout } from '@/modules/auth/AuthLayout'
 import { AuthProvider, useAuth } from '@/modules/auth/AuthProvider'
 import { LoginPage } from '@/modules/auth/LoginPage'
@@ -64,7 +66,11 @@ function HouseholdGate() {
       <AppShell>
         <Routes>
           {modules.map((m) => (
-            <Route key={m.id} path={m.path === '/' ? '/' : `${m.path}/*`} element={<m.component />} />
+            <Route
+              key={m.id}
+              path={m.path === '/' ? '/' : `${m.path}/*`}
+              element={PAGE_AGENTS[m.id] ? <AgentShell scope={PAGE_AGENTS[m.id]} base={m.path} title={m.label} page={m.component} /> : <m.component />}
+            />
           ))}
           <Route path="/mandarin" element={<Navigate to="/languages?lang=zh" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
