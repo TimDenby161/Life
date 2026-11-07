@@ -52,6 +52,13 @@ describe('AI priorities: what Claude sees', () => {
     expect(input).not.toContain('dentist')
   })
 
+  it('says who is away today, without saying why', () => {
+    const ctx = context({ open: [task({ title: 'Hoover', due_date: TODAY })], calendar: [{ owner_id: SAM, title: 'Florida', start: '2026-11-05', end: '2026-11-12', allDay: true }] })
+    const input = prioritiesInput(ctx, alex, candidatesFor(ctx, alex), '06:15')
+    expect(JSON.parse(input)).toMatchObject({ awayToday: false, partnerAwayToday: true })
+    expect(input).not.toContain('Florida')
+  })
+
   it('names the Together tab after both of you, with both busy times', () => {
     const ctx = context({ open: [task({ title: 'Big shop', due_date: TODAY, needs_both: true })], calendar: [ev('Gym', '2026-11-06T18:00:00Z', '2026-11-06T19:00:00Z', SAM)] })
     const data = JSON.parse(prioritiesInput(ctx, TOGETHER, candidatesFor(ctx, TOGETHER), '06:05'))

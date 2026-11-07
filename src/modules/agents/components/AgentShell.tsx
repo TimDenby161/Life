@@ -16,23 +16,26 @@ const AgentView = lazy(() => import('./AgentView'))
 export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgent; base: string; title: string; page: ComponentType }) {
   const [params, setParams] = useSearchParams()
   const { pathname } = useLocation()
+  // Home has no switch, so it's always the agent view unless a link points inside it.
   const view = pageView(pathname, base, params)
   const setView = (v: 'agent' | 'details') =>
     setParams(v === 'agent' ? { view: 'agent' } : (p) => { p.set('view', 'details'); return p }, { replace: true })
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      <Segmented
-        aria-label="View"
-        size="sm"
-        className="w-fit"
-        value={view}
-        onChange={setView}
-        options={[
-          { value: 'agent', label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
-          { value: 'details', label: 'Details' },
-        ]}
-      />
+      {scope.bare ? null : (
+        <Segmented
+          aria-label="View"
+          size="sm"
+          className="w-fit"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'agent', label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
+            { value: 'details', label: 'Details' },
+          ]}
+        />
+      )}
       {view === 'agent' ? (
         <div>
           {scope.bare ? <h1 className="sr-only">{title}</h1> : <PageHeader title={title} description={scope.description} />}

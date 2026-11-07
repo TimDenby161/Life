@@ -36,7 +36,7 @@ describe('AgentShell', () => {
     expect(await screen.findByText('agent suggestions')).toBeInTheDocument()
   })
 
-  it('keeps Home bare: no visible title or description', async () => {
+  it('keeps Home bare: no title, description or Details switch', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
@@ -47,6 +47,7 @@ describe('AgentShell', () => {
     expect(await screen.findByText('agent suggestions')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Home' })).toHaveClass('sr-only')
     expect(screen.queryByText(PAGE_AGENTS.home.description)).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: 'Details' })).not.toBeInTheDocument()
   })
 
   it('goes straight to the page for a link into it', () => {

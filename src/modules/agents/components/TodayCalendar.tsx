@@ -22,7 +22,7 @@ export function upcomingToday(events: CalendarEvent[], integrations: CalendarInt
     .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start))
 }
 
-export function TodayCalendar() {
+export function TodayCalendar({ max, compact = false }: { max?: number; compact?: boolean }) {
   const { me } = useHousehold()
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -37,21 +37,22 @@ export function TodayCalendar() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>{todayLabel(now)}</CardTitle></CardHeader>
-      <CardContent>
+      <CardHeader className={compact ? 'p-3 pb-1 sm:p-3 sm:pb-1' : undefined}><CardTitle>{todayLabel(now)}</CardTitle></CardHeader>
+      <CardContent className={compact ? 'p-3 pt-1 sm:p-3 sm:pt-1' : undefined}>
         {events.isPending || integrations.isPending ? (
-          <ListSkeleton rows={3} />
+          <ListSkeleton rows={compact ? 2 : 3} />
         ) : result && result.status !== 'ok' ? (
           <p className="text-sm text-muted-foreground">{result.message}</p>
         ) : items.length ? (
-          <ul className="grid gap-1.5 text-sm">
-            {items.map((e) => (
+          <ul className={cn('grid text-sm', compact ? 'gap-1' : 'gap-1.5')}>
+            {items.slice(0, max).map((e) => (
               <li key={e.id} className="flex items-center gap-3">
                 <span className="w-24 shrink-0 text-muted-foreground tabular">{e.allDay ? 'All day' : `${hhmm(e.start)}–${hhmm(e.end)}`}</span>
                 <span className={cn('size-2 shrink-0 rounded-full', colorOf(e.color).dot)} />
                 <span className="truncate">{e.title}</span>
               </li>
             ))}
+            {max && items.length > max ? <li className="text-xs text-muted-foreground">+{items.length - max} more later</li> : null}
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">Nothing else in your calendar today.</p>

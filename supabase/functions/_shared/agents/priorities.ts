@@ -7,7 +7,7 @@
 // API key. Claude sees job titles, categories, dates and flags, plus today's
 // busy times from the calendar, never event titles, health data or amounts.
 // It can only choose from the shortlist; anything else in its answer is dropped.
-import { busyBlocks } from './calendar.ts'
+import { busyBlocks, isAway } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekday } from './dates.ts'
 import { cycleDays, ownerOf } from './taskManager.ts'
 import type { Member, OpenTask, TaskContext } from './types.ts'
@@ -88,7 +88,8 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 export const PRIORITIES_PROMPT = [
   'You choose the most important jobs for one person to focus on today, for a household task app.',
   `Pick up to ${MAX_PICKS} jobs from the list, most important first, each with a reason of at most 12 words.`,
-  'For each pick say where it can be done: "home" if it needs you at home (cleaning, laundry, tidying, cooking, DIY, the garden), or "anywhere" if it can be done out and about (language practice, calls, emails and messages, online bookings, orders and payments, reading, planning). When there are jobs that can be done anywhere, include at least three of them, so there is something to do away from home.',
+  'For each pick say where it can be done: "anywhere" only if it can be done on a phone (language practice, calls, emails and messages, online bookings and payments, reading, planning, deciding things); otherwise "home". Shopping, cleaning, laundry, tidying, cooking, DIY, the bins and the garden are "home". When there are jobs that can be done on a phone, include at least three of them, so there is something to do away from home.',
+  'awayToday (and partnerAwayToday) means that person is away from home all day. When the person is away, pick only jobs that can be done on a phone. For the together list, if either of them is away, pick only jobs they can both do on their phones, and none if there are none.',
   'How to judge: a deadline beats everything as it gets close, and a missed one is worst. A one-off past its due date matters more the later it is. A repeating job only matters once it is late by most of its cycle; one day late on a daily job is normal.',
   'Jobs in a category starting "C4" are paid work: only pick them on a weekday before 17:00. A "together" job needs both people free, so check the partner\'s busy times too.',
   'Fit the day: when the person is busy for much of it, pick fewer and quicker jobs; on a free day bigger jobs are fine. A job with a time belongs at that time.',
@@ -101,6 +102,7 @@ export const PRIORITIES_PROMPT = [
 export function prioritiesInput(ctx: TaskContext, view: Member | typeof TOGETHER, candidates: Candidate[], nowTime: string): string {
   const tz = ctx.timezone ?? 'Europe/London'
   const busy = (id: string) => (ctx.calendar?.length ? busyBlocks(ctx.calendar, id, ctx.today, tz) : [])
+  const away = (id: string) => (ctx.calendar?.length ? isAway(ctx.calendar, id, ctx.today, tz) : false)
   const [first, second] = view === TOGETHER ? ctx.members : [view, ctx.members.find((m) => m.id !== view.id)]
   return JSON.stringify({
     person: view === TOGETHER ? `${ctx.members.map((m) => m.name).join(' and ')}, together` : view.name,
@@ -110,6 +112,8 @@ export function prioritiesInput(ctx: TaskContext, view: Member | typeof TOGETHER
     time: nowTime,
     busyToday: first ? busy(first.id) : [],
     partnerBusyToday: second ? busy(second.id) : [],
+    awayToday: first ? away(first.id) : false,
+    partnerAwayToday: second ? away(second.id) : false,
     jobs: candidates.map(({ task_id: _id, ...c }) => c),
   })
 }

@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere } from '@/modules/agents/lib/aiOrder'
+import { awayToday } from '@/modules/agents/lib/away'
+import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -191,41 +193,53 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
 
 const JOBS_PER_STEP = 5
 
-/** The open tasks that most need doing, in score order, five more at a time on request. */
-/** Out today, remembered on this device until midnight. */
-function useOutToday(today: string): [boolean, (out: boolean) => void] {
-  const read = () => {
+type Place = 'home' | 'out'
+
+/**
+ * A tab's At home / Out choice for today, when someone has changed it from
+ * what the calendar says. Remembered on this device until midnight.
+ */
+function useOutOverride(today: string): [(tab: string) => Place | undefined, (tab: string, place: Place) => void] {
+  const read = (): Record<string, Place> => {
     try {
-      return localStorage.getItem('life.out') === today
+      const saved = JSON.parse(localStorage.getItem('life.place') ?? '{}') as { day?: string; tabs?: Record<string, Place> }
+      return saved.day === today ? (saved.tabs ?? {}) : {}
     } catch {
-      return false
+      return {}
     }
   }
-  const [out, setOut] = useState(read)
-  const set = (v: boolean) => {
-    setOut(v)
+  const [tabs, setTabs] = useState(read)
+  const set = (tab: string, place: Place) => {
+    const next = { ...read(), [tab]: place }
+    setTabs(next)
     try {
-      if (v) localStorage.setItem('life.out', today)
-      else localStorage.removeItem('life.out')
+      localStorage.setItem('life.place', JSON.stringify({ day: today, tabs: next }))
     } catch {
       // Private browsing: it just won't be remembered.
     }
   }
-  return [out && read(), set]
+  return [(tab) => tabs[tab], set]
 }
 
+/** The open tasks that most need doing: today's AI picks first, then score order, five more at a time on request (or a fixed few when compact). */
 export function TopJobsCard({
   title = 'Top jobs',
   adding = false,
   onToggleAdding,
   onMessage,
+  limit,
+  footer,
 }: {
   title?: string
   adding?: boolean
   onToggleAdding?: () => void
   onMessage?: () => void
+  /** Show just this many, with no Show more (Home, to fit one screen). */
+  limit?: number
+  /** Anything else to show at the foot of the card (Home: what the agents flagged). */
+  footer?: React.ReactNode
 }) {
-  const { me, partner } = useHousehold()
+  const { me, partner, members } = useHousehold()
   const views = useViewOptions()
   const [who, setWho] = useState(me.id)
   const { open, items } = useOccurrencesFor(who)
@@ -244,14 +258,21 @@ export function TopJobsCard({
   // A score of 0 means nothing needs doing yet, so it stays off the list.
   // This tab's AI picks for today go first, then the usual score order.
   const picks = useAiPicks(today).data?.get(who)
-  const [out, setOut] = useOutToday(today)
+  // Out when the calendar says this tab's person is away today (either of us, for Together), unless changed by hand.
+  const integrations = useCalendarIntegrations().data ?? []
+  const calendar = useCalendarEvents(today, today).data
+  const events = calendar?.status === 'ok' ? calendar.events : []
+  const away = (id: string) => awayToday(events, integrations, id, today)
+  const awayNow = who === TOGETHER ? members.some((m) => away(m.id)) : away(who)
+  const [placeFor, setPlace] = useOutOverride(today)
+  const out = (placeFor(who) ?? (awayNow ? 'out' : 'home')) === 'out'
   const scored = topJobs(items ?? [], categories, today, Infinity)
   const ai = aiFirst(scored, picks)
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
   const ranked = ai.items
     .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
     .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
-  const visible = ranked.slice(0, shown)
+  const visible = ranked.slice(0, limit ?? shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -271,19 +292,9 @@ export function TopJobsCard({
   )
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className={limit ? 'p-3 pb-1 sm:p-3 sm:pb-1' : undefined}>
         <CardTitle>{title}</CardTitle>
         <div className="flex items-center gap-2">
-          <Segmented
-            aria-label="Where I am"
-            size="sm"
-            value={out ? 'out' : 'home'}
-            onChange={(v) => setOut(v === 'out')}
-            options={[
-              { value: 'home', label: 'At home' },
-              { value: 'out', label: 'Out' },
-            ]}
-          />
           {onMessage ? (
             <Button size="icon-sm" variant="outline" aria-label="Message" title="Message" onClick={onMessage}>
               <MessageSquarePlus />
@@ -296,22 +307,33 @@ export function TopJobsCard({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="px-2 sm:px-3">
-        {partner ? (
-          <Segmented aria-label="Whose top jobs" size="sm" className="mx-1 mb-2 sm:mx-2" value={who} onChange={pickWho} options={views} />
-        ) : null}
+      <CardContent className={limit ? 'px-1.5 pb-2 pt-1 sm:px-2' : 'px-2 sm:px-3'}>
+        <div className="mx-1 mb-1.5 flex flex-wrap items-center justify-between gap-2 sm:mx-2">
+          {partner ? <Segmented aria-label="Whose top jobs" size="sm" value={who} onChange={pickWho} options={views} /> : <span />}
+          <Segmented
+            aria-label="Where"
+            size="sm"
+            value={out ? 'out' : 'home'}
+            onChange={(v) => setPlace(who, v as Place)}
+            options={[
+              { value: 'home', label: 'Home' },
+              { value: 'out', label: 'Out' },
+            ]}
+          />
+        </div>
         {open.isPending ? (
           <ListSkeleton rows={5} className="px-2" />
         ) : open.error ? (
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
         ) : !visible.length ? (
           <p className="flex items-center gap-2 px-2 pb-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4 text-success" /> Nothing to do
+            <CheckCircle2 className="size-4 text-success" /> {out ? 'Nothing that can be done on a phone' : 'Nothing to do'}
           </p>
         ) : (
           renderRows(visible)
         )}
-        <div className="mt-1 flex">
+        {footer}
+        <div className={limit ? 'hidden' : 'mt-1 flex'}>
           {ranked.length > shown ? (
             <Button variant="ghost" className="flex-1" onClick={() => setShown(shown + JOBS_PER_STEP)}>
               <ChevronDown /> Show more jobs

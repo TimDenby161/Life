@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowRight, CheckCircle2, Play, Settings2 } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Map as MapIcon, Play, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -14,6 +14,7 @@ import { agentById } from '../../../../supabase/functions/_shared/agents/registr
 import { OBSERVATION_KINDS } from '../../../../supabase/functions/_shared/agents/types.ts'
 import { type Suggestion, useAgentRuns, useLatestBriefing, useRunAgent, useSuggestions } from '../api'
 import type { PageAgent } from '../pageAgents'
+import { AgentFlags } from './AgentFlags'
 import { SuggestionCard } from './SuggestionCard'
 import { TodayCalendar } from './TodayCalendar'
 import { TopNews } from './TopNews'
@@ -27,13 +28,34 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
   return <AgentSuggestions scope={scope} onDetails={onDetails} />
 }
 
-/** Home: the rest of today's calendar, the jobs I can do today (AI-picked, home or out), and the news. Nothing else. */
+/** Pinned links at the top of Home. */
+const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifact/7Tm8wQd2ZezWCcVMVMs3Ra', icon: MapIcon }]
+
+/**
+ * Home, sized to fit a phone screen: pinned links, the rest of today's
+ * calendar, the jobs I can do today (AI-picked, home or out) with what the
+ * agents have flagged, and the news.
+ */
 function HomeToday() {
   return (
-    <div className="grid grid-cols-1 gap-4">
-      <TodayCalendar />
-      <TopJobsCard title="Tasks I can do today" />
-      <TopNews />
+    <div className="grid grid-cols-1 gap-3">
+      <div className="flex gap-3">
+        {HOME_LINKS.map(({ label, href, icon: Icon }) => (
+          <a
+            key={href}
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="grid size-20 shrink-0 place-content-center justify-items-center gap-1 rounded-xl border bg-card p-2 text-center text-xs font-medium leading-tight shadow-[0_1px_2px_rgb(0_0_0/0.03)] hover:bg-muted/60"
+          >
+            <Icon className="size-5 text-primary" />
+            {label}
+          </a>
+        ))}
+      </div>
+      <TodayCalendar max={3} compact />
+      <TopJobsCard title="Today’s tasks" limit={4} footer={<AgentFlags max={2} />} />
+      <TopNews max={3} compact />
     </div>
   )
 }

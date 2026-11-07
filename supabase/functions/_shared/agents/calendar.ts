@@ -84,3 +84,21 @@ export function busyBlocks(events: CalEvent[], person: string, date: ISODate, ti
   }
   return out.sort((a, b) => a.from.localeCompare(b.from))
 }
+
+/** An event this long means a day out (a match, a day trip, a wedding). */
+export const AWAY_MINUTES = 240
+
+/**
+ * Away from home today, going by the person's own calendar (not shared ones):
+ * an all-day event, or one event of four hours or more. Mirrored for the app
+ * in agents/lib/away.ts.
+ */
+export function isAway(events: CalEvent[], person: string, date: ISODate, timeZone: string): boolean {
+  return events.some((e) => {
+    if (e.owner_id !== person) return false
+    if (e.allDay) return e.start <= date && date < e.end
+    const start = localNow(new Date(e.start), timeZone)
+    const end = localNow(new Date(e.end), timeZone)
+    return start.date <= date && end.date >= date && (new Date(e.end).getTime() - new Date(e.start).getTime()) / 60_000 >= AWAY_MINUTES
+  })
+}

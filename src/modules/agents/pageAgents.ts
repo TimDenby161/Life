@@ -14,7 +14,7 @@ export type PageAgent = {
   extra?: 'today' | 'calendar'
   /** Cap on suggestions shown (Home shows the top few). */
   limit?: number
-  /** No visible title or description (Home keeps it clean). */
+  /** No visible title, description or agent / Details switch (Home keeps it clean). */
   bare?: boolean
 }
 
