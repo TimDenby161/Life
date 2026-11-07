@@ -6,7 +6,9 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import type { CalEvent } from '../_shared/agents/calendar.ts'
 import { addDays } from '../_shared/agents/dates.ts'
+import type { Headline } from '../_shared/agents/headlines.ts'
 import { CALENDAR_SCOPE, googleAccessToken, listEvents } from '../_shared/google-calendar.ts'
+import { fetchRss } from '../_shared/rss.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
 import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
 import type { Goal } from '../_shared/agents/career.ts'
@@ -273,4 +275,23 @@ export async function loadCalendar(db: SupabaseClient, householdId: string, toda
     }),
   )
   return lists.flat()
+}
+
+/** The day's top headlines from the household's first news (RSS) source in the Feed; none if there isn't one or it can't be read. */
+export async function loadNews(db: SupabaseClient, householdId: string): Promise<Headline[]> {
+  const source = check(
+    await db
+      .from('feed_sources')
+      .select('config')
+      .eq('household_id', householdId)
+      .eq('provider', 'rss')
+      .eq('enabled', true)
+      .order('sort_order')
+      .limit(1)
+      .maybeSingle(),
+  ) as { config: Record<string, unknown> } | null
+  if (!source) return []
+  const feed = await fetchRss(source.config).catch(() => null)
+  if (feed?.status !== 'ok') return []
+  return feed.items.flatMap((i) => (i.url ? [{ url: i.url, title: i.title, summary: i.summary }] : []))
 }

@@ -275,3 +275,13 @@ export const useAiPicks = (day: string) =>
       return new Map(rows.map((r) => [r.view, r.picks as AiPick[]]))
     },
   })
+
+/** Today's one-line headlines from the morning routine, by story address. */
+export const useShortHeadlines = (day: string) =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'headlines', day],
+    queryFn: async () => {
+      const row = unwrap(await supabase.from('ai_headlines').select('items').eq('day', day).maybeSingle())
+      return new Map(((row?.items ?? []) as { url: string; short: string }[]).map((h) => [h.url, h.short]))
+    },
+  })

@@ -8,15 +8,18 @@
 //   {"mode":"priorities-save", "key", "picks":[{ref, why, where}]}
 //                                -> that tab's picks, after checking each is
 //                                   one of its open jobs
+//   {"mode":"news-save", "key", "items":[{ref, short}]}
+//                                -> one-line versions of the day's headlines
 //
 // Tabs: each person with "AI picks my top jobs" on (and the Chief of Staff on)
 // gets their own; Together is picked when anyone has it on. Shortlists hold job
 // titles, categories, dates and flags, and busy times without event titles.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { localNow } from '../_shared/agents/dates.ts'
+import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
 import { type Candidate, candidatesFor, cleanPicks, MAX_PICKS, PRIORITIES_PROMPT, prioritiesInput, TOGETHER } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
-import { type AgentPrefs, loadCalendar, loadContext, loadPrefs } from './context.ts'
+import { type AgentPrefs, loadCalendar, loadContext, loadNews, loadPrefs } from './context.ts'
 
 type Household = { id: string; timezone: string }
 export type Tab = Member | typeof TOGETHER
@@ -54,7 +57,11 @@ export async function routineInput(db: SupabaseClient, now: Date) {
   const { data: households, error } = await db.from('households').select('id, timezone')
   if (error) throw new Error(error.message)
   const tabs: { key: string; name: string; input: unknown }[] = []
+  const news: { key: string; headlines: unknown }[] = []
   for (const household of (households ?? []) as Household[]) {
+    const { date } = localNow(now, household.timezone)
+    const headlines = await loadNews(db, household.id)
+    if (headlines.length) news.push({ key: `${household.id}:news:${date}`, headlines: headlinesInput(headlines) })
     const prefs = await loadPrefs(db, household.id)
     if (!prefs.aiPriorities.size) continue
     const ctx = await contextFor(db, household, now)
@@ -75,6 +82,9 @@ export async function routineInput(db: SupabaseClient, now: Date) {
     answer: { mode: 'priorities-save', key: '<the tab’s key>', picks: [{ ref: '<job ref>', why: '<at most 12 words>', where: 'home | anywhere' }] },
     // "people" is what the routine's prompt reads; each entry is one Top jobs tab.
     people: tabs,
+    news_instructions: HEADLINES_PROMPT,
+    news_answer: { mode: 'news-save', key: '<the news key>', items: [{ ref: '<headline ref>', short: '<at most 40 characters>' }] },
+    news,
   }
 }
 
@@ -90,4 +100,19 @@ export async function routineSave(db: SupabaseClient, body: { key?: unknown; pic
   if (!tab) return { status: 'error', message: 'Unknown key.' }
   const saved = await savePicks(db, householdId, ctx, tab, JSON.stringify({ picks: body.picks }))
   return saved ? { status: 'ok', saved } : { status: 'error', message: 'None of those picks are on the shortlist.' }
+}
+
+/** One-line headlines, checked against the feed as it is now, saved for today. */
+export async function routineSaveNews(db: SupabaseClient, body: { key?: unknown; items?: unknown }, now: Date) {
+  const [householdId, kind, date] = typeof body.key === 'string' ? body.key.split(':') : []
+  if (!householdId || kind !== 'news' || !date) return { status: 'error', message: 'Unknown key.' }
+  const { data: household, error } = await db.from('households').select('id, timezone').eq('id', householdId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!household) return { status: 'error', message: 'Unknown key.' }
+  if (localNow(now, (household as Household).timezone).date !== date) return { status: 'error', message: 'Those headlines are from another day.' }
+  const items = cleanHeadlines(body.items, await loadNews(db, householdId))
+  if (!items.length) return { status: 'error', message: 'None of those match today’s headlines.' }
+  const saved = await db.rpc('agent_save_headlines', { p_household_id: householdId, p_day: date, p_items: items })
+  if (saved.error) throw new Error(saved.error.message)
+  return { status: 'ok', saved: items.length }
 }

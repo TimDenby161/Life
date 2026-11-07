@@ -439,6 +439,35 @@ export type Database = {
           },
         ]
       }
+      ai_headlines: {
+        Row: {
+          created_at: string
+          day: string
+          household_id: string
+          items: Json
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          household_id: string
+          items: Json
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          household_id?: string
+          items?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_headlines_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_picks: {
         Row: {
           created_at: string
@@ -3037,6 +3066,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_save_headlines: {
+        Args: { p_day: string; p_household_id: string; p_items: Json }
+        Returns: undefined
+      }
       agent_save_picks: {
         Args: {
           p_day: string
@@ -3045,15 +3078,6 @@ export type Database = {
           p_view: string
         }
         Returns: undefined
-      }
-      agent_set_top_picks: {
-        Args: {
-          p_date: string
-          p_household_id: string
-          p_top: Json
-          p_user_id: string
-        }
-        Returns: boolean
       }
       agents_dispatch: { Args: never; Returns: undefined }
       apply_sheet_balances: {
