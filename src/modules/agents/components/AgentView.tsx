@@ -39,21 +39,23 @@ const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifac
 function HomeToday() {
   return (
     <div className="grid grid-cols-1 gap-3">
-      <div className="flex gap-3">
+      <div className="flex items-stretch gap-3">
         {HOME_LINKS.map(({ label, href, icon: Icon }) => (
           <a
             key={href}
             href={href}
             target="_blank"
             rel="noreferrer noopener"
-            className="grid size-20 shrink-0 place-content-center justify-items-center gap-1 rounded-xl border bg-card p-2 text-center text-xs font-medium leading-tight shadow-[0_1px_2px_rgb(0_0_0/0.03)] hover:bg-muted/60"
+            className="grid w-20 shrink-0 place-content-center justify-items-center gap-1 rounded-xl border bg-card p-2 text-center text-xs font-medium leading-tight shadow-[0_1px_2px_rgb(0_0_0/0.03)] hover:bg-muted/60"
           >
             <Icon className="size-5 text-primary" />
             {label}
           </a>
         ))}
+        <div className="min-w-0 flex-1">
+          <TodayCalendar max={3} compact />
+        </div>
       </div>
-      <TodayCalendar max={3} compact />
       <TopJobsCard title="Today’s tasks" limit={4} footer={<AgentFlags max={2} />} />
       <TopNews max={3} compact />
     </div>

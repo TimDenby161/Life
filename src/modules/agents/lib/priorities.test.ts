@@ -116,9 +116,12 @@ describe('AI priorities: Top jobs order', () => {
 })
 
 describe('out and about', () => {
-  it('goes by the AI’s tag when there is one', () => {
-    expect(canDoAnywhere('Vacuum the hall', null, 'anywhere')).toBe(true)
+  it('goes by the AI’s tag, except for obvious home jobs', () => {
+    expect(canDoAnywhere('Draft the guest list', null, 'anywhere')).toBe(true)
     expect(canDoAnywhere('Learn two Spanish words', 'Spanish', 'home')).toBe(false)
+    expect(canDoAnywhere('Check food supplies', null, 'anywhere')).toBe(false)
+    expect(canDoAnywhere('Weekly shop', null, 'anywhere')).toBe(false)
+    expect(canDoAnywhere('Vacuum the hall', null, 'anywhere')).toBe(false)
   })
 
   it('otherwise keeps language practice, calls and online admin, not housework', () => {
@@ -126,6 +129,7 @@ describe('out and about', () => {
     expect(canDoAnywhere('Review Mandarin characters', null)).toBe(true)
     expect(canDoAnywhere('Call the council about bins', null)).toBe(true)
     expect(canDoAnywhere('Book boiler service', 'Admin & bills')).toBe(true)
+    expect(canDoAnywhere('Check food supplies', null)).toBe(false)
     expect(canDoAnywhere('Vacuum the hall', 'Cleaning')).toBe(false)
     expect(canDoAnywhere('Change the towels', null)).toBe(false)
   })

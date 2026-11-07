@@ -17,11 +17,21 @@ export function aiFirst<T extends { task_id: string }>(ranked: T[], picks: AiPic
   }
 }
 
-/** Language practice, calls, messages, online bookings and the like: fine away from home. Used for jobs the AI didn't tag. */
-const ANYWHERE_WORDS = /\b(call|ring|phone|email|e-mail|text|message|reply|book|order|pay|renew|cancel|apply|research|read|learn|study|review|revise|words?|characters?|plan|check|sign up|register|buy online)\b/i
-const ANYWHERE_CATEGORIES = /^(spanish|mandarin|languages?|admin|finance)/i
+/** Things that need you at home, whatever the AI said: the house, food and supplies, cleaning, laundry, bins, shopping. */
+const HOME_WORDS =
+  /\b(food|fridge|freezer|cupboards?|pantry|supplies|stock|groceries|shop(ping)?|clean|wash|wipe|tidy|vacuum|hoover|dust|mop|bins?|laundry|towels|bed(ding|s)?|sheets|iron(ing)?|cook|bake|meal|garden|plants?|water the|descale|fix|repair|paint|bathroom|kitchen|oven|rug|floor|windows?|declutter|sort out the)\b/i
 
+/** Language practice, calls, messages, online bookings and the like: fine away from home. Used for jobs the AI didn't tag. */
+const ANYWHERE_WORDS = /\b(call|ring|phone|email|e-mail|text|message|reply|book|order online|pay|renew|cancel|apply|research|read|learn|study|review|revise|words?|characters?|tones|plan|sign up|register|decide|agree|draft|shortlist)\b/i
+const ANYWHERE_CATEGORIES = /^(spanish|mandarin|languages?)/i
+
+/** Starts with something you do on a phone ("Call the council about the bins"). */
+const PHONE_START = /^(call|ring|phone|email|e-mail|text|message|reply|book|pay|renew|cancel|apply|research|plan|draft|agree|decide|shortlist|order online)\b/i
+
+/** Can this be done away from home, on a phone? Phone actions are; obvious home jobs never are; otherwise the AI's tag, then the word lists. */
 export function canDoAnywhere(title: string, category: string | null | undefined, tagged?: Where): boolean {
+  if (PHONE_START.test(title.trim())) return true
+  if (HOME_WORDS.test(title)) return false
   if (tagged) return tagged === 'anywhere'
   return ANYWHERE_CATEGORIES.test(category ?? '') || ANYWHERE_WORDS.test(title)
 }
