@@ -275,6 +275,8 @@ export function TopJobsCard({
     ? []
     : ai.items
         .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
+        // Home's list is today's: anything dated later (swiped or put off) waits until it's due.
+        .filter((o) => !limit || !o.due_date || o.due_date <= today)
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
   const visible = ranked.slice(0, limit ?? shown)
