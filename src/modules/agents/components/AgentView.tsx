@@ -28,6 +28,16 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
   return <AgentSuggestions scope={scope} onDetails={onDetails} />
 }
 
+/**
+ * On iPhone a claude.ai link opens the Claude app, where artifacts don't fit the
+ * screen; x-safari-https:// sends it to Safari instead (iOS 17+). Elsewhere the
+ * link is left alone.
+ */
+export function inBrowser(href: string, userAgent = navigator.userAgent): string {
+  const ios = /iPhone|iPad|iPod/.test(userAgent)
+  return ios && href.startsWith('https://') ? `x-safari-${href}` : href
+}
+
 /** Pinned links at the top of Home. */
 const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifact/7Tm8wQd2ZezWCcVMVMs3Ra', icon: MapIcon }]
 
@@ -43,7 +53,7 @@ function HomeToday() {
         {HOME_LINKS.map(({ label, href, icon: Icon }) => (
           <a
             key={href}
-            href={href}
+            href={inBrowser(href)}
             target="_blank"
             rel="noreferrer noopener"
             className="grid w-20 shrink-0 place-content-center justify-items-center gap-1 rounded-xl border bg-card p-2 text-center text-xs font-medium leading-tight shadow-[0_1px_2px_rgb(0_0_0/0.03)] hover:bg-muted/60"
