@@ -267,7 +267,7 @@ export function TopJobsCard({
   const [placeFor, setPlace] = useOutOverride(today)
   const out = (placeFor(who) ?? (awayNow ? 'out' : 'home')) === 'out'
   const scored = topJobs(items ?? [], categories, today, Infinity)
-  const ai = aiFirst(scored, picks)
+  const ai = aiFirst(scored, picks, today)
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
   // Together jobs need you both there: none while either of you is out.
   const togetherOff = who === TOGETHER && out
