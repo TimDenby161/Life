@@ -110,13 +110,6 @@ describe('AI priorities: Top jobs order', () => {
     expect(where).toEqual(new Map([['c', 'anywhere'], ['b', 'home']]))
   })
 
-  it('drops a pick that has been put off past today', () => {
-    const jobs = [{ task_id: 'a', due_date: '2026-11-06' }, { task_id: 'b', due_date: '2026-11-07' }]
-    const { items, notes } = aiFirst(jobs, [{ task_id: 'b', why: 'x' }, { task_id: 'a', why: 'y' }], TODAY)
-    expect(items.map((r) => r.task_id)).toEqual(['a', 'b'])
-    expect(notes.has('b')).toBe(false)
-  })
-
   it('leaves the order alone with no picks', () => {
     expect(aiFirst(rows, undefined).items).toBe(rows)
   })

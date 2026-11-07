@@ -171,6 +171,8 @@ export function TaskRow({
   onReopen,
   done = false,
   aiNote,
+  swipeDays,
+  onSwiped,
 }: {
   occurrence: OccurrenceWithTask
   lists: TaskList[]
@@ -184,6 +186,9 @@ export function TaskRow({
   done?: boolean
   /** Why the AI put it in today's top jobs ("" when it gave no reason). */
   aiNote?: string
+  /** Swipe right puts it off this many days instead of the usual growing delay (Home: 1, until tomorrow). */
+  swipeDays?: number
+  onSwiped?: () => void
 }) {
   const { member } = useHousehold()
   const task = occurrence.task
@@ -198,8 +203,15 @@ export function TaskRow({
   const update = useQuickTaskUpdate()
   const showSubtasks = !task.subtasks_collapsed
   const delay = useDelayOccurrence()
-  const delayBy = delayDaysFor(occurrence, categories)
-  const swipe = useSwipeRight(done ? undefined : () => delay(occurrence, delayBy))
+  const delayBy = swipeDays ?? delayDaysFor(occurrence, categories)
+  const swipe = useSwipeRight(
+    done
+      ? undefined
+      : () => {
+          delay(occurrence, delayBy)
+          onSwiped?.()
+        },
+  )
 
   return (
     <li className="relative touch-pan-y overflow-hidden rounded-xl animate-fade-in" {...swipe.handlers}>

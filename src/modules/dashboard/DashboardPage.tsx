@@ -221,6 +221,29 @@ function useOutOverride(today: string): [(tab: string) => Place | undefined, (ta
   return [(tab) => tabs[tab], set]
 }
 
+/** Jobs swiped away today on this device. */
+function useSwipedToday(today: string): [Set<string>, (id: string) => void] {
+  const read = (): string[] => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('life.swiped') ?? '{}') as { day?: string; ids?: string[] }
+      return saved.day === today ? (saved.ids ?? []) : []
+    } catch {
+      return []
+    }
+  }
+  const [ids, setIds] = useState(read)
+  const mark = (id: string) => {
+    const next = [...new Set([...read(), id])]
+    setIds(next)
+    try {
+      localStorage.setItem('life.swiped', JSON.stringify({ day: today, ids: next }))
+    } catch {
+      // Private browsing: it just won't be remembered.
+    }
+  }
+  return [new Set(ids), mark]
+}
+
 /** The open tasks that most need doing: today's AI picks first, then score order, five more at a time on request (or a fixed few when compact). */
 export function TopJobsCard({
   title = 'Top jobs',
@@ -265,9 +288,10 @@ export function TopJobsCard({
   const away = (id: string) => awayToday(events, integrations, id, today)
   const awayNow = who === TOGETHER ? members.some((m) => away(m.id)) : away(who)
   const [placeFor, setPlace] = useOutOverride(today)
+  const [swiped, markSwiped] = useSwipedToday(today)
   const out = (placeFor(who) ?? (awayNow ? 'out' : 'home')) === 'out'
   const scored = topJobs(items ?? [], categories, today, Infinity)
-  const ai = aiFirst(scored, picks, today)
+  const ai = aiFirst(scored, picks)
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
   // Together jobs need you both there: none while either of you is out.
   const togetherOff = who === TOGETHER && out
@@ -275,8 +299,8 @@ export function TopJobsCard({
     ? []
     : ai.items
         .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
-        // Home's list is today's: anything dated later (swiped or put off) waits until it's due.
-        .filter((o) => !limit || !o.due_date || o.due_date <= today)
+        // Swiped today (put off until tomorrow) leaves today's list; Undo brings its date, and it, back.
+        .filter((o) => !(swiped.has(o.id) && o.due_date && o.due_date > today))
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
   const visible = ranked.slice(0, limit ?? shown)
@@ -291,6 +315,8 @@ export function TopJobsCard({
           showList
           showVotes
           aiNote={ai.notes.get(o.task_id)}
+          swipeDays={limit ? 1 : undefined}
+          onSwiped={() => markSwiped(o.id)}
           onOpen={() => opener.open(o)}
           onComplete={(by, also) => complete.mutate({ occurrenceId: o.id, completedBy: by, alsoCompletedBy: also ?? undefined })}
         />

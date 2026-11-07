@@ -1,18 +1,14 @@
 // Today's AI picks for a Top jobs tab put first, in the AI's order; the rest
 // keep their own order. Picks only count while the job is still open in this
-// list and hasn't been put off past today. When I'm out, only jobs that can be done away from home are left.
+// list. (Home drops a job swiped away today itself.) When I'm out, only jobs that can be done away from home are left.
 
 export type Where = 'home' | 'anywhere'
 export type AiPick = { task_id: string; why: string; where?: Where }
 
-export function aiFirst<T extends { task_id: string; due_date?: string | null }>(ranked: T[], picks: AiPick[] | undefined, today?: string) {
+export function aiFirst<T extends { task_id: string }>(ranked: T[], picks: AiPick[] | undefined) {
   if (!picks?.length) return { items: ranked, notes: new Map<string, string>(), where: new Map<string, Where>() }
   const byTask = new Map(ranked.map((o) => [o.task_id, o]))
-  // A pick put off past today (swiped or delayed) is no longer one of today's.
-  const live = picks.filter((p) => {
-    const o = byTask.get(p.task_id)
-    return o && !(today && o.due_date && o.due_date > today)
-  })
+  const live = picks.filter((p) => byTask.has(p.task_id))
   const firstIds = new Set(live.map((p) => p.task_id))
   return {
     items: [...live.map((p) => byTask.get(p.task_id)!), ...ranked.filter((o) => !firstIds.has(o.task_id))],
