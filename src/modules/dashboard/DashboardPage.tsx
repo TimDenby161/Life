@@ -269,9 +269,14 @@ export function TopJobsCard({
   const scored = topJobs(items ?? [], categories, today, Infinity)
   const ai = aiFirst(scored, picks)
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
-  const ranked = ai.items
-    .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
-    .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
+  // Together jobs need you both there: none while either of you is out.
+  const togetherOff = who === TOGETHER && out
+  const ranked = togetherOff
+    ? []
+    : ai.items
+        .filter((o) => ai.notes.has(o.task_id) || taskScore(o, categories, today) > 0)
+        .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
+  const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
   const visible = ranked.slice(0, limit ?? shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
@@ -327,7 +332,12 @@ export function TopJobsCard({
           <ErrorState error={open.error} onRetry={() => open.refetch()} />
         ) : !visible.length ? (
           <p className="flex items-center gap-2 px-2 pb-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4 text-success" /> {out ? 'Nothing that can be done on a phone' : 'Nothing to do'}
+            <CheckCircle2 className="size-4 text-success" />{' '}
+            {togetherOff
+              ? `Nothing together today${awayNames.length ? `: ${awayNames.join(' and ')} ${awayNames.length > 1 || awayNames[0] === 'you' ? 'are' : 'is'} away` : ''}`
+              : out
+                ? 'Nothing that can be done on a phone'
+                : 'Nothing to do'}
           </p>
         ) : (
           renderRows(visible)

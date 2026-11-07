@@ -15,6 +15,7 @@
 // gets their own; Together is picked when anyone has it on. Shortlists hold job
 // titles, categories, dates and flags, and busy times without event titles.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
+import { isAway } from '../_shared/agents/calendar.ts'
 import { localNow } from '../_shared/agents/dates.ts'
 import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
 import { type Candidate, candidatesFor, cleanPicks, MAX_PICKS, PRIORITIES_PROMPT, prioritiesInput, TOGETHER } from '../_shared/agents/priorities.ts'
@@ -27,10 +28,11 @@ export type Tab = Member | typeof TOGETHER
 const hhmm = (p: { hour: number; minute: number }) => `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
 export const tabId = (tab: Tab) => (tab === TOGETHER ? TOGETHER : tab.id)
 
-/** The tabs to pick for in this household. */
+/** The tabs to pick for in this household. Together is skipped while either of you is away: those jobs need you both there. */
 export function tabsFor(ctx: TaskContext, prefs: AgentPrefs): Tab[] {
   const wanted = ctx.members.filter((m) => prefs.aiPriorities.has(m.id) && prefs.enabled('chief_of_staff').includes(m.id))
-  return wanted.length ? [...wanted, TOGETHER] : []
+  const someoneAway = ctx.members.some((m) => isAway(ctx.calendar ?? [], m.id, ctx.today, ctx.timezone ?? 'Europe/London'))
+  return wanted.length ? [...wanted, ...(someoneAway ? [] : [TOGETHER])] : []
 }
 
 /** The routine answers with task ids, so a job finished meanwhile can't shift which pick means what. */
