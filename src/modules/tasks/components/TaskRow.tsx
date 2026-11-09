@@ -8,7 +8,8 @@ import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
 import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
 import { delayLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
-import { delayDaysFor, subtaskScore, taskScore } from '../lib/topJobs'
+import { estimateMinutes, formatMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
+import { delayDaysFor, subtaskScore } from '../lib/topJobs'
 import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
@@ -144,7 +145,7 @@ function SubtaskList({ occurrence, categories }: { occurrence: OccurrenceWithTas
         <li key={s.id} className="flex items-center gap-2.5 py-1">
           <Checkbox checked={s.is_done} onCheckedChange={(v) => toggle.mutate({ id: s.id, isDone: v === true })} aria-label={s.title} />
           <span className={cn('min-w-0 flex-1 text-sm', s.is_done && 'text-muted-foreground line-through')}>{s.title}</span>
-          {s.is_done ? null : <span className="text-xs tabular text-muted-foreground">{s.score}</span>}
+          {s.is_done ? null : <span className="text-xs tabular text-muted-foreground" title="Estimated time">~{formatMinutes(estimateMinutes(s.title))}</span>}
         </li>
       ))}
     </ul>
@@ -267,8 +268,12 @@ export function TaskRow({
                 <span className="truncate">Waiting on {waitingOn}</span>
               </span>
             ) : null}
-            {/* Shown in place of the due date while we test the score; the detail page still has the date. */}
-            {!done ? <span className={toneClass[tone]}>{taskScore(occurrence, categories, todayISO())}</span> : null}
+            {/* Estimated time, coloured by how pressing it is; the detail page has the date. */}
+            {!done ? (
+              <span className={toneClass[tone]} title="Estimated time">
+                ~{formatMinutes(estimateMinutes(task.title, category?.name ?? null))}
+              </span>
+            ) : null}
             {task.recurrence ? (
               <span className="inline-flex items-center gap-1" title="Repeats">
                 <Repeat className="size-3" />
