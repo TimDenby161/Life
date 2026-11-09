@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
+import { MorningCheckIn } from '@/modules/health/components/MorningCheckIn'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
@@ -42,13 +43,14 @@ export function inBrowser(href: string, userAgent = navigator.userAgent): string
 const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifact/7Tm8wQd2ZezWCcVMVMs3Ra', icon: MapIcon }]
 
 /**
- * Home, sized to fit a phone screen: pinned links, the rest of today's
+ * Home, sized to fit a phone screen: the morning check-in until it's done, pinned links, the rest of today's
  * calendar, the jobs I can do today (AI-picked, home or out) with what the
  * agents have flagged, and the news.
  */
 function HomeToday() {
   return (
     <div className="grid grid-cols-1 gap-3">
+      <MorningCheckIn />
       <div className="flex items-stretch gap-3">
         {HOME_LINKS.map(({ label, href, icon: Icon }) => (
           <a

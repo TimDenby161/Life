@@ -11,6 +11,7 @@ import { analyseTargets, parseLanguageTargets } from '../../../../supabase/funct
 import { analyseFood, MEAL_PLAN_TASK, parseFoodGoals, reachBy, type Takeaway, type WeightReading } from '../../../../supabase/functions/_shared/agents/nutrition.ts'
 import { analysePeople, nextBirthday, type Person } from '../../../../supabase/functions/_shared/agents/people.ts'
 import { analyseProjects, parseProjectsConfig } from '../../../../supabase/functions/_shared/agents/projects.ts'
+import { analyseSleep, bedtime, nightsFrom, parseSleepGoals } from '../../../../supabase/functions/_shared/agents/sleep.ts'
 import { analyseTravel, type Trip } from '../../../../supabase/functions/_shared/agents/travel.ts'
 import { ALEX, BOTH, context, SAM, task } from './fixtures'
 
@@ -293,5 +294,57 @@ describe('Briefing goal lines', () => {
       { label: 'Guatemala', value: 'Spanish · 3 months' },
       { label: 'Wedding', value: '£6,000/£20,000' },
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+describe('Sleep Coach', () => {
+  const goals = parseSleepGoals({ targetHours: 8, wakeTime: '06:45' })!
+  const night = (date: string, hours: number | null, score: number | null = null, user_id = ALEX) => ({ user_id, date, hours, score })
+  const coach = (today: string, nights: ReturnType<typeof night>[], calendar: CalEvent[] = [], travel = [] as { word: string; minutes: number }[]) =>
+    analyseSleep(today, members, nights, BOTH, (id) => (id === ALEX ? goals : null), calendar, () => travel)
+
+  it('reads goals and works out the bedtime', () => {
+    expect(parseSleepGoals({})).toBeNull()
+    expect(parseSleepGoals({ targetHours: 8 })).toEqual({ targetHours: 8, wakeTime: '07:00' })
+    expect(bedtime(goals)).toBe('22:30')
+  })
+
+  it('groups the check-in readings into nights', () => {
+    const nights = nightsFrom([
+      { user_id: ALEX, date: MONDAY, key: 'sleep_duration', value: 6.5 },
+      { user_id: ALEX, date: MONDAY, key: 'sleep_score', value: 71 },
+      { user_id: ALEX, date: MONDAY, key: 'weight', value: 90 },
+    ])
+    expect(nights).toEqual([{ user_id: ALEX, date: MONDAY, hours: 6.5, score: 71 }])
+  })
+
+  it('after a short night gives tonight’s bedtime, only to its owner', () => {
+    const [s] = coach('2026-11-10', [night('2026-11-10', 6.5, 71)])
+    expect(s).toMatchObject({ kind: 'sleep_short', title: '6h 30m last night, score 71', recipients: [ALEX], severity: 1 })
+    expect(s.reason).toContain('In bed by 22:30 tonight gets you 8h before your 06:45 alarm.')
+    expect(s.action).toMatchObject({ title: 'In bed by 22:30', list: 'personal' })
+    expect(coach('2026-11-10', [night('2026-11-10', 7.9)])).toEqual([])
+  })
+
+  it('warns when the evening, with travel home, runs close to bedtime, and presses after three short nights', () => {
+    const padel: CalEvent = { owner_id: ALEX, title: 'Padel', start: '2026-11-10T19:15:00Z', end: '2026-11-10T20:15:00Z', allDay: false }
+    const nights = ['2026-11-08', '2026-11-09', '2026-11-10'].map((d) => night(d, 6))
+    const [s] = coach('2026-11-10', nights, [padel], [{ word: 'padel', minutes: 60 }])
+    expect(s.severity).toBe(2)
+    expect(s.reason).toContain('3 short nights in a row')
+    expect(s.reason).toContain('busy until 21:15, so go straight to bed after')
+  })
+
+  it('reviews the week on Mondays', () => {
+    const nights = Array.from({ length: 7 }, (_, i) => night(addDays(MONDAY, -i), i % 2 ? 8 : 7, 80))
+    const s = coach(MONDAY, nights).find((x) => x.kind === 'sleep_week')!
+    expect(s.title).toBe('Last week: 7h 26m a night on average')
+    expect(s.reason).toMatch(/^3 of 7 logged nights reached 8h; sleep score 80 on average\. This week: /)
+  })
+
+  it('adds a sleep line to the briefing', () => {
+    const lines = goalLines(MONDAY, { fitness: null, food: null, weights: [], sleep: goals, nights: [night(MONDAY, 7), night('2026-11-08', 8)], projects: { projects: [], sponsorTeam: null }, languages: [], savings: [] })
+    expect(lines).toEqual([{ label: 'Sleep', value: '7h 30m → 8h' }])
   })
 })

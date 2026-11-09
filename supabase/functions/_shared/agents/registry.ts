@@ -16,6 +16,7 @@ export type AgentId =
   | 'nutrition'
   | 'side_projects'
   | 'friends'
+  | 'sleep'
 
 export type AgentSchedule = 'daily' | 'weekly'
 
@@ -159,6 +160,17 @@ export const AGENTS: AgentDef[] = [
     schedules: [],
     reads: ['Your own weight readings', 'Takeaways logged on the Health page'],
     can: ['Add a weigh-in or meal planning task'],
+  },
+  {
+    id: 'sleep',
+    name: 'Sleep Coach',
+    summary: 'Your sleep from the morning check-in against your target: after a short night, a bedtime for tonight (and a warning when the evening runs late), and a weekly review with one habit to try.',
+    status: 'live',
+    runs: 'Every morning; the review on Mondays',
+    cadence: 'daily',
+    schedules: [],
+    reads: ['Your own sleep hours and score', 'Your calendar’s busy times this evening'],
+    can: ['Add a bedtime task'],
   },
   {
     id: 'side_projects',

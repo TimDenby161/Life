@@ -1,14 +1,16 @@
 // The goals at the top of each person's briefing: one short line each, from
 // the goals they've set with the agents. Pure. Bare values, no label words:
-// "Graham Spicer 1★ · 6 days", "Weight · 90.4 → 87.0".
+// "Graham Spicer 1★ · 6 days", "Weight · 90.4 → 87.0", "Sleep · 7h 10m → 8h".
 //
-// Weight is health data, so only its owner sees it. None of this goes to the
+// Weight and sleep are health data, so only their owner sees them. None of this goes to the
 // AI summary (llm.ts builds its input field by field) or a notification.
 import { daysBetween, type ISODate } from './dates.ts'
 import type { FitnessGoals } from './fitness.ts'
 import { LANGUAGE_NAMES, type LanguageTarget } from './languages.ts'
 import { averageTo, type FoodGoals, kg, type WeightReading } from './nutrition.ts'
 import { nextGoal, type ProjectsConfig } from './projects.ts'
+import { type Night, type SleepGoals, weekAverage } from './sleep.ts'
+import { formatMinutes } from './taskManager.ts'
 import { formatPounds } from './types.ts'
 
 export const EVENT_DAYS = 60
@@ -21,6 +23,9 @@ export type GoalInputs = {
   food: FoodGoals | null
   /** This person's readings only. */
   weights: WeightReading[]
+  sleep?: SleepGoals | null
+  /** This person's nights only. */
+  nights?: Night[]
   projects: ProjectsConfig
   languages: LanguageTarget[]
   /** Savings goals with a target date that this person shares or owns. */
@@ -48,6 +53,11 @@ export function goalLines(today: ISODate, g: GoalInputs): GoalLine[] {
     const latest = g.weights.map((w) => w.date).sort().at(-1)
     const now = latest ? averageTo(g.weights, latest) : null
     if (now !== null) out.push({ label: 'Weight', value: `${kg(now)} → ${kg(g.food.targetKg)}` })
+  }
+
+  if (g.sleep) {
+    const avg = weekAverage(today, g.nights ?? [])
+    if (avg !== null) out.push({ label: 'Sleep', value: `${formatMinutes(Math.round(avg * 60))} → ${formatMinutes(Math.round(g.sleep.targetHours * 60))}` })
   }
 
   for (const p of g.projects.projects) {

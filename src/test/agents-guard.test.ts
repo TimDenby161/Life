@@ -44,12 +44,12 @@ describe('agents Edge Function', () => {
     expect(ctx).toContain(".select('account_id, as_of, balance_minor, source, created_at')")
   })
 
-  it('reads weight only as kilos and dates, only in loadWeights, and only for weight', () => {
+  it('reads health readings only as values and dates, only in loadReadings, and only weight and sleep', () => {
     const ctx = fn.find((x) => x.f === 'context.ts')!.text
     const chains = [...ctx.matchAll(/\.from\('health_measurements'\)[\s\S]*?\.limit\(\d+\)/g)].map((m) => m[0])
     expect(chains).toHaveLength(1)
     expect(chains[0]).toContain(".select('user_id, measured_at, value, metric:health_metric_definitions!inner(key)')")
-    expect(chains[0]).toContain(".eq('metric.key', 'weight')")
+    expect(chains[0]).toContain(".in('metric.key', ['weight', 'sleep_duration', 'sleep_score'])")
     for (const { f, text } of fn) if (f !== 'context.ts') expect(text, f).not.toMatch(/health_measurements|health_periods/)
   })
 

@@ -29,6 +29,7 @@ import { FoodGoals } from './FoodGoals'
 import { LanguageTargets } from './LanguageTargets'
 import { Renewals } from './Renewals'
 import { SideProjects } from './SideProjects'
+import { SleepGoals } from './SleepGoals'
 import { TravelTimes } from './TravelTimes'
 import { Trips } from './Trips'
 import { RunStatus } from './HistoryTab'
@@ -74,6 +75,7 @@ function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | un
         </>
       ) : null}
       {agent.id === 'chief_of_staff' ? <TravelTimes key={row ? 'saved' : 'new'} row={row} /> : null}
+      {agent.id === 'sleep' ? <SleepGoals key={row ? 'saved' : 'new'} row={row} /> : null}
       {agent.id === 'nutrition' ? <FoodGoals key={row ? 'saved' : 'new'} row={row} /> : null}
       {agent.id === 'language_coach' ? <LanguageTargets key={row ? 'saved' : 'new'} row={row} /> : null}
       {agent.id === 'side_projects' ? <SideProjects key={row ? 'saved' : 'new'} row={row} /> : null}

@@ -41,6 +41,8 @@ Each agent now works from goals set on its card in AI Hub → Agents (`agent_set
 | Language Coach: target dates, a weekly speaking topic for the first target, monthly speaking nudge | `languages.ts` `analyseTargets`, `LanguageTargets.tsx` | Vitest; run locally |
 | Side Projects (new): weekly growth experiment against paid-user goals, sponsor pitch monthly | `projects.ts`, `SideProjects.tsx` | Vitest; run locally |
 | Friends (new) and the People page | `people` table, `people.ts`, `src/modules/people` | Vitest, pgTAP; run locally |
+| Sleep Coach (new) and Home's morning check-in (weight, hours slept, sleep score; Garmin has no personal API). After a short night, a bedtime for tonight, warning when the evening (with travel home) runs late; Monday review | migration `20261109000300` (sleep metrics), `sleep.ts`, `MorningCheckIn.tsx`, `SleepGoals.tsx`, Health page Sleep | Vitest, pgTAP `25_sleep_metrics.test.sql`; run locally |
+| Free time for plans: calendar busy times (work included, never 'away'), travel time each way by event word, 07:00-22:00, at most 4h | `calendar.ts` `freeToday`/`busyBlocks`, `agents/lib/away.ts`, `TravelTimes.tsx` | Vitest |
 | Briefing goal lines (first in the briefing) | `goals.ts`, `BriefingCard.tsx` | Vitest; run locally |
 
 ## Known issue (CI only)

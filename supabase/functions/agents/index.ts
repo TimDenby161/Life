@@ -36,6 +36,7 @@ import { analyseLanguages, analyseTargets, parseLanguageTargets } from '../_shar
 import { analyseFood, parseFoodGoals } from '../_shared/agents/nutrition.ts'
 import { analysePeople } from '../_shared/agents/people.ts'
 import { analyseProjects, parseProjectsConfig } from '../_shared/agents/projects.ts'
+import { analyseSleep, nightsFrom, parseSleepGoals } from '../_shared/agents/sleep.ts'
 import { analyseLifeAdmin } from '../_shared/agents/lifeAdmin.ts'
 import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
 import { candidatesFor, prioritiesInput } from '../_shared/agents/priorities.ts'
@@ -62,8 +63,9 @@ import {
   loadTakeaways,
   loadTrips,
   loadWedding,
-  loadWeights,
+  loadReadings,
   travelRules,
+  weightsOf,
 } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
@@ -139,9 +141,20 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       return [...analyseFinance(input, enabled), ...analyseSavings(input, savings.goals, savings.pots, enabled)]
     }
     case 'nutrition': {
-      const [weights, takeaways] = await Promise.all([loadWeights(db, householdId, ctx.today, 60), loadTakeaways(db, householdId, ctx.today)])
-      return analyseFood(ctx.today, ctx.members, weights, takeaways, ctx.open, enabled, (id) => parseFoodGoals(prefs.config('nutrition', id)))
+      const [readings, takeaways] = await Promise.all([loadReadings(db, householdId, ctx.today, 60), loadTakeaways(db, householdId, ctx.today)])
+      return analyseFood(ctx.today, ctx.members, weightsOf(readings), takeaways, ctx.open, enabled, (id) => parseFoodGoals(prefs.config('nutrition', id)))
     }
+    case 'sleep':
+      return analyseSleep(
+        ctx.today,
+        ctx.members,
+        nightsFrom(await loadReadings(db, householdId, ctx.today, 14)),
+        enabled,
+        (id) => parseSleepGoals(prefs.config('sleep', id)),
+        ctx.calendar,
+        (id) => ctx.travel?.[id] ?? [],
+        ctx.timezone,
+      )
     case 'side_projects':
       return analyseProjects(ctx.today, ctx.open, enabled, (id) => parseProjectsConfig(prefs.config('side_projects', id)))
     case 'friends':
@@ -158,7 +171,9 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
  */
 async function goalsLoader(db: SupabaseClient, householdId: string, ctx: TaskContext, prefs: AgentPrefs): Promise<(userId: string) => GoalLine[]> {
   try {
-    const [weights, finance, savings] = await Promise.all([loadWeights(db, householdId, ctx.today, 14), loadFinance(db, householdId), loadSavings(db, householdId)])
+    const [readings, finance, savings] = await Promise.all([loadReadings(db, householdId, ctx.today, 14), loadFinance(db, householdId), loadSavings(db, householdId)])
+    const weights = weightsOf(readings)
+    const nights = nightsFrom(readings)
     const saved = savedSoFar({ today: ctx.today, members: ctx.members, ...finance }, savings.goals, savings.pots)
     return (userId) => {
       // Only goals whose agent this person has on.
@@ -167,6 +182,8 @@ async function goalsLoader(db: SupabaseClient, householdId: string, ctx: TaskCon
         fitness: on('health_coach') ? parseFitnessGoals(prefs.config('health_coach', userId)) : null,
         food: on('nutrition') ? parseFoodGoals(prefs.config('nutrition', userId)) : null,
         weights: weights.filter((w) => w.user_id === userId),
+        sleep: on('sleep') ? parseSleepGoals(prefs.config('sleep', userId)) : null,
+        nights: nights.filter((n) => n.user_id === userId),
         projects: on('side_projects') ? parseProjectsConfig(prefs.config('side_projects', userId)) : { projects: [], sponsorTeam: null },
         languages: on('language_coach') ? parseLanguageTargets(prefs.config('language_coach', userId)) : [],
         savings: on('finance')
@@ -216,7 +233,7 @@ async function runAgent(
     ctx.timezone = household.timezone
     // Only these plan around the calendar. A calendar problem never stops the run.
     ctx.travel = travelRules(ctx, prefs)
-    if (agentId === 'task_manager' || agentId === 'chief_of_staff' || agentId === 'career') {
+    if (agentId === 'task_manager' || agentId === 'chief_of_staff' || agentId === 'career' || agentId === 'sleep') {
       ctx.calendar = await loadCalendar(db, household.id, date).catch(() => {
         console.warn('agents: calendar unavailable')
         return []

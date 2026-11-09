@@ -237,19 +237,27 @@ export async function loadSavings(db: SupabaseClient, householdId: string): Prom
   }
 }
 
-/** Weight readings (kg) for the last `days` days. Only the Weight & Food agent and the owner's briefing line use them. */
-export async function loadWeights(db: SupabaseClient, householdId: string, today: string, days: number): Promise<WeightReading[]> {
+export type Reading = { user_id: string; date: string; key: string; value: number }
+
+/**
+ * Weight (kg) and sleep (hours, score) readings for the last `days` days. Only
+ * Weight & Food, the Sleep Coach and each owner's briefing lines use them.
+ */
+export async function loadReadings(db: SupabaseClient, householdId: string, today: string, days: number): Promise<Reading[]> {
   const rows = check(
     await db
       .from('health_measurements')
       .select('user_id, measured_at, value, metric:health_metric_definitions!inner(key)')
       .eq('household_id', householdId)
-      .eq('metric.key', 'weight')
+      .in('metric.key', ['weight', 'sleep_duration', 'sleep_score'])
       .gte('measured_at', `${addDays(today, -days)}T00:00:00Z`)
-      .limit(2000),
-  ) as { user_id: string; measured_at: string; value: number }[]
-  return rows.map((r) => ({ user_id: r.user_id, date: r.measured_at.slice(0, 10), kg: Number(r.value) }))
+      .limit(4000),
+  ) as { user_id: string; measured_at: string; value: number; metric: { key: string } }[]
+  return rows.map((r) => ({ user_id: r.user_id, date: r.measured_at.slice(0, 10), key: r.metric.key, value: Number(r.value) }))
 }
+
+export const weightsOf = (readings: Reading[]): WeightReading[] =>
+  readings.filter((r) => r.key === 'weight').map((r) => ({ user_id: r.user_id, date: r.date, kg: r.value }))
 
 export async function loadTakeaways(db: SupabaseClient, householdId: string, today: string): Promise<Takeaway[]> {
   return check(await db.from('takeaways').select('user_id, eaten_on, shared').eq('household_id', householdId).gte('eaten_on', addDays(today, -14)).limit(500))

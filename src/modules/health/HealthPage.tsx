@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input } from '@/components/ui/input'
 import { Badge, Segmented, Skeleton } from '@/components/ui/misc'
-import { addDaysISO, daysBetween, formatDay, parseISODate, todayISO } from '@/lib/dates'
+import { addDaysISO, daysBetween, formatDay, parseISODate, toISODate, todayISO } from '@/lib/dates'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import {
   type ExerciseSession,
@@ -79,6 +79,7 @@ export default function HealthPage() {
             {showPeriods ? <PeriodSection own={own} periods={personPeriods} /> : null}
           </div>
           {weight && weights.length ? <WeightTrendCard def={weight} rows={weights} /> : null}
+          <SleepSection personId={personId} defs={defs.data ?? []} rows={measurements.data ?? []} />
           <ExerciseSection own={own} sessions={sessions} />
           <TakeawaySection own={own} personId={personId} />
 
@@ -343,6 +344,43 @@ function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSe
         )}
       </Card>
       <LogExerciseDialog open={open} onClose={() => setOpen(false)} />
+    </section>
+  )
+}
+
+/** The last two weeks of sleep from the morning check-in: hours and score each morning, and the week's average. */
+function SleepSection({ personId, defs, rows }: { personId: string; defs: MetricDefinition[]; rows: { user_id: string; metric_id: string; measured_at: string; value: number }[] }) {
+  const id = (key: string) => defs.find((d) => d.key === key && d.owner_id === null)?.id
+  const hoursId = id('sleep_duration')
+  const scoreId = id('sleep_score')
+  const from = addDaysISO(todayISO(), -13)
+  const nights = new Map<string, { hours?: number; score?: number }>()
+  for (const r of rows) {
+    const day = toISODate(new Date(r.measured_at))
+    if (r.user_id !== personId || day < from || (r.metric_id !== hoursId && r.metric_id !== scoreId)) continue
+    nights.set(day, { ...nights.get(day), [r.metric_id === hoursId ? 'hours' : 'score']: Number(r.value) })
+  }
+  if (!nights.size) return null
+  const list = [...nights.entries()].sort(([a], [b]) => b.localeCompare(a))
+  const week = list.filter(([d, n]) => d > addDaysISO(todayISO(), -7) && n.hours !== undefined)
+  const avg = week.length ? week.reduce((s, [, n]) => s + n.hours!, 0) / week.length : null
+  const hm = (h: number) => formatMinutes(Math.round(h * 60))
+
+  return (
+    <section className="mt-2">
+      <SectionTitle>Sleep</SectionTitle>
+      <Card className="grid gap-1 p-3">
+        {avg !== null ? <p className="text-xs text-muted-foreground">Last 7 days: {hm(avg)} a night on average</p> : null}
+        <ul className="divide-y text-sm">
+          {list.slice(0, 7).map(([day, n]) => (
+            <li key={day} className="flex items-center gap-3 py-2">
+              <span className="flex-1">{formatDay(day)}</span>
+              <span className="tabular">{n.hours !== undefined ? hm(n.hours) : '–'}</span>
+              <span className="w-10 text-right tabular text-muted-foreground">{n.score ?? '–'}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </section>
   )
 }
