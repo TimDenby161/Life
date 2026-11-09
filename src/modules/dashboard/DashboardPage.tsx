@@ -325,9 +325,12 @@ export function TopJobsCard({
   const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel, dayWindow))
   const people = who === TOGETHER ? members.map((m) => m.id) : [who]
   const shopGapNow = longestGapToday(events, integrations, people, today, shopsClose(today), new Date(), travel, dayWindow)
-  // Asking a manager waits for a good day (Tue-Thu), and shopping for a long enough gap before the shops shut.
+  // Nothing dated after today (a job delayed since the AI picked it leaves the plan); asking a manager waits
+  // for a good day (Tue-Thu), and shopping for a long enough gap before the shops shut.
   const fits = (o: OccurrenceWithTask) =>
-    (goodDayToAsk(today) || !isWorkAsk(o.task.title)) && (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
+    !(o.due_date && o.due_date > today) &&
+    (goodDayToAsk(today) || !isWorkAsk(o.task.title)) &&
+    (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
   const plan = limit
     ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, {
         score: (o) => taskScore(o, categories, today),
