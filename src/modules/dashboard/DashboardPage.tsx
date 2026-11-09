@@ -12,7 +12,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAiPicks } from '@/modules/agents/api'
-import { aiFirst, canDoAnywhere } from '@/modules/agents/lib/aiOrder'
+import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
 import { awayToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
@@ -26,6 +26,7 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
+import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
 function useOccurrencesFor(view: string) {
@@ -306,7 +307,12 @@ export function TopJobsCard({
         .filter((o) => !(swiped.has(o.id) && o.due_date && o.due_date > today))
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
-  const visible = ranked.slice(0, limit ? (expanded ? ranked.length : limit) : shown)
+  // Compact (Home): only what can realistically get done today, the AI's plan or the rules' two hours.
+  const plan = limit
+    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), (o) => estimateMinutes(o.task.title, categoryName(o.task.category_id)))
+    : ranked
+  const planMinutes = plan.reduce((sum, o) => sum + estimateMinutes(o.task.title, categoryName(o.task.category_id)), 0)
+  const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -366,16 +372,18 @@ export function TopJobsCard({
             <CheckCircle2 className="size-4 text-success" />{' '}
             {togetherOff
               ? `Nothing together today${awayNames.length ? `: ${awayNames.join(' and ')} ${awayNames.length > 1 || awayNames[0] === 'you' ? 'are' : 'is'} away` : ''}`
-              : out
-                ? 'Nothing that can be done on a phone'
-                : 'Nothing to do'}
+              : limit && picks?.length
+                ? 'Today’s plan is done'
+                : out
+                  ? 'Nothing that can be done on a phone'
+                  : 'Nothing to do'}
           </p>
         ) : (
           renderRows(visible)
         )}
-        {limit && (ranked.length > limit || expanded) ? (
+        {limit && (plan.length > limit || expanded) ? (
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show all {ranked.length}</>}
+            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {plan.length} · ~{formatMinutes(planMinutes)}</>}
           </Button>
         ) : null}
         {footer}

@@ -1,6 +1,6 @@
 import { busyBlocks, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 import { candidatesFor, cleanPicks, MAX_PICKS, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
-import { aiFirst, canDoAnywhere } from './aiOrder'
+import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
 
 const TODAY = '2026-11-06'
@@ -132,5 +132,24 @@ describe('out and about', () => {
     expect(canDoAnywhere('Check food supplies', null)).toBe(false)
     expect(canDoAnywhere('Vacuum the hall', 'Cleaning')).toBe(false)
     expect(canDoAnywhere('Change the towels', null)).toBe(false)
+  })
+})
+
+describe('Today’s plan on Home', () => {
+  const job = (task_id: string, score: number, minutes = 15) => ({ task_id, score, minutes })
+  const plan = (ranked: ReturnType<typeof job>[], picked: Set<string> | null) =>
+    todaysPlan(ranked, picked, (o) => o.score, (o) => o.minutes).map((o) => o.task_id)
+
+  it('is exactly the AI’s plan when there is one, and empty once it’s all done', () => {
+    const ranked = [job('a', 200), job('b', 150), job('c', 120)]
+    expect(plan(ranked, new Set(['c', 'a']))).toEqual(['a', 'c'])
+    expect(plan(ranked, new Set())).toEqual([])
+  })
+
+  it('without one, takes what’s due or late until about two hours', () => {
+    const ranked = [job('late', 210, 30), job('due', 100, 45), job('big', 100, 60), job('small', 100, 15), job('soon', 60), job('undated', 30)]
+    expect(plan(ranked, null)).toEqual(['late', 'due', 'small'])
+    expect(plan([job('huge', 150, 180)], null)).toEqual(['huge'])
+    expect(plan(Array.from({ length: 20 }, (_, i) => job(`j${i}`, 100, 5)), null)).toHaveLength(PLAN_MAX)
   })
 })
