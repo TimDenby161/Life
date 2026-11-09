@@ -85,18 +85,55 @@ export function busyBlocks(events: CalEvent[], person: string, date: ISODate, ti
   return out.sort((a, b) => a.from.localeCompare(b.from))
 }
 
-/** An event this long means a day out (a match, a day trip, a wedding). */
+/** An event this long means a day out (a match, a day trip, a wedding)… */
 export const AWAY_MINUTES = 240
+/** …unless it's work: busy, but at home (we both work from home). */
+export const WORK_EVENT = /\b(work|working|office|c4)\b/i
+
+/** Jobs fit between these local times: nothing before 7am or after 10pm. */
+export const DAY_START = 7 * 60
+export const DAY_END = 22 * 60
+
+/** "HH:MM" to minutes after midnight. */
+export const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5))
+
+/**
+ * Free minutes from `from` (minutes after midnight) to the end of the day,
+ * after the busy blocks (which may overlap). Never before DAY_START or after DAY_END.
+ */
+export function freeMinutes(blocks: { from: number; to: number }[], from: number, start = DAY_START, end = DAY_END): number {
+  const lo = Math.max(from, start)
+  if (lo >= end) return 0
+  const clipped = blocks
+    .map((b) => ({ from: Math.max(b.from, lo), to: Math.min(b.to, end) }))
+    .filter((b) => b.to > b.from)
+    .sort((a, b) => a.from - b.from)
+  let busy = 0
+  let reach = lo
+  for (const b of clipped) {
+    if (b.to <= reach) continue
+    busy += b.to - Math.max(b.from, reach)
+    reach = b.to
+  }
+  return end - lo - busy
+}
+
+/** Free minutes left today for these people together (both free for a Together job), from the calendar. */
+export function freeToday(events: CalEvent[], people: string[], date: ISODate, timeZone: string, fromMinute: number): number {
+  const blocks = people.flatMap((p) => busyBlocks(events, p, date, timeZone)).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) }))
+  return freeMinutes(blocks, fromMinute)
+}
 
 /**
  * Away from home today, going by the person's own calendar (not shared ones):
- * an all-day event, or one event of four hours or more. Mirrored for the app
+ * an all-day event, or one event of four hours or more that isn't work. Mirrored for the app
  * in agents/lib/away.ts.
  */
 export function isAway(events: CalEvent[], person: string, date: ISODate, timeZone: string): boolean {
   return events.some((e) => {
     if (e.owner_id !== person) return false
     if (e.allDay) return e.start <= date && date < e.end
+    if (WORK_EVENT.test(e.title)) return false
     const start = localNow(new Date(e.start), timeZone)
     const end = localNow(new Date(e.end), timeZone)
     return start.date <= date && end.date >= date && (new Date(e.end).getTime() - new Date(e.start).getTime()) / 60_000 >= AWAY_MINUTES

@@ -36,31 +36,31 @@ export function canDoAnywhere(title: string, category: string | null | undefined
   return ANYWHERE_CATEGORIES.test(category ?? '') || ANYWHERE_WORDS.test(title)
 }
 
-/** Without AI picks, a day's plan by the rules: what's due today or late, best first, up to about this many minutes. */
-export const PLAN_MINUTES = 120
 export const PLAN_MAX = 10
 /** A one-off on its day, a late job or a deadline day scores at least this (DUE_DAY_SCORE in tasks/lib/topJobs.ts). */
 export const PLAN_MIN_SCORE = 100
 
 /**
- * Home's Today's tasks: what can realistically get done today. With AI picks
- * today (`picked`, the ones still open), exactly the AI's plan: it fits the
- * day around the calendar, and once it's all done nothing else is added. Without, jobs
- * due today or late in score order until about two hours of estimated work.
- * The first job always goes in, however long.
+ * Home's Today's tasks: what can realistically get done in the free time left
+ * today (`budget` minutes, from the calendar). With AI picks today (`picked`,
+ * the ones still open), the AI's plan in its order, less whatever no longer
+ * fits as the day fills up; once it's all done nothing else is added. Without,
+ * jobs due today or late in score order. `minutes` is 0 for paid work, which
+ * happens in work time.
  */
 export function todaysPlan<T extends { task_id: string }>(
   ranked: T[],
   picked: ReadonlySet<string> | null,
   score: (o: T) => number,
   minutes: (o: T) => number,
+  budget: number,
 ): T[] {
-  if (picked) return ranked.filter((o) => picked.has(o.task_id))
   const out: T[] = []
   let total = 0
   for (const o of ranked) {
-    if (out.length >= PLAN_MAX || score(o) < PLAN_MIN_SCORE) continue
-    if (out.length && total + minutes(o) > PLAN_MINUTES) continue
+    if (out.length >= PLAN_MAX) break
+    if (picked ? !picked.has(o.task_id) : score(o) < PLAN_MIN_SCORE) continue
+    if (total + minutes(o) > budget) continue
     out.push(o)
     total += minutes(o)
   }

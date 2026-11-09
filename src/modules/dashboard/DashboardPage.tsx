@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
-import { awayToday } from '@/modules/agents/lib/away'
+import { awayToday, freeMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
@@ -26,6 +26,7 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
+import { MAX_PLAN_MINUTES } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
@@ -307,11 +308,15 @@ export function TopJobsCard({
         .filter((o) => !(swiped.has(o.id) && o.due_date && o.due_date > today))
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
-  // Compact (Home): only what can realistically get done today, the AI's plan or the rules' two hours.
+  // Compact (Home): only what fits the free time left today, from the calendar: the AI's plan, or the rules' pick.
+  // Paid work (C4) happens in work time, so it takes none of it.
+  const jobMinutes = (o: OccurrenceWithTask) =>
+    /^c4\b/i.test(categoryName(o.task.category_id) ?? '') ? 0 : estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes)
+  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today))
   const plan = limit
-    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), (o) => estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes))
+    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow)
     : ranked
-  const planMinutes = plan.reduce((sum, o) => sum + estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes), 0)
+  const planMinutes = plan.reduce((sum, o) => sum + jobMinutes(o), 0)
   const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
@@ -372,7 +377,9 @@ export function TopJobsCard({
             <CheckCircle2 className="size-4 text-success" />{' '}
             {togetherOff
               ? `Nothing together today${awayNames.length ? `: ${awayNames.join(' and ')} ${awayNames.length > 1 || awayNames[0] === 'you' ? 'are' : 'is'} away` : ''}`
-              : limit && picks?.length
+              : limit && freeNow === 0
+                ? 'No free time left today'
+                : limit && picks?.length
                 ? 'Today’s plan is done'
                 : out
                   ? 'Nothing that can be done on a phone'
@@ -383,7 +390,7 @@ export function TopJobsCard({
         )}
         {limit && (plan.length > limit || expanded) ? (
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {plan.length} · ~{formatMinutes(planMinutes)}</>}
+            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {plan.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
           </Button>
         ) : null}
         {footer}

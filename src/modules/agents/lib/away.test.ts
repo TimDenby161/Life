@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
 import { isAway, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { awayToday } from './away'
+import { awayToday, freeMinutesToday } from './away'
 
 const TODAY = '2026-11-07'
 const calendars = [{ id: 'tim', owner_id: 'tim' }, { id: 'sophie', owner_id: 'sophie' }, { id: 'shared', owner_id: null }]
@@ -30,5 +30,22 @@ describe('away today (agents)', () => {
     expect(isAway([cal('tim', '2026-11-07T09:00:00Z', '2026-11-07T10:00:00Z')], 'tim', TODAY, 'Europe/London')).toBe(false)
     expect(isAway([cal(null, '2026-11-07', '2026-11-08', true)], 'tim', TODAY, 'Europe/London')).toBe(false)
     expect(isAway([cal('tim', '2026-11-07', '2026-11-08', true)], 'tim', TODAY, 'Europe/London')).toBe(true)
+  })
+})
+
+describe('free time today (app)', () => {
+  const at = (hhmm: string) => new Date(`${TODAY}T${hhmm}:00`)
+  const work = { ...ev('tim', at('09:00').toISOString(), at('17:30').toISOString()), title: 'Work' } as CalendarEvent
+
+  it('is the time to 10pm less my own and shared events, and work never means away', () => {
+    const shared = ev('shared', at('19:00').toISOString(), at('20:00').toISOString())
+    expect(freeMinutesToday([work, shared], calendars, ['tim'], TODAY, at('06:00'))).toBe(15 * 60 - 510 - 60)
+    expect(freeMinutesToday([work], calendars, ['sophie'], TODAY, at('20:00'))).toBe(120)
+    expect(awayToday([work], calendars, 'tim', TODAY)).toBe(false)
+  })
+
+  it('needs both free for Together', () => {
+    const sophie = ev('sophie', at('18:00').toISOString(), at('21:00').toISOString())
+    expect(freeMinutesToday([work, sophie], calendars, ['tim', 'sophie'], TODAY, at('17:00'))).toBe(30 + 60)
   })
 })

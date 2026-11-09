@@ -18,7 +18,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { isAway } from '../_shared/agents/calendar.ts'
 import { localNow } from '../_shared/agents/dates.ts'
 import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
-import { type Candidate, candidatesFor, cleanPicks, MAX_PICKS, PRIORITIES_PROMPT, prioritiesInput, TOGETHER } from '../_shared/agents/priorities.ts'
+import { type Candidate, candidatesFor, cleanPicks, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, TOGETHER } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
 import { type AgentPrefs, loadCalendar, loadContext, loadNews, loadPrefs } from './context.ts'
 
@@ -46,9 +46,9 @@ async function contextFor(db: SupabaseClient, household: Household, now: Date) {
   return ctx
 }
 
-/** Checks picks against the tab's shortlist now and saves them for today. */
+/** Checks picks against the tab's shortlist now, keeps what fits the day's free time, and saves them for today. */
 export async function savePicks(db: SupabaseClient, householdId: string, ctx: TaskContext, tab: Tab, raw: string, candidates = shortlist(ctx, tab)) {
-  const picks = cleanPicks(raw, candidates)
+  const picks = cleanPicks(raw, candidates, planBudget(ctx, tab, ctx.hour * 60))
   if (!picks?.length) return 0
   const saved = await db.rpc('agent_save_picks', { p_household_id: householdId, p_view: tabId(tab), p_day: ctx.today, p_picks: picks })
   if (saved.error) throw new Error(saved.error.message)
@@ -101,7 +101,7 @@ export async function routineSave(db: SupabaseClient, body: { key?: unknown; pic
   const tab: Tab | undefined = view === TOGETHER ? TOGETHER : ctx.members.find((m) => m.id === view)
   if (!tab) return { status: 'error', message: 'Unknown key.' }
   const saved = await savePicks(db, householdId, ctx, tab, JSON.stringify({ picks: body.picks }))
-  return saved ? { status: 'ok', saved } : { status: 'error', message: 'None of those picks are on the shortlist.' }
+  return saved ? { status: 'ok', saved } : { status: 'error', message: 'None of those picks are on the shortlist and fit the free time.' }
 }
 
 /** One-line headlines, checked against the feed as it is now, saved for today. */

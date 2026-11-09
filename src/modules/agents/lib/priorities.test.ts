@@ -1,5 +1,5 @@
-import { busyBlocks, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { candidatesFor, cleanPicks, MAX_PICKS, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
+import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
@@ -138,8 +138,8 @@ describe('out and about', () => {
 
 describe('Today’s plan on Home', () => {
   const job = (task_id: string, score: number, minutes = 15) => ({ task_id, score, minutes })
-  const plan = (ranked: ReturnType<typeof job>[], picked: Set<string> | null) =>
-    todaysPlan(ranked, picked, (o) => o.score, (o) => o.minutes).map((o) => o.task_id)
+  const plan = (ranked: ReturnType<typeof job>[], picked: Set<string> | null, budget = 120) =>
+    todaysPlan(ranked, picked, (o) => o.score, (o) => o.minutes, budget).map((o) => o.task_id)
 
   it('is exactly the AI’s plan when there is one, and empty once it’s all done', () => {
     const ranked = [job('a', 200), job('b', 150), job('c', 120)]
@@ -147,10 +147,16 @@ describe('Today’s plan on Home', () => {
     expect(plan(ranked, new Set())).toEqual([])
   })
 
+  it('drops AI picks that no longer fit as the day fills up, keeping its order', () => {
+    const ranked = [job('a', 200, 60), job('b', 150, 45), job('c', 120, 15)]
+    expect(plan(ranked, new Set(['a', 'b', 'c']), 80)).toEqual(['a', 'c'])
+    expect(plan(ranked, new Set(['a', 'b', 'c']), 0)).toEqual([])
+  })
+
   it('without one, takes what’s due or late until about two hours', () => {
     const ranked = [job('late', 210, 30), job('due', 100, 45), job('big', 100, 60), job('small', 100, 15), job('soon', 60), job('undated', 30)]
     expect(plan(ranked, null)).toEqual(['late', 'due', 'small'])
-    expect(plan([job('huge', 150, 180)], null)).toEqual(['huge'])
+    expect(plan([job('huge', 150, 180)], null)).toEqual([])
     expect(plan(Array.from({ length: 20 }, (_, i) => job(`j${i}`, 100, 5)), null)).toHaveLength(PLAN_MAX)
   })
 })
@@ -165,5 +171,40 @@ describe('Job times', () => {
   it('gives the AI the time set on a job', () => {
     const ctx = context({ open: [task({ title: 'Tax return', due_date: TODAY, duration_minutes: 180 })] })
     expect(candidatesFor(ctx, ctx.members[0])[0].minutes).toBe(180)
+  })
+})
+
+describe('Free time', () => {
+  it('counts free minutes from now to 10pm, after overlapping busy blocks', () => {
+    // 9 to 5:30 work and a 7pm match overlapping a 7:30 call, from 6am.
+    const blocks = [{ from: 540, to: 1050 }, { from: 1140, to: 1260 }, { from: 1170, to: 1200 }]
+    expect(freeMinutes(blocks, 360)).toBe(900 - 510 - 120)
+    expect(freeMinutes(blocks, 1250)).toBe(1320 - 1260)
+    expect(freeMinutes([], 1330)).toBe(0)
+  })
+
+  it('treats work as busy but not away', () => {
+    const work: CalEvent = { owner_id: ALEX, title: 'Work', start: '2026-11-06T09:00:00Z', end: '2026-11-06T17:30:00Z', allDay: false }
+    const match: CalEvent = { ...work, title: 'SBL Halton', start: '2026-11-06T10:00:00Z', end: '2026-11-06T16:00:00Z' }
+    expect(isAway([work], ALEX, TODAY, 'Europe/London')).toBe(false)
+    expect(isAway([match], ALEX, TODAY, 'Europe/London')).toBe(true)
+    expect(freeToday([work], [ALEX], TODAY, 'Europe/London', 6 * 60)).toBe(900 - 510)
+  })
+
+  it('gives the AI the free minutes and drops picks past them (paid work aside)', () => {
+    const work: CalEvent = { owner_id: ALEX, title: 'Work', start: '2026-11-06T09:00:00Z', end: '2026-11-06T21:00:00Z', allDay: false }
+    const ctx = context({
+      calendar: [work],
+      categories: [...context().categories],
+      open: [task({ title: 'Clean the oven', due_date: TODAY }), task({ title: 'Reply to client', due_date: TODAY, category_id: 'c-work' }), task({ title: 'Hoover', due_date: TODAY })],
+    })
+    const alex = ctx.members[0]
+    const c = candidatesFor(ctx, alex)
+    const budget = planBudget(ctx, alex, 6 * 60)
+    expect(budget).toBe(120 + 60) // 7 to 9am and 9 to 10pm
+    expect(JSON.parse(prioritiesInput(ctx, alex, c, '06:00')).freeMinutesToday).toBe(180)
+    const ref = (t: string) => c.find((x) => x.title === t)!.ref
+    const picks = cleanPicks(JSON.stringify({ picks: ['Clean the oven', 'Reply to client', 'Hoover'].map((t) => ({ ref: ref(t), why: 'ok' })) }), c, 40)
+    expect(picks!.map((p) => p.title)).toEqual(['Clean the oven', 'Reply to client'])
   })
 })
