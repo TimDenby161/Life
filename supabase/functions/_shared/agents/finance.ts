@@ -5,6 +5,9 @@
 //                       before and over the year, what moved it, and per person
 //   fin:stale:<date>    the latest sheet balances are getting old
 //   fin:debt:<date>     card and loan balances rising update after update
+//   fin:goal:<id>:<month>  a savings goal with a target date (the wedding, a
+//                       honeymoon): saved so far, what's needed a month, and
+//                       whether it's behind where a steady pace would be
 //
 // Net worth is worked out exactly as the Finances page does (finances/lib/calc.ts:
 // valueOn, balanceOn, netWorthDates): active GBP accounts included in net worth;
@@ -232,4 +235,87 @@ export function analyseFinance(input: FinanceInput, enabled: string[]): Suggesti
   }
 
   return out.map((s) => ({ ...s, recipients: enabled }))
+}
+
+// ---------------------------------------------------------------------------
+// Savings goals with a target date.
+
+export type SavingsGoal = {
+  id: string
+  name: string
+  target_minor: number
+  target_date: ISODate | null
+  account_id: string | null
+  manual_saved_minor: number
+  pot_id: string | null
+  sort_order: number
+  ownership: string
+  owner_id: string | null
+  created_at: string
+}
+export type SavingsPot = { id: string; account_id: string | null }
+
+/** Average days in a month, for "a month" amounts. */
+const MONTH_DAYS = 30.44
+
+/**
+ * What each goal has saved: its account's balance, its manual amount, or its
+ * share of a pot (the pot's account funds its items in order, each in full
+ * before the next, as fundPot in finances/lib/pots.ts). Null when the money
+ * sits in an account that isn't counted in net worth.
+ */
+export function savedSoFar(input: FinanceInput, goals: SavingsGoal[], pots: SavingsPot[]): Map<string, number | null> {
+  const balance = (accountId: string | null) => {
+    const a = accountId ? input.accounts.find((x) => x.id === accountId) : undefined
+    if (!a) return null
+    return balanceOn(a, input.snapshots.filter((s) => s.account_id === a.id), input.transactions.filter((t) => t.account_id === a.id), input.today)
+  }
+  const out = new Map<string, number | null>()
+  for (const g of goals) if (!g.pot_id) out.set(g.id, g.account_id ? balance(g.account_id) : g.manual_saved_minor)
+  for (const pot of pots) {
+    const b = balance(pot.account_id)
+    let left = b === null ? 0 : Math.max(0, b)
+    for (const g of goals.filter((x) => x.pot_id === pot.id).sort((x, y) => x.sort_order - y.sort_order)) {
+      const funded = Math.min(left, g.target_minor)
+      left -= funded
+      out.set(g.id, b === null ? null : funded)
+    }
+  }
+  return out
+}
+
+export function analyseSavings(input: FinanceInput, goals: SavingsGoal[], pots: SavingsPot[], enabled: string[]): SuggestionDraft[] {
+  if (!enabled.length) return []
+  const saved = savedSoFar(input, goals, pots)
+  const month = input.today.slice(0, 7)
+  const out: SuggestionDraft[] = []
+  for (const g of goals) {
+    const have = saved.get(g.id)
+    if (!g.target_date || have === null || have === undefined || g.target_date <= input.today || have >= g.target_minor) continue
+    const recipients = g.ownership === 'personal' && g.owner_id ? enabled.filter((id) => id === g.owner_id) : enabled
+    if (!recipients.length) continue
+    const monthsLeft = Math.max(1, daysBetween(input.today, g.target_date) / MONTH_DAYS)
+    const perMonth = Math.ceil((g.target_minor - have) / monthsLeft / 100) * 100
+    // Where a steady pace from when the goal was set would be by now.
+    const start = g.created_at.slice(0, 10)
+    const span = daysBetween(start, g.target_date)
+    const expected = span > 0 ? Math.round((g.target_minor * Math.max(0, daysBetween(start, input.today))) / span) : 0
+    const behind = expected - have > perMonth
+    out.push({
+      dedupe_key: `fin:goal:${g.id}:${month}`,
+      kind: 'savings_pace',
+      severity: behind ? 2 : 1,
+      title: `${g.name}: ${pounds(have)} of ${pounds(g.target_minor)}`,
+      reason: [
+        `${pounds(perMonth)} a month${recipients.length > 1 ? ` (${pounds(Math.ceil(perMonth / 2 / 100) * 100)} each)` : ''} reaches it by ${dayMonth(g.target_date)} ${g.target_date.slice(0, 4)}.`,
+        behind ? `That’s behind a steady pace: about ${pounds(expected)} would be saved by now.` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      task_id: null,
+      action: null,
+      recipients,
+    })
+  }
+  return out
 }

@@ -51,6 +51,8 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `renewals` | Things that expire (passport, MOT, insurance, contracts): name, owner (null = joint), expiry date, days of warning, months between renewals. Household-shared; read by Life Admin. |
 | | `trips` | Trips for the Travel agent: name, dates, owner (null = both), abroad, and todo/done/not_needed for time off, travel, stay and insurance. No bookings or prices. Household-shared. |
 | | `career_goals` | One person's career goals: title, target date, check-in period, last check-in, done. Both read; owner writes. |
+| | `takeaways` | One row per takeaway for the Weight & Food agent: date, and on your own or together. Both read; only the logger adds or deletes. |
+| | `people` | Friends and family for the Friends agent: owner (null = joint), birthday as month and day, how often you'd like to see them, last seen. Household-shared. |
 | | `push_subscriptions` | Devices a person allowed briefing notifications on (Web Push endpoint and keys). Endpoint must be a browser push service. Owner only; `user_preferences.briefing_push` is the on/off switch (off by default). |
 | | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 

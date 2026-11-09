@@ -1,6 +1,7 @@
 import { format, parseISO, startOfWeek } from 'date-fns'
-import { CalendarHeart, Dumbbell, HeartPulse, Plus, Trash2 } from 'lucide-react'
+import { CalendarHeart, Dumbbell, HeartPulse, Plus, Trash2, UtensilsCrossed } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { axisProps, ChartCard, ChartTooltip, DataTable, gridProps } from '@/components/charts'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
@@ -16,15 +17,19 @@ import {
   type ExerciseSession,
   type MetricDefinition,
   type Period,
+  type Takeaway,
   useAddMeasurement,
+  useAddTakeaway,
   useAddPeriod,
   useDeleteExercise,
   useDeleteMeasurement,
   useDeletePeriod,
+  useDeleteTakeaway,
   useExerciseSessions,
   useMeasurements,
   useMetricDefinitions,
   usePeriods,
+  useTakeaways,
   useUpdatePeriod,
 } from './api'
 import { LogExerciseDialog } from './components/LogExerciseDialog'
@@ -75,6 +80,7 @@ export default function HealthPage() {
           </div>
           {weight && weights.length ? <WeightTrendCard def={weight} rows={weights} /> : null}
           <ExerciseSection own={own} sessions={sessions} />
+          <TakeawaySection own={own} personId={personId} />
 
         </>
       )}
@@ -337,6 +343,54 @@ function ExerciseSection({ own, sessions }: { own: boolean; sessions: ExerciseSe
         )}
       </Card>
       <LogExerciseDialog open={open} onClose={() => setOpen(false)} />
+    </section>
+  )
+}
+
+/** Takeaways: on your own, or together. Weight & Food checks them against your limits. */
+function TakeawaySection({ own, personId }: { own: boolean; personId: string }) {
+  const { me } = useHousehold()
+  const takeaways = useTakeaways()
+  const add = useAddTakeaway()
+  const del = useDeleteTakeaway()
+  const [date, setDate] = useState(todayISO())
+  const rows = (takeaways.data ?? []).filter((t) => t.shared || t.user_id === personId)
+  if (!own && !rows.length) return null
+  const monday = addDaysISO(todayISO(), -((parseISODate(todayISO()).getDay() + 6) % 7))
+  const week = rows.filter((t) => t.eaten_on >= monday)
+  const solo = week.filter((t) => !t.shared).length
+  const log = (shared: boolean) => add.mutate({ eaten_on: date, shared }, { onSuccess: () => toast.success(shared ? 'Takeaway together logged' : 'Takeaway logged') })
+  const label = (t: Takeaway) => (t.shared ? 'Together' : 'On my own')
+
+  return (
+    <section className="mt-2">
+      <SectionTitle>Takeaways</SectionTitle>
+      <Card className="grid gap-2 p-3">
+        <p className="text-xs text-muted-foreground">This week: {solo} on {own ? 'my' : 'their'} own · {week.length - solo} together</p>
+        {own ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input type="date" aria-label="When" className="h-8 w-auto" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value || todayISO())} />
+            <Button size="sm" variant="outline" disabled={add.isPending} onClick={() => log(false)}><Plus /> On my own</Button>
+            <Button size="sm" variant="outline" disabled={add.isPending} onClick={() => log(true)}><Plus /> Together</Button>
+          </div>
+        ) : null}
+        {rows.length ? (
+          <ul className="divide-y">
+            {rows.slice(0, 6).map((t) => (
+              <li key={t.id} className="group flex items-center gap-3 py-2 text-sm">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"><UtensilsCrossed className="size-4" /></span>
+                <span className="flex-1">{formatDay(t.eaten_on)}</span>
+                <span className="text-muted-foreground">{label(t)}</span>
+                {t.user_id === me.id ? (
+                  <button type="button" aria-label="Delete takeaway" className="rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 focus:opacity-100" onClick={() => del.mutate(t.id)}>
+                    <Trash2 className="size-3.5" />
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Card>
     </section>
   )
 }

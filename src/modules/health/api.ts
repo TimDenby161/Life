@@ -7,6 +7,7 @@ export type MetricDefinition = Tables<'health_metric_definitions'>
 export type Measurement = Tables<'health_measurements'>
 export type ExerciseSession = Tables<'health_exercise_sessions'>
 export type Period = Tables<'health_periods'>
+export type Takeaway = Tables<'takeaways'>
 
 // Everything below is filtered by RLS to the household. Both members see all of it.
 export const healthKeys = {
@@ -15,6 +16,7 @@ export const healthKeys = {
   measurements: ['health', 'measurements'] as const,
   exercise: ['health', 'exercise'] as const,
   periods: ['health', 'periods'] as const,
+  takeaways: ['health', 'takeaways'] as const,
 }
 
 export const useMetricDefinitions = () =>
@@ -32,6 +34,15 @@ export const useExerciseSessions = () =>
 export const usePeriods = () =>
   useQuery({ queryKey: healthKeys.periods, queryFn: async () => unwrap(await supabase.from('health_periods').select('*').order('started_on', { ascending: false }).limit(200)) })
 
+/** The last eight weeks of takeaways, newest first. */
+export const useTakeaways = () =>
+  useQuery({
+    queryKey: healthKeys.takeaways,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 56 * 86_400_000).toISOString().slice(0, 10)
+      return unwrap(await supabase.from('takeaways').select('*').gte('eaten_on', since).order('eaten_on', { ascending: false }).order('created_at', { ascending: false }))
+    },
+  })
 
 function useHealthMutation<TArgs>(fn: (householdId: string, args: TArgs) => Promise<unknown>) {
   const { household } = useHousehold()
@@ -63,3 +74,8 @@ export const useUpdatePeriod = () =>
     unwrap(await supabase.from('health_periods').update(a.patch).eq('id', a.id)),
   )
 export const useDeletePeriod = () => useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('health_periods').delete().eq('id', id)))
+
+/** A takeaway, logged as mine: on my own, or together (counts against the joint limit). */
+export const useAddTakeaway = () =>
+  useHealthMutation(async (h, t: { eaten_on: string; shared: boolean }) => unwrap(await supabase.from('takeaways').insert({ ...t, household_id: h })))
+export const useDeleteTakeaway = () => useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('takeaways').delete().eq('id', id)))

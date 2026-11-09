@@ -5,6 +5,9 @@
 //   trip:<id>:todo:<items>           time off, travel, stay or insurance still
 //                                    to do inside its window, one card a trip
 //   trip:<id>:pack                   leaving within three days
+//   trip:<id>:deals:<window>         a big trip a year or more out with travel
+//                                    still to book: ask operators for offers,
+//                                    with an email to copy (you send it)
 //   trip:<id>:passport:<person>      passport expires within six months of
 //                                    coming home, or isn't on the renewals list
 //
@@ -50,6 +53,26 @@ export const ITEMS: { key: Item; label: string; days: (t: Trip) => number; task:
   },
 ]
 export const PACK_DAYS = 3
+/** When to ask operators about offers, in days before the trip: early-booking, then a second ask. */
+export const DEAL_WINDOWS: { key: string; from: number; to: number }[] = [
+  { key: 'early', from: 540, to: 366 },
+  { key: 'again', from: 365, to: 240 },
+]
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** An email to copy and send yourself: dates, a honeymoon if it is one, and what to ask for. */
+export function dealEmail(trip: Trip, second: boolean): string {
+  const when = `${MONTH_NAMES[Number(trip.starts_on.slice(5, 7)) - 1]} ${trip.starts_on.slice(0, 4)}`
+  const honeymoon = /honeymoon/i.test(trip.name)
+  return [
+    `Hi, we’re planning ${trip.name.replace(/\s*\(?honeymoon\)?/i, '') || 'a trip'} for two in ${when}${honeymoon ? ', for our honeymoon' : ''}.`,
+    second
+      ? 'We asked earlier in the year and are now ready to book. Do you have any current offers, upcoming sales or upgrades we should know about?'
+      : 'Before we book, do you offer early-booking discounts, honeymoon or couples offers, or sales later in the year we should wait for?',
+    'Could you send prices and what’s included? Thanks.',
+  ].join(' ')
+}
 /** Some countries want this long left on a passport after you leave. */
 export const PASSPORT_SPARE_DAYS = 183
 /** Passports are only checked for trips this close. */
@@ -96,6 +119,22 @@ export function analyseTravel(
           recipients,
         })
       }
+    }
+
+    // Big trips booked a long way out: ask for offers before paying full price.
+    const window = DEAL_WINDOWS.find((w) => days <= w.from && days >= w.to)
+    const ask = `Email 3 operators about ${trip.name} offers`
+    if (window && trip.abroad && trip.transport === 'todo' && !hasTask(ask)) {
+      out.push({
+        dedupe_key: `trip:${trip.id}:deals:${window.key}`,
+        kind: 'trip_deals',
+        severity: 1,
+        title: window.key === 'early' ? `${trip.name}: ask about early-booking offers` : `${trip.name}: ask again before booking`,
+        reason: `Operators often have early-booking or honeymoon offers they only mention if asked. Copy this to three of them: “${dealEmail(trip, window.key !== 'early')}”`,
+        task_id: null,
+        action: { type: 'create_task', title: ask, list, due_date: saturday },
+        recipients,
+      })
     }
 
     if (days <= PACK_DAYS && !hasTask(`Pack for ${trip.name}`)) {

@@ -1786,6 +1786,63 @@ export type Database = {
           },
         ]
       }
+      people: {
+        Row: {
+          birthday_day: number | null
+          birthday_month: number | null
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          last_seen_on: string | null
+          name: string
+          owner_id: string | null
+          see_every_weeks: number | null
+          updated_at: string
+        }
+        Insert: {
+          birthday_day?: number | null
+          birthday_month?: number | null
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          last_seen_on?: string | null
+          name: string
+          owner_id?: string | null
+          see_every_weeks?: number | null
+          updated_at?: string
+        }
+        Update: {
+          birthday_day?: number | null
+          birthday_month?: number | null
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          last_seen_on?: string | null
+          name?: string
+          owner_id?: string | null
+          see_every_weeks?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "people_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_color: string
@@ -2060,6 +2117,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "households"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      takeaways: {
+        Row: {
+          created_at: string
+          eaten_on: string
+          household_id: string
+          id: string
+          shared: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          eaten_on?: string
+          household_id: string
+          id?: string
+          shared?: boolean
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          eaten_on?: string
+          household_id?: string
+          id?: string
+          shared?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "takeaways_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "takeaways_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
           },
         ]
       }

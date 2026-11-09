@@ -27,11 +27,15 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { briefingFor, type PendingSuggestion } from '../_shared/agents/chiefOfStaff.ts'
 import { isoWeekday, localNow } from '../_shared/agents/dates.ts'
-import { analyseCareer } from '../_shared/agents/career.ts'
-import { analyseFinance } from '../_shared/agents/finance.ts'
+import { analyseCareer, analyseEvents, parseCareerConfig } from '../_shared/agents/career.ts'
+import { analyseFinance, analyseSavings, savedSoFar } from '../_shared/agents/finance.ts'
 import { analyseFitness, HISTORY_DAYS, parseFitnessGoals } from '../_shared/agents/fitness.ts'
+import { type GoalLine, goalLines } from '../_shared/agents/goals.ts'
 import { analyseHousehold } from '../_shared/agents/household.ts'
-import { analyseLanguages } from '../_shared/agents/languages.ts'
+import { analyseLanguages, analyseTargets, parseLanguageTargets } from '../_shared/agents/languages.ts'
+import { analyseFood, parseFoodGoals } from '../_shared/agents/nutrition.ts'
+import { analysePeople } from '../_shared/agents/people.ts'
+import { analyseProjects, parseProjectsConfig } from '../_shared/agents/projects.ts'
 import { analyseLifeAdmin } from '../_shared/agents/lifeAdmin.ts'
 import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
 import { candidatesFor, prioritiesInput } from '../_shared/agents/priorities.ts'
@@ -42,7 +46,24 @@ import { analyseTravel } from '../_shared/agents/travel.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
 import { analyseWedding } from '../_shared/agents/wedding.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
-import { type AgentPrefs, loadCalendar, loadContext, loadFinance, loadGoals, loadLanguages, loadPrefs, loadRenewals, loadRooms, loadSessions, loadTrips, loadWedding } from './context.ts'
+import {
+  type AgentPrefs,
+  loadCalendar,
+  loadContext,
+  loadFinance,
+  loadGoals,
+  loadLanguages,
+  loadPeople,
+  loadPrefs,
+  loadRenewals,
+  loadRooms,
+  loadSavings,
+  loadSessions,
+  loadTakeaways,
+  loadTrips,
+  loadWedding,
+  loadWeights,
+} from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
 import { routineInput, routineSave, routineSaveNews, savePicks, tabsFor } from './routine.ts'
@@ -89,7 +110,10 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       return analyseWedding(await loadWedding(db, householdId, ctx), enabled)
     case 'language_coach': {
       const { study, progress } = await loadLanguages(db, householdId)
-      return analyseLanguages(ctx.today, study, progress, enabled)
+      return [
+        ...analyseLanguages(ctx.today, study, progress, enabled),
+        ...analyseTargets(ctx.today, enabled, (id) => parseLanguageTargets(prefs.config('language_coach', id))),
+      ]
     }
     case 'health_coach':
       return analyseFitness(ctx.today, ctx.members, await loadSessions(db, householdId, ctx.today, HISTORY_DAYS), ctx.open, enabled, (id) =>
@@ -104,11 +128,59 @@ async function specialist(db: SupabaseClient, householdId: string, agentId: stri
       return analyseTravel(ctx.today, trips, renewals, ctx.open, enabled)
     }
     case 'career':
-      return analyseCareer(ctx.today, await loadGoals(db, householdId), enabled)
-    case 'finance':
-      return analyseFinance({ today: ctx.today, members: ctx.members, ...(await loadFinance(db, householdId)) }, enabled)
+      return [
+        ...analyseCareer(ctx.today, await loadGoals(db, householdId), enabled),
+        ...analyseEvents(ctx.today, ctx.calendar ?? [], enabled, (id) => parseCareerConfig(prefs.config('career', id)), ctx.timezone),
+      ]
+    case 'finance': {
+      const [finance, savings] = await Promise.all([loadFinance(db, householdId), loadSavings(db, householdId)])
+      const input = { today: ctx.today, members: ctx.members, ...finance }
+      return [...analyseFinance(input, enabled), ...analyseSavings(input, savings.goals, savings.pots, enabled)]
+    }
+    case 'nutrition': {
+      const [weights, takeaways] = await Promise.all([loadWeights(db, householdId, ctx.today, 60), loadTakeaways(db, householdId, ctx.today)])
+      return analyseFood(ctx.today, ctx.members, weights, takeaways, ctx.open, enabled, (id) => parseFoodGoals(prefs.config('nutrition', id)))
+    }
+    case 'side_projects':
+      return analyseProjects(ctx.today, ctx.open, enabled, (id) => parseProjectsConfig(prefs.config('side_projects', id)))
+    case 'friends':
+      return analysePeople(ctx.today, await loadPeople(db, householdId), ctx.open, enabled)
     default:
       throw new Error(`No runner for ${agentId}`)
+  }
+}
+
+/**
+ * Each person's goal lines for the briefing, from the goals they've set with
+ * the other agents. A failure here leaves the briefing without goals rather
+ * than stopping it.
+ */
+async function goalsLoader(db: SupabaseClient, householdId: string, ctx: TaskContext, prefs: AgentPrefs): Promise<(userId: string) => GoalLine[]> {
+  try {
+    const [weights, finance, savings] = await Promise.all([loadWeights(db, householdId, ctx.today, 14), loadFinance(db, householdId), loadSavings(db, householdId)])
+    const saved = savedSoFar({ today: ctx.today, members: ctx.members, ...finance }, savings.goals, savings.pots)
+    return (userId) => {
+      // Only goals whose agent this person has on.
+      const on = (agentId: string) => prefs.enabled(agentId).includes(userId)
+      return goalLines(ctx.today, {
+        fitness: on('health_coach') ? parseFitnessGoals(prefs.config('health_coach', userId)) : null,
+        food: on('nutrition') ? parseFoodGoals(prefs.config('nutrition', userId)) : null,
+        weights: weights.filter((w) => w.user_id === userId),
+        projects: on('side_projects') ? parseProjectsConfig(prefs.config('side_projects', userId)) : { projects: [], sponsorTeam: null },
+        languages: on('language_coach') ? parseLanguageTargets(prefs.config('language_coach', userId)) : [],
+        savings: on('finance')
+          ? savings.goals
+              .filter((g) => g.target_date && g.target_date > ctx.today && (g.ownership !== 'personal' || g.owner_id === userId))
+              .flatMap((g) => {
+                const have = saved.get(g.id)
+                return have === null || have === undefined || have >= g.target_minor ? [] : [{ name: g.name, saved: have, target: g.target_minor }]
+              })
+          : [],
+      })
+    }
+  } catch {
+    console.warn('agents: goals unavailable')
+    return () => []
   }
 }
 
@@ -141,8 +213,8 @@ async function runAgent(
     const { date, hour } = localNow(now, household.timezone)
     const ctx = await loadContext(db, household.id, date, hour)
     ctx.timezone = household.timezone
-    // Only these two plan around the calendar. A calendar problem never stops the run.
-    if (agentId === 'task_manager' || agentId === 'chief_of_staff') {
+    // Only these plan around the calendar. A calendar problem never stops the run.
+    if (agentId === 'task_manager' || agentId === 'chief_of_staff' || agentId === 'career') {
       ctx.calendar = await loadCalendar(db, household.id, date).catch(() => {
         console.warn('agents: calendar unavailable')
         return []
@@ -163,11 +235,12 @@ async function runAgent(
       if (pending.error) throw new Error(pending.error.message)
       const kind = options.kind ?? (isoWeekday(date) === 1 ? 'weekly' : 'daily')
       const budget = { spent: await llmSpentThisMonth(db, household.id, now), limit: monthlyBudgetMicroUsd(Deno.env.get('AGENT_LLM_MONTHLY_BUDGET_USD')) }
+      const goalsFor = await goalsLoader(db, household.id, ctx, prefs)
       for (const member of ctx.members) {
         if (!prefs.enabled('chief_of_staff').includes(member.id)) continue
         if (options.onlyFor && options.onlyFor !== member.id) continue
         if (kind === 'daily' && !options.onlyFor && prefs.schedule('chief_of_staff', member.id) !== 'daily') continue
-        const briefing = briefingFor(ctx, tm, member, kind, now, pending.data as PendingSuggestion[])
+        const briefing = briefingFor(ctx, tm, member, kind, now, pending.data as PendingSuggestion[], goalsFor(member.id))
         if (prefs.aiSummaries.has(member.id)) {
           const result = await writeSummary(member.name, briefing.content as Parameters<typeof writeSummary>[1], budget)
           briefing.ai_summary = result.summary

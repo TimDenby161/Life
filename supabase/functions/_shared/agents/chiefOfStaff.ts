@@ -6,6 +6,7 @@
 // deadlines and busy stretches ahead, and the suggestions that matter most.
 import { dayLoad, loadText, MAX_EVENTS_LISTED, packedDays } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekKey, shortDay } from './dates.ts'
+import type { GoalLine } from './goals.ts'
 import { cycleDays, effectiveCompletions, ownerOf, type PlanItem, type TaskManagerResult, type WorkloadSummary } from './taskManager.ts'
 import type { BriefingDraft, Member, OpenTask, SuggestionDraft, TaskContext } from './types.ts'
 
@@ -19,6 +20,8 @@ export const MAX_SUGGESTIONS = 3
 export type BriefingContent = {
   date: ISODate
   headline: string
+  /** The person's goals, first (goals.ts). Never sent to the AI summary. */
+  goals?: GoalLine[]
   dueToday: number
   /** One-off tasks past their date. */
   overdue: number
@@ -111,6 +114,7 @@ export type PendingSuggestion = Pick<SuggestionDraft, 'dedupe_key' | 'title' | '
 /**
  * suggestions: every agent's pending suggestions (the Chief of Staff runs after
  * them in the same tick), so the briefing combines them rather than redoing them.
+ * goals: this person's goal lines, shown before everything else.
  */
 export function briefingFor(
   ctx: TaskContext,
@@ -119,6 +123,7 @@ export function briefingFor(
   kind: 'daily' | 'weekly',
   now: Date,
   suggestions: PendingSuggestion[] = tm.suggestions,
+  goals: GoalLine[] = [],
 ): BriefingDraft {
   const { today } = ctx
   const mine = inView(ctx, member)
@@ -175,6 +180,7 @@ export function briefingFor(
       titles: d.events.filter((e) => e.time).map((e) => e.title).slice(0, 3),
     }))
   }
+  if (goals.length) content.goals = goals
   content.headline = headline(content)
   if (kind === 'weekly') {
     content.plan = tm.plans[member.id] ?? []

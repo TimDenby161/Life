@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns'
 import { Bell, Play } from 'lucide-react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -22,8 +23,12 @@ import {
 } from '../api'
 import { pushSupport } from '../push'
 import { CareerGoals } from './CareerGoals'
+import { EventCoaching } from './EventCoaching'
 import { FitnessGoals } from './FitnessGoals'
+import { FoodGoals } from './FoodGoals'
+import { LanguageTargets } from './LanguageTargets'
 import { Renewals } from './Renewals'
+import { SideProjects } from './SideProjects'
 import { Trips } from './Trips'
 import { RunStatus } from './HistoryTab'
 
@@ -61,7 +66,20 @@ function LiveAgent({ agent, lastRun }: { agent: AgentDef; lastRun: AgentRun | un
       {agent.id === 'health_coach' ? <FitnessGoals key={row ? 'saved' : 'new'} row={row} /> : null}
       {agent.id === 'life_admin' ? <Renewals /> : null}
       {agent.id === 'travel' ? <Trips /> : null}
-      {agent.id === 'career' ? <CareerGoals /> : null}
+      {agent.id === 'career' ? (
+        <>
+          <CareerGoals />
+          <EventCoaching key={row ? 'saved' : 'new'} row={row} />
+        </>
+      ) : null}
+      {agent.id === 'nutrition' ? <FoodGoals key={row ? 'saved' : 'new'} row={row} /> : null}
+      {agent.id === 'language_coach' ? <LanguageTargets key={row ? 'saved' : 'new'} row={row} /> : null}
+      {agent.id === 'side_projects' ? <SideProjects key={row ? 'saved' : 'new'} row={row} /> : null}
+      {agent.id === 'friends' ? (
+        <p className="text-sm">
+          Add friends, birthdays and how often you’d like to see them on the <Link className="underline" to="/people">People</Link> page.
+        </p>
+      ) : null}
       <dl className="grid gap-1 text-sm sm:grid-cols-[8rem_1fr]">
         <dt className="text-muted-foreground">Reads</dt>
         <dd>{agent.reads.join(', ')}</dd>

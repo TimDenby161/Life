@@ -225,7 +225,7 @@ describe('Fitness Coach with goals', () => {
     analyseFitness(today, context().members, sessions, open, BOTH, (id) => (id === ALEX ? goals : null)).filter((s) => s.recipients[0] === ALEX)
 
   it('reads goals from settings, ignoring junk', () => {
-    expect(goals).toEqual({ activeDays: 6, activities: [{ name: 'Table tennis', times: 1, optional: false }, { name: 'Padel', times: 1, optional: false }, { name: 'Run', times: 1, optional: true }] })
+    expect(goals).toEqual({ activeDays: 6, activities: [{ name: 'Table tennis', times: 1, optional: false, max: false }, { name: 'Padel', times: 1, optional: false, max: false }, { name: 'Run', times: 1, optional: true, max: false }], events: [] })
     expect(parseFitnessGoals({})).toBeNull()
     expect(parseFitnessGoals({ activeDays: 9, activities: [{ name: '', times: 1 }, { name: 'Swim', times: 0 }, 'x'] })).toBeNull()
   })

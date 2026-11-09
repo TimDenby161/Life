@@ -4,18 +4,23 @@
 // own training.
 //
 // Rules, in order of priority:
+//   0. Events (tournaments, races) from the goals: a taper in the six days
+//      before, which also holds back conditioning and strength, and an easy
+//      day after.
 //   1. Load: a week well above the person's usual, or too many days in a row,
 //      gets recovery advice and nothing that adds volume. Someone aiming for six
 //      or more active days a week gets the rest-day nudge after seven in a row.
-//   2. Goals (if set): a required activity not done yet late in the week, active
-//      days behind pace, and on Mondays a review of last week.
+//   2. Goals (if set): a required activity not done yet late in the week, an
+//      "at most" activity over its limit, active days behind pace, and on
+//      Mondays a review of last week. When you both have the same activity
+//      still to do, it becomes one suggestion to do it together.
 //   3. Balance: no strength or no mobility in two weeks.
 //   4. Table tennis: one conditioning session a week for anyone who plays,
 //      rotating footwork, explosiveness and endurance.
 //   5. Without goals: a gap, for someone who usually trains.
 // Missing logs are just missing logs: wording says "nothing logged", never
 // "you haven't exercised".
-import { addDays, daysBetween, type ISODate, isoWeekday, isoWeekKey, nextWeekday } from './dates.ts'
+import { addDays, daysBetween, type ISODate, isoWeekday, isoWeekKey, nextWeekday, shortDay } from './dates.ts'
 import { similarTitles } from './taskManager.ts'
 import type { Action, Member, OpenTask, SuggestionDraft } from './types.ts'
 
@@ -27,11 +32,16 @@ export const GAP_DAYS = 4
 export const MAX_PER_PERSON = 3
 /** A once-a-week activity is nudged from Thursday (four days left, today included). */
 export const NUDGE_DAYS_LEFT = 4
+/** Days before an event when the taper starts, and when hard sessions stop. */
+export const TAPER_DAYS = 6
+export const FRESH_DAYS = 3
 
 export type Session = { user_id: string; description: string; started_at: string; duration_minutes: number }
 
-export type ActivityGoal = { name: string; times: number; optional?: boolean }
-export type FitnessGoals = { activeDays: number | null; activities: ActivityGoal[] }
+/** `max`: times is a limit, not a target (e.g. table tennis at most twice a week). */
+export type ActivityGoal = { name: string; times: number; optional?: boolean; max?: boolean }
+export type FitnessEvent = { name: string; date: ISODate }
+export type FitnessGoals = { activeDays: number | null; activities: ActivityGoal[]; events: FitnessEvent[] }
 
 const STRENGTH = /\b(gym|weights?|strength|workout|press[- ]?ups?|squats?|deadlifts?|kettlebells?|circuits?|lunges?|plank)\b/i
 const MOBILITY = /\b(yoga|pilates|stretch(ing)?|mobility|foam roll(ing)?)\b/i
@@ -59,14 +69,19 @@ export function matchesActivity(description: string, name: string): boolean {
 
 /** Goals as saved in agent_settings.config, cleaned; null when there are none. */
 export function parseFitnessGoals(config: unknown): FitnessGoals | null {
-  const c = (config ?? {}) as { activeDays?: unknown; activities?: unknown }
+  const c = (config ?? {}) as { activeDays?: unknown; activities?: unknown; events?: unknown }
   const activeDays = Number.isInteger(c.activeDays) && (c.activeDays as number) >= 1 && (c.activeDays as number) <= 7 ? (c.activeDays as number) : null
   const activities = (Array.isArray(c.activities) ? c.activities : [])
-    .map((a) => a as { name?: unknown; times?: unknown; optional?: unknown })
+    .map((a) => a as { name?: unknown; times?: unknown; optional?: unknown; max?: unknown })
     .filter((a) => typeof a.name === 'string' && a.name.trim() && Number.isInteger(a.times) && (a.times as number) >= 1 && (a.times as number) <= 7)
     .slice(0, 8)
-    .map((a) => ({ name: (a.name as string).trim().slice(0, 40), times: a.times as number, optional: a.optional === true }))
-  return activeDays || activities.length ? { activeDays, activities } : null
+    .map((a) => ({ name: (a.name as string).trim().slice(0, 40), times: a.times as number, optional: a.optional === true, max: a.max === true }))
+  const events = (Array.isArray(c.events) ? c.events : [])
+    .map((e) => e as { name?: unknown; date?: unknown })
+    .filter((e) => typeof e.name === 'string' && e.name.trim() && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
+    .slice(0, 12)
+    .map((e) => ({ name: (e.name as string).trim().slice(0, 60), date: e.date as ISODate }))
+  return activeDays || activities.length || events.length ? { activeDays, activities, events } : null
 }
 
 export const TT_DRILLS = [
@@ -91,6 +106,7 @@ function weekReview(today: ISODate, goals: FitnessGoals, mine: Dated[]): { title
   const active = new Set(lastWeek.map((s) => s.date)).size
   const parts = goals.activities.map((a) => {
     const n = lastWeek.filter((s) => matchesActivity(s.description, a.name)).length
+    if (a.max) return `${lower(a.name)} ${n} (at most ${a.times}${n > a.times ? ', over' : ''})`
     return a.optional ? `${lower(a.name)} ${n} (optional)` : `${lower(a.name)} ${n} of ${a.times}${n >= a.times ? ' ✓' : ''}`
   })
   return {
@@ -116,6 +132,40 @@ function personAdvice(today: ISODate, member: Member, sessions: Session[], open:
   const hasTask = (title: string) => open.some((t) => similarTitles(t.title, title))
   const task = (title: string, due: ISODate): Action => ({ type: 'create_task', title, list: 'personal', due_date: due })
   const out: Omit<SuggestionDraft, 'recipients'>[] = []
+
+  // 0. Events: taper before, easy day after.
+  const upcoming = (goals?.events ?? []).filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
+  const daysToEvent = upcoming ? daysBetween(today, upcoming.date) : null
+  /** Close enough to an event that hard conditioning and strength would leave you tired for it. */
+  const fresh = daysToEvent !== null && daysToEvent <= FRESH_DAYS
+  if (upcoming && daysToEvent! <= TAPER_DAYS) {
+    const when = daysToEvent === 0 ? 'today' : daysToEvent === 1 ? 'tomorrow' : `on ${shortDay(upcoming.date, today)}`
+    const sharpen = `Light hit before ${upcoming.name}: 30 min, serves and receive`
+    out.push({
+      dedupe_key: `fitness:${member.id.slice(0, 8)}:event:${upcoming.date}`,
+      kind: 'event_taper',
+      severity: daysToEvent! <= 2 ? 2 : 1,
+      title: `${upcoming.name} ${when}`,
+      reason:
+        daysToEvent === 0
+          ? 'Eat well beforehand, warm up properly and take water and a snack for between matches.'
+          : `Keep sessions short and sharp from now${fresh ? '' : `, nothing hard in the last ${FRESH_DAYS} days`}: no heavy legs or long conditioning. A light hit the day before and a good night’s sleep matter more than extra training.`,
+      task_id: null,
+      action: daysToEvent! >= 2 && !hasTask(sharpen) ? task(sharpen, addDays(upcoming.date, -1)) : null,
+    })
+  }
+  const justDone = (goals?.events ?? []).find((e) => e.date === addDays(today, -1))
+  if (justDone) {
+    out.push({
+      dedupe_key: `fitness:${member.id.slice(0, 8)}:after:${justDone.date}`,
+      kind: 'event_recovery',
+      severity: 1,
+      title: `After ${justDone.name}: an easy day`,
+      reason: 'A walk or 15 minutes of stretching helps legs recover. Note one thing that worked and one to practise next.',
+      task_id: null,
+      action: null,
+    })
+  }
 
   // 1. Too much: recovery only.
   if (usual >= 60 && lastWeek >= SPIKE_MIN_MINUTES && lastWeek > usual * SPIKE_RATIO) {
@@ -144,14 +194,27 @@ function personAdvice(today: ISODate, member: Member, sessions: Session[], open:
       action: null,
     })
   }
-  if (out.length) return out
+  if (out.some((s) => s.kind === 'training_load' || s.kind === 'rest_day')) return out
 
   // 2. Goals.
   if (goals) {
     const monday = addDays(today, 1 - isoWeekday(today))
     const daysLeft = 8 - isoWeekday(today)
     const thisWeek = mine.filter((s) => s.date >= monday && s.date <= today)
-    for (const a of goals.activities.filter((g) => !g.optional)) {
+    for (const a of goals.activities.filter((g) => g.max)) {
+      const n = thisWeek.filter((s) => matchesActivity(s.description, a.name)).length
+      if (n <= a.times) continue
+      out.push({
+        dedupe_key: key(`over:${a.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}:${n}`),
+        kind: 'over_limit',
+        severity: 1,
+        title: `${n} ${lower(a.name)} sessions this week`,
+        reason: `You set a limit of ${a.times === 1 ? 'once' : `${a.times} times`} a week, for balance. Something else, or a rest, for the rest of the week.`,
+        task_id: null,
+        action: null,
+      })
+    }
+    for (const a of goals.activities.filter((g) => !g.optional && !g.max)) {
       const need = a.times - thisWeek.filter((s) => matchesActivity(s.description, a.name)).length
       const title = `${a.name} session`
       if (need <= 0 || daysLeft > NUDGE_DAYS_LEFT + need - 1 || hasTask(title)) continue
@@ -194,7 +257,9 @@ function personAdvice(today: ISODate, member: Member, sessions: Session[], open:
       ? 'Explosive strength for table tennis: 3 × 5 squat jumps, 3 × 8 split squats, 3 × 10 calf raises'
       : 'Strength: 3 × 10 squats, press-ups and rows'
     const mobility = 'Mobility: 15 min hips, ankles and upper back'
-    if (!recent(STRENGTH, 14) && !hasTask(strength)) {
+    if (fresh) {
+      // Nothing that leaves the legs heavy just before an event.
+    } else if (!recent(STRENGTH, 14) && !hasTask(strength)) {
       out.push({
         dedupe_key: key('strength'),
         kind: 'add_strength',
@@ -218,7 +283,7 @@ function personAdvice(today: ISODate, member: Member, sessions: Session[], open:
   }
 
   // 4. One table tennis conditioning session a week.
-  if (playsTT) {
+  if (playsTT && !fresh) {
     const drill = TT_DRILLS[weekNumber(today) % TT_DRILLS.length]
     if (!hasTask(drill)) {
       out.push({
@@ -261,7 +326,42 @@ export function analyseFitness(
   enabled: string[],
   goalsFor: (userId: string) => FitnessGoals | null = () => null,
 ): SuggestionDraft[] {
-  return members
+  const out = members
     .filter((m) => enabled.includes(m.id))
     .flatMap((m) => personAdvice(today, m, sessions, open, goalsFor(m.id)).map((s) => ({ ...s, recipients: [m.id] })))
+  return together(today, members, out)
+}
+
+/** The activity a goal nudge is about, from its dedupe key (fitness:<id>:goal:<activity>:<week>). */
+const goalActivity = (s: SuggestionDraft) => (s.kind === 'goal_activity' ? s.dedupe_key.split(':')[3] : null)
+
+/**
+ * The same activity still to do for both of you this week: one suggestion to do
+ * it together (a joint task for two) instead of one each.
+ */
+function together(today: ISODate, members: Member[], drafts: SuggestionDraft[]): SuggestionDraft[] {
+  if (members.length < 2) return drafts
+  const out = [...drafts]
+  const byActivity = new Map<string, SuggestionDraft[]>()
+  for (const s of drafts) {
+    const a = goalActivity(s)
+    if (a) byActivity.set(a, [...(byActivity.get(a) ?? []), s])
+  }
+  for (const [activity, pair] of byActivity) {
+    if (pair.length < 2) continue
+    const name = pair[0].action?.type === 'create_task' ? pair[0].action.title.replace(/ session$/, '') : activity
+    const lowered = lower(name)
+    for (const s of pair) out.splice(out.indexOf(s), 1)
+    out.push({
+      dedupe_key: `fitness:together:${activity}:${isoWeekKey(today)}`,
+      kind: 'goal_together',
+      severity: Math.max(...pair.map((s) => s.severity)) as SuggestionDraft['severity'],
+      title: `You both still have ${lowered} to do this week: go together?`,
+      reason: 'It’s on both your weekly goals, and a plan with someone else is harder to skip.',
+      task_id: null,
+      action: { type: 'create_task', title: `${name} together`, list: 'joint', needs_both: true, due_date: pair[0].action?.type === 'create_task' ? pair[0].action.due_date : today },
+      recipients: pair.flatMap((s) => s.recipients),
+    })
+  }
+  return out
 }

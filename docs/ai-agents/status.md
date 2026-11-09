@@ -27,6 +27,22 @@ _Last updated 6 November 2026._ All ten agents are built. Travel and Career (mig
 | AI sentence sees Task Manager suggestions only (no money or health titles) | `llm.ts` `TASK_SUGGESTION` | Vitest |
 | Briefing notifications (Web Push, off by default) | migration `0400`, `_shared/push.ts`, `agents/notify.ts`, `public/push-sw.js`, AI Hub → Agents | 9 Vitest cases (encryption decrypted on the browser side, VAPID signature verified, gone devices); pgTAP `17_push_notifications.test.sql` (14); locally the scheduled briefing sent through FCM, which rejected the fake device, and the function forgot it |
 
+## Goals (9 November 2026)
+
+Each agent now works from goals set on its card in AI Hub → Agents (`agent_settings.config`, owner only), so Tim and Sophie each get coaching aimed at their own goals.
+
+| Piece | Where | Checked by |
+|---|---|---|
+| Fitness: "at most" limits, tournaments (taper before, easy day after, no conditioning or strength in the last 3 days), one joint suggestion when both have the same session to do | `fitness.ts`, `FitnessGoals.tsx` | Vitest (`goals.test.ts`); run locally |
+| Weight & Food (new): Monday weight review against the pace to a target, weigh-in nudge, takeaway limits (own and together), meal planning day. Weight goes only to its owner, never to the AI sentence or a notification | migration `20261109000100` (`takeaways`), `nutrition.ts`, `FoodGoals.tsx`, Health page Takeaways | Vitest, guards, pgTAP `23_takeaways_people.test.sql`; run locally |
+| Career: coaching before and after calendar events whose title has your chosen words | `career.ts` `analyseEvents`, `EventCoaching.tsx` | Vitest; no calendar locally |
+| Finance: savings goals with a target date against the monthly pace (pot items funded in order) | `finance.ts` `analyseSavings`, `loadSavings` | Vitest; run locally |
+| Travel: when to ask operators for offers on big trips, with an email to copy | `travel.ts` | Vitest |
+| Language Coach: target dates, a weekly speaking topic for the first target, monthly speaking nudge | `languages.ts` `analyseTargets`, `LanguageTargets.tsx` | Vitest; run locally |
+| Side Projects (new): weekly growth experiment against paid-user goals, sponsor pitch monthly | `projects.ts`, `SideProjects.tsx` | Vitest; run locally |
+| Friends (new) and the People page | `people` table, `people.ts`, `src/modules/people` | Vitest, pgTAP; run locally |
+| Briefing goal lines (first in the briefing) | `goals.ts`, `BriefingCard.tsx` | Vitest; run locally |
+
 ## Known issue (CI only)
 
 On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, any function call refused for lack of EXECUTE segfaults the server. The arm64 build (local Macs and the hosted project, which reports `aarch64`) doesn't. The pgTAP tests therefore check `has_function_privilege` instead of making refused calls. Don't add tests that call a function a role can't execute.

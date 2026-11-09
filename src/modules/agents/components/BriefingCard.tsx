@@ -61,6 +61,19 @@ export function BriefingCard({ onOpenTask }: { onOpenTask: (taskId: string) => v
               <p className="text-xs text-muted-foreground">Written {formatDistanceToNow(new Date(b.updated_at), { addSuffix: true })}</p>
             </div>
 
+            {c.goals?.length ? (
+              <Section title="Goals">
+                <ul className="grid gap-0.5 text-sm">
+                  {c.goals.map((g) => (
+                    <li key={g.label} className="flex justify-between gap-3">
+                      <span className="truncate">{g.label}</span>
+                      <span className="shrink-0 text-muted-foreground tabular">{g.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
             {c.calendar?.length ? (
               <Section title="Calendar">
                 <ul className="grid gap-0.5 text-sm">

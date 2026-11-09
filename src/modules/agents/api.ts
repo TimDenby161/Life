@@ -99,6 +99,14 @@ export const useSaveAgentSetting = () =>
     else unwrap(inserted)
   })
 
+/** Saves my settings for one agent's goals, keeping whether it's on and its schedule. */
+export const useSaveAgentConfig = (agentId: string, row: AgentSetting | undefined) => {
+  const save = useSaveAgentSetting()
+  const mutate = (config: Json, options?: Parameters<typeof save.mutate>[1]) =>
+    save.mutate({ agentId, enabled: row?.enabled ?? true, schedule: (row?.schedule ?? 'daily') as AgentSchedule, config }, options)
+  return { mutate, isPending: save.isPending }
+}
+
 export const useAiPriorities = () => {
   const userId = useUserId()
   return useQuery({

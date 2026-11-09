@@ -2,7 +2,8 @@
 // role, which bypasses RLS, so EVERY query here is filtered by household_id
 // (src/test/agents-guard.test.ts checks that). Only the columns the rules use
 // are selected: no task descriptions or comments, no contact details, and of
-// health data only exercise sessions (never weight or periods).
+// health data only exercise sessions, takeaways and weight (for the Weight &
+// Food agent and the owner's own briefing line; never periods).
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import type { CalEvent } from '../_shared/agents/calendar.ts'
 import { addDays } from '../_shared/agents/dates.ts'
@@ -10,7 +11,9 @@ import type { Headline } from '../_shared/agents/headlines.ts'
 import { CALENDAR_SCOPE, googleAccessToken, listEvents } from '../_shared/google-calendar.ts'
 import { fetchRss } from '../_shared/rss.ts'
 import type { AgentSchedule } from '../_shared/agents/registry.ts'
-import type { FinAccount, FinSnapshot, FinTx } from '../_shared/agents/finance.ts'
+import type { FinAccount, FinSnapshot, FinTx, SavingsGoal, SavingsPot } from '../_shared/agents/finance.ts'
+import type { Takeaway, WeightReading } from '../_shared/agents/nutrition.ts'
+import type { Person } from '../_shared/agents/people.ts'
 import type { Goal } from '../_shared/agents/career.ts'
 import type { Session } from '../_shared/agents/fitness.ts'
 import type { Renewal } from '../_shared/agents/lifeAdmin.ts'
@@ -209,6 +212,52 @@ export async function loadFinance(db: SupabaseClient, householdId: string): Prom
     snapshots: n(check(snapshots) as FinSnapshot[], 'balance_minor'),
     transactions: n(check(transactions) as FinTx[], 'amount_minor'),
   }
+}
+
+/** Savings goals with a target date and the pots that fund them: names, amounts and dates only. */
+export async function loadSavings(db: SupabaseClient, householdId: string): Promise<{ goals: SavingsGoal[]; pots: SavingsPot[] }> {
+  const [goals, pots] = await Promise.all([
+    db
+      .from('savings_goals')
+      .select('id, name, target_minor, target_date, account_id, manual_saved_minor, pot_id, sort_order, ownership, owner_id, created_at')
+      .eq('household_id', householdId)
+      .eq('currency', 'GBP')
+      .is('archived_at', null)
+      .limit(500),
+    db.from('savings_pots').select('id, account_id').eq('household_id', householdId).limit(100),
+  ])
+  return {
+    goals: (check(goals) as SavingsGoal[]).map((g) => ({ ...g, target_minor: Number(g.target_minor), manual_saved_minor: Number(g.manual_saved_minor) })),
+    pots: check(pots),
+  }
+}
+
+/** Weight readings (kg) for the last `days` days. Only the Weight & Food agent and the owner's briefing line use them. */
+export async function loadWeights(db: SupabaseClient, householdId: string, today: string, days: number): Promise<WeightReading[]> {
+  const rows = check(
+    await db
+      .from('health_measurements')
+      .select('user_id, measured_at, value, metric:health_metric_definitions!inner(key)')
+      .eq('household_id', householdId)
+      .eq('metric.key', 'weight')
+      .gte('measured_at', `${addDays(today, -days)}T00:00:00Z`)
+      .limit(2000),
+  ) as { user_id: string; measured_at: string; value: number }[]
+  return rows.map((r) => ({ user_id: r.user_id, date: r.measured_at.slice(0, 10), kg: Number(r.value) }))
+}
+
+export async function loadTakeaways(db: SupabaseClient, householdId: string, today: string): Promise<Takeaway[]> {
+  return check(await db.from('takeaways').select('user_id, eaten_on, shared').eq('household_id', householdId).gte('eaten_on', addDays(today, -14)).limit(500))
+}
+
+export async function loadPeople(db: SupabaseClient, householdId: string): Promise<Person[]> {
+  return check(
+    await db
+      .from('people')
+      .select('id, owner_id, name, birthday_month, birthday_day, see_every_weeks, last_seen_on, created_at')
+      .eq('household_id', householdId)
+      .limit(500),
+  )
 }
 
 export async function loadRenewals(db: SupabaseClient, householdId: string): Promise<Renewal[]> {

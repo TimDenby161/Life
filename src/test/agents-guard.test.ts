@@ -22,25 +22,44 @@ describe('agents Edge Function', () => {
     }
   })
 
-  it('reads only the tables the agents need, never weight, periods, money accounts, investments or the feed', () => {
+  it('reads only the tables the agents need, never periods, investments, budgets or the feed', () => {
     const allowed = new Set([
       'households', 'household_members', 'user_preferences', 'agent_settings', 'agent_runs', 'agent_suggestions',
       'task_lists', 'task_categories', 'task_rooms', 'tasks', 'task_occurrences', 'task_completion_events',
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
       'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations', 'feed_sources',
+      'savings_goals', 'savings_pots', 'health_measurements', 'takeaways', 'people',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
     }
   })
 
-  it('reads finances only for net worth: no budgets, goals, categories, or transaction details', () => {
-    for (const { f, text } of [...fn, ...shared]) expect(text, f).not.toMatch(/budgets|finance_categories|savings_goals/)
+  it('reads finances only for net worth and savings goals: no budgets, categories, or transaction details', () => {
+    for (const { f, text } of [...fn, ...shared]) expect(text, f).not.toMatch(/budgets|finance_categories/)
     const ctx = fn.find((x) => x.f === 'context.ts')!.text
     expect(ctx).toContain(".from('financial_transactions').select('account_id, occurred_on, amount_minor, created_at')")
     expect(ctx).toContain(".select('id, account_type, ownership, owner_id, opening_balance_minor, opening_date')")
     expect(ctx).toContain(".select('account_id, as_of, balance_minor, source, created_at')")
+  })
+
+  it('reads weight only as kilos and dates, only in loadWeights, and only for weight', () => {
+    const ctx = fn.find((x) => x.f === 'context.ts')!.text
+    const chains = [...ctx.matchAll(/\.from\('health_measurements'\)[\s\S]*?\.limit\(\d+\)/g)].map((m) => m[0])
+    expect(chains).toHaveLength(1)
+    expect(chains[0]).toContain(".select('user_id, measured_at, value, metric:health_metric_definitions!inner(key)')")
+    expect(chains[0]).toContain(".eq('metric.key', 'weight')")
+    for (const { f, text } of fn) if (f !== 'context.ts') expect(text, f).not.toMatch(/health_measurements|health_periods/)
+  })
+
+  it('keeps weight out of everything but its owner’s own suggestions and briefing lines', () => {
+    const food = shared.find((x) => x.f === 'nutrition.ts')!.text
+    for (const [, recipients] of food.matchAll(/recipients: ([^,\n}]+)/g)) {
+      expect(['[m.id]', 'sharedLimit.map((p) => p.m.id)', 'planners']).toContain(recipients.trim())
+    }
+    const index = fn.find((x) => x.f === 'index.ts')!.text
+    expect(index).toContain('weights: weights.filter((w) => w.user_id === userId)')
   })
 
   it('selects no contact details, free-text notes, task descriptions or comments', () => {
@@ -67,7 +86,7 @@ describe('agents Edge Function', () => {
 
   it('never gives the LLM anything but the task briefing', () => {
     const llm = shared.find((x) => x.f === 'llm.ts')!.text
-    expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth/i)
+    expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth|goals|weight|takeaway|people/i)
   })
 
   it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone and agent_save_picks', () => {
