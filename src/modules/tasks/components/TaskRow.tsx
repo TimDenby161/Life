@@ -268,10 +268,11 @@ export function TaskRow({
                 <span className="truncate">Waiting on {waitingOn}</span>
               </span>
             ) : null}
-            {/* Estimated time, coloured by how pressing it is; the detail page has the date. */}
+            {/* Time (set, or ~estimated), coloured by how pressing it is; the detail page has the date. */}
             {!done ? (
-              <span className={toneClass[tone]} title="Estimated time">
-                ~{formatMinutes(estimateMinutes(task.title, category?.name ?? null))}
+              <span className={toneClass[tone]} title={task.duration_minutes ? 'Time' : 'Estimated time'}>
+                {task.duration_minutes ? '' : '~'}
+                {formatMinutes(estimateMinutes(task.title, category?.name ?? null, task.duration_minutes))}
               </span>
             ) : null}
             {task.recurrence ? (

@@ -38,7 +38,7 @@ export async function loadContext(db: SupabaseClient, householdId: string, today
     db
       .from('task_occurrences')
       .select(
-        'id, due_date, due_time, delay_count, task:tasks!inner(id, title, list_id, category_id, needs_both, priority, importance_votes, recurrence, deadline, waiting_on_task_id, created_by, created_at, archived_at, room_id)',
+        'id, due_date, due_time, delay_count, task:tasks!inner(id, title, list_id, category_id, needs_both, priority, importance_votes, recurrence, deadline, waiting_on_task_id, created_by, created_at, archived_at, room_id, duration_minutes)',
       )
       .eq('household_id', householdId)
       .eq('status', 'open')
@@ -82,6 +82,7 @@ export async function loadContext(db: SupabaseClient, householdId: string, today
         created_by: o.task.created_by as string,
         created_at: o.task.created_at as string,
         room_id: o.task.room_id as string | null,
+        duration_minutes: o.task.duration_minutes as number | null,
       }),
     ),
     events: check(events) as CompletionEvent[],

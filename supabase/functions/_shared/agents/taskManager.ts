@@ -133,8 +133,12 @@ const EFFORT: [RegExp, number][] = [
   [/\b(bins?|recycling|dishwasher|plants?|tidy|wipe|dust)\b/i, 10],
 ]
 
-/** Rough minutes a job takes, from its wording. An estimate, and labelled as one wherever it's shown. */
-export function estimateMinutes(title: string, category: string | null = null): number {
+/**
+ * Minutes a job takes: the time set on the task, else a rough estimate from its
+ * wording (labelled as an estimate wherever it's shown).
+ */
+export function estimateMinutes(title: string, category: string | null = null, set: number | null = null): number {
+  if (set) return set
   const text = `${title} ${category ?? ''}`
   return EFFORT.find(([re]) => re.test(text))?.[1] ?? 15
 }

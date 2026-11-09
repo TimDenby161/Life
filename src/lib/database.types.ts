@@ -2602,6 +2602,7 @@ export type Database = {
           description: string | null
           due_date: string | null
           due_time: string | null
+          duration_minutes: number | null
           household_id: string
           id: string
           importance_votes: number
@@ -2629,6 +2630,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           due_time?: string | null
+          duration_minutes?: number | null
           household_id: string
           id?: string
           importance_votes?: number
@@ -2656,6 +2658,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           due_time?: string | null
+          duration_minutes?: number | null
           household_id?: string
           id?: string
           importance_votes?: number

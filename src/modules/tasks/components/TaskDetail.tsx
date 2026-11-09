@@ -42,6 +42,7 @@ import { delayLabel, dueLabel, dueTone } from '../lib/format'
 import { assignedTo, assignPatch, JOINT, TOGETHER } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
 import { waitingChoices } from '../lib/waiting'
+import { estimateMinutes, formatMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
 import { TaskForm } from './TaskForm'
 import { ImportanceVote } from './TaskRow'
@@ -301,6 +302,24 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
         />
       </label>
 
+      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+        How long
+        <NativeSelect
+          aria-label="How long"
+          className="h-10 w-auto"
+          value={task.duration_minutes ?? ''}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ id: task.id, patch: { duration_minutes: e.target.value ? Number(e.target.value) : null } })}
+        >
+          <option value="">Not set (~{formatMinutes(estimateMinutes(task.title, categories.find((c) => c.id === task.category_id)?.name ?? null))})</option>
+          {DURATIONS.map((m) => (
+            <option key={m} value={m}>
+              {formatMinutes(m)}
+            </option>
+          ))}
+        </NativeSelect>
+      </label>
+
       <label className="grid gap-1.5 text-sm font-semibold">
         Waiting on
         <NativeSelect
@@ -449,6 +468,7 @@ function Comments({ taskId, comments }: { taskId: string; comments: DetailData['
 }
 
 const BOTH = 'both'
+const DURATIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480]
 
 function History({ events }: { events: CompletionEvent[] }) {
   const { member, members } = useHousehold()

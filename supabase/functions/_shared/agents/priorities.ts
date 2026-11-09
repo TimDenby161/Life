@@ -38,7 +38,7 @@ export type Candidate = {
   votes: number
   priority: string
   time: string | null
-  /** Rough minutes, from the job's wording. */
+  /** Minutes: set on the job, else a rough estimate from its wording. */
   minutes: number
 }
 
@@ -85,7 +85,7 @@ export function candidatesFor(ctx: TaskContext, view: Member | typeof TOGETHER):
       votes: t.importance_votes,
       priority: t.priority,
       time: t.due_time ? t.due_time.slice(0, 5) : null,
-      minutes: estimateMinutes(t.title, ctx.categories.find((c) => c.id === t.category_id)?.name ?? null),
+      minutes: estimateMinutes(t.title, ctx.categories.find((c) => c.id === t.category_id)?.name ?? null, t.duration_minutes ?? null),
     }))
 }
 
@@ -93,7 +93,7 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 export const PRIORITIES_PROMPT = [
   'You plan what one person can realistically get done today, for a household task app. The list you pick is their whole to-do list for the day, so it must be achievable, not everything that could be done.',
-  `Pick up to ${MAX_PICKS} jobs from the list, most important first, each with a reason of at most 12 words. Each job has rough minutes: add them up and fit the free time left today after the busy times. On a working weekday that is usually about 1 to 2 hours of jobs outside work; on a free weekend day up to about 3 to 4 hours. Fewer jobs that get done beat a long list. Leave out anything that can sensibly wait.`,
+  `Pick up to ${MAX_PICKS} jobs from the list, most important first, each with a reason of at most 12 words. Each job has minutes (set by the person, or a rough estimate): add them up and fit the free time left today after the busy times. On a working weekday that is usually about 1 to 2 hours of jobs outside work; on a free weekend day up to about 3 to 4 hours. Fewer jobs that get done beat a long list. Leave out anything that can sensibly wait.`,
   'For each pick say where it can be done: "anywhere" only if it can be done on a phone (language practice, calls, emails and messages, online bookings and payments, reading, planning, deciding things); otherwise "home". Anything that needs you in the house is "home": shopping, checking food or supplies, cleaning, laundry, tidying, cooking, DIY, the bins and the garden. When there are jobs that can be done on a phone, include at least three of them, so there is something to do away from home.',
   'awayToday (and partnerAwayToday) means that person is away from home all day. When the person is away, pick only jobs that can be done on a phone. For the together list, if either of them is away, pick nothing: together jobs need both of them there.',
   'How to judge: a deadline beats everything as it gets close, and a missed one is worst. A one-off past its due date matters more the later it is. A repeating job only matters once it is late by most of its cycle; one day late on a daily job is normal.',

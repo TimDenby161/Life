@@ -1,6 +1,7 @@
 import { busyBlocks, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 import { candidatesFor, cleanPicks, MAX_PICKS, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
+import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
 
 const TODAY = '2026-11-06'
@@ -151,5 +152,18 @@ describe('Today’s plan on Home', () => {
     expect(plan(ranked, null)).toEqual(['late', 'due', 'small'])
     expect(plan([job('huge', 150, 180)], null)).toEqual(['huge'])
     expect(plan(Array.from({ length: 20 }, (_, i) => job(`j${i}`, 100, 5)), null)).toHaveLength(PLAN_MAX)
+  })
+})
+
+describe('Job times', () => {
+  it('uses the time set on a job, else estimates it from the wording', () => {
+    expect(estimateMinutes('Clean the oven', null, 90)).toBe(90)
+    expect(estimateMinutes('Clean the oven')).toBe(30)
+    expect(estimateMinutes('Do the tax return')).toBe(15)
+  })
+
+  it('gives the AI the time set on a job', () => {
+    const ctx = context({ open: [task({ title: 'Tax return', due_date: TODAY, duration_minutes: 180 })] })
+    expect(candidatesFor(ctx, ctx.members[0])[0].minutes).toBe(180)
   })
 })

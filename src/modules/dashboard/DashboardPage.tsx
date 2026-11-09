@@ -309,9 +309,9 @@ export function TopJobsCard({
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
   // Compact (Home): only what can realistically get done today, the AI's plan or the rules' two hours.
   const plan = limit
-    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), (o) => estimateMinutes(o.task.title, categoryName(o.task.category_id)))
+    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), (o) => estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes))
     : ranked
-  const planMinutes = plan.reduce((sum, o) => sum + estimateMinutes(o.task.title, categoryName(o.task.category_id)), 0)
+  const planMinutes = plan.reduce((sum, o) => sum + estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes), 0)
   const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>

@@ -29,6 +29,8 @@ export type OpenTask = {
   /** When the task (not the occurrence) was created. */
   created_at: string
   room_id?: string | null
+  /** Minutes set on the task; null = estimate from the title. */
+  duration_minutes?: number | null
 }
 
 /** A row of the append-only completion log (task_completion_events). */
