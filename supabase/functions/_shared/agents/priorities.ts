@@ -9,7 +9,7 @@
 // API key. Claude sees job titles, categories, dates and flags, plus today's
 // busy times from the calendar, never event titles, health data or amounts.
 // It can only choose from the shortlist; anything else in its answer is dropped.
-import { busyBlocks, freeToday, isAway, toMinutes } from './calendar.ts'
+import { busyBlocks, freeToday, isAway, toMinutes, workToday } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekday } from './dates.ts'
 import { cycleDays, estimateMinutes, ownerOf } from './taskManager.ts'
 import type { Member, OpenTask, TaskContext } from './types.ts'
@@ -22,8 +22,8 @@ export const TOGETHER = 'together'
 export const MAX_REASON_CHARS = 100
 /** However free the day, no more than this much in jobs. */
 export const MAX_PLAN_MINUTES = 240
-/** Paid work (a category starting "C4") happens in work time, so it doesn't use free time. */
-const WORK_JOB = /^c4\b/i
+/** Paid work (a category starting "C4") happens in work time, so it uses that rather than free time. */
+export const WORK_JOB = /^c4\b/i
 
 /**
  * Minutes free for jobs today from `fromMinute`: the calendar's free time
@@ -32,6 +32,11 @@ const WORK_JOB = /^c4\b/i
 export function planBudget(ctx: TaskContext, view: Member | typeof TOGETHER, fromMinute: number): number {
   const people = view === TOGETHER ? ctx.members.map((m) => m.id) : [view.id]
   return Math.min(MAX_PLAN_MINUTES, freeToday(ctx.calendar ?? [], people, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute, (p) => ctx.travel?.[p] ?? []))
+}
+
+/** Minutes of Work left today for paid-work jobs (none for Together: those are never paid work). */
+export function workBudget(ctx: TaskContext, view: Member | typeof TOGETHER, fromMinute: number): number {
+  return view === TOGETHER ? 0 : workToday(ctx.calendar ?? [], view.id, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute)
 }
 
 export type Candidate = {
@@ -106,11 +111,11 @@ const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 export const PRIORITIES_PROMPT = [
   'You plan what one person can realistically get done today, for a household task app. The list you pick is their whole to-do list for the day, so it must be achievable, not everything that could be done.',
-  `Pick up to ${MAX_PICKS} jobs from the list, most important first, each with a reason of at most 12 words. Each job has minutes (set by the person, or a rough estimate). freeMinutesToday is the time actually free for jobs today, after work and everything else in the calendar: the picks' minutes must add up to no more than it (jobs in a "C4" category are paid work done in work time and don't count). Anything over is dropped, so put the most important first. Fewer jobs that get done beat a long list. Leave out anything that can sensibly wait.`,
+  `Pick up to ${MAX_PICKS} jobs from the list, most important first, each with a reason of at most 12 words. Each job has minutes (set by the person, or a rough estimate). freeMinutesToday is the time actually free for jobs today, after work and everything else in the calendar: the picks' minutes must add up to no more than it. Jobs in a "C4" category are paid work: they go in work time instead, and their minutes must add up to no more than workMinutesToday (the Work time left in the calendar today; none means no C4 jobs). Anything over either is dropped, so put the most important first. Fewer jobs that get done beat a long list. Leave out anything that can sensibly wait.`,
   'For each pick say where it can be done: "anywhere" only if it can be done on a phone (language practice, calls, emails and messages, online bookings and payments, reading, planning, deciding things); otherwise "home". Anything that needs you in the house is "home": shopping, checking food or supplies, cleaning, laundry, tidying, cooking, DIY, the bins and the garden. When there are jobs that can be done on a phone, include at least three of them, so there is something to do away from home.',
   'awayToday (and partnerAwayToday) means that person is away from home all day. When the person is away, pick only jobs that can be done on a phone. For the together list, if either of them is away, pick nothing: together jobs need both of them there.',
   'How to judge: a deadline beats everything as it gets close, and a missed one is worst. A one-off past its due date matters more the later it is. A repeating job only matters once it is late by most of its cycle; one day late on a daily job is normal.',
-  'Jobs in a category starting "C4" are paid work: only pick them on a weekday before 17:00. A "together" job needs both people free, so check the partner\'s busy times too.',
+  'A "together" job needs both people free, so check the partner\'s busy times too.',
   'Fit the day: when the person is busy for much of it, pick fewer and quicker jobs; on a free day bigger jobs are fine. A job with a time belongs at that time.',
   'Importance votes and high or urgent priority count in a job\'s favour. A job put off several times may need doing now.',
   'Use only the refs given. Do not invent jobs or give advice. British English, plain words.',
@@ -130,6 +135,7 @@ export function prioritiesInput(ctx: TaskContext, view: Member | typeof TOGETHER
     weekday: WEEKDAYS[isoWeekday(ctx.today) - 1],
     time: nowTime,
     freeMinutesToday: planBudget(ctx, view, toMinutes(nowTime)),
+    workMinutesToday: workBudget(ctx, view, toMinutes(nowTime)),
     busyToday: first ? busy(first.id) : [],
     partnerBusyToday: second ? busy(second.id) : [],
     awayToday: first ? away(first.id) : false,
@@ -158,9 +164,10 @@ export const PRIORITIES_SCHEMA = {
 /**
  * The picks, if they're from the shortlist; unknown refs, repeats and odd
  * reasons are dropped, as is any pick that would take the day past `budget`
- * free minutes (paid work aside). Null if the answer isn't usable at all.
+ * free minutes, or paid work past `work` minutes of work time. Null if the
+ * answer isn't usable at all.
  */
-export function cleanPicks(raw: string, candidates: Candidate[], budget = Infinity): Pick[] | null {
+export function cleanPicks(raw: string, candidates: Candidate[], budget = Infinity, work = Infinity): Pick[] | null {
   let picks: unknown
   try {
     picks = (JSON.parse(raw) as { picks?: unknown }).picks
@@ -171,12 +178,17 @@ export function cleanPicks(raw: string, candidates: Candidate[], budget = Infini
   const byRef = new Map(candidates.map((c) => [c.ref, c]))
   const out: Pick[] = []
   let used = 0
+  let worked = 0
   for (const p of picks as { ref?: unknown; why?: unknown; where?: unknown }[]) {
     const c = typeof p?.ref === 'string' ? byRef.get(p.ref) : undefined
     if (!c || out.some((o) => o.task_id === c.task_id)) continue
-    const minutes = WORK_JOB.test(c.category ?? '') ? 0 : c.minutes
-    if (used + minutes > budget) continue
-    used += minutes
+    if (WORK_JOB.test(c.category ?? '')) {
+      if (worked + c.minutes > work) continue
+      worked += c.minutes
+    } else {
+      if (used + c.minutes > budget) continue
+      used += c.minutes
+    }
     const why = typeof p.why === 'string' ? p.why.replace(/\s+/g, ' ').trim() : ''
     out.push({
       task_id: c.task_id,

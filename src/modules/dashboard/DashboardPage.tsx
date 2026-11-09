@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAgentSettings, useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
-import { awayToday, freeMinutesToday } from '@/modules/agents/lib/away'
+import { awayToday, freeMinutesToday, workMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
@@ -27,7 +27,7 @@ import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
-import { MAX_PLAN_MINUTES } from '../../../supabase/functions/_shared/agents/priorities.ts'
+import { MAX_PLAN_MINUTES, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
@@ -309,18 +309,19 @@ export function TopJobsCard({
         .filter((o) => !(swiped.has(o.id) && o.due_date && o.due_date > today))
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
-  // Compact (Home): only what fits the free time left today, from the calendar: the AI's plan, or the rules' pick.
-  // Paid work (C4) happens in work time, so it takes none of it.
-  const jobMinutes = (o: OccurrenceWithTask) =>
-    /^c4\b/i.test(categoryName(o.task.category_id) ?? '') ? 0 : estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes)
+  // Compact (Home): only what fits the time left today, from the calendar: the AI's plan, or the rules' pick.
+  // Paid work (C4) fits the Work time left; everything else the free time.
+  const jobMinutes = (o: OccurrenceWithTask) => estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes)
+  const isWork = (o: OccurrenceWithTask) => WORK_JOB.test(categoryName(o.task.category_id) ?? '')
+  const workNow = who === TOGETHER ? 0 : workMinutesToday(events, integrations, who, today)
   // Travel rules are each person's own settings: mine apply here (my partner's live with the agents).
   const myTravel = parseTravel(useAgentSettings().data?.find((s) => s.agent_id === 'chief_of_staff')?.config)
   const travel = (person: string) => (person === me.id ? myTravel : [])
   const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel))
   const plan = limit
-    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow)
+    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow, isWork, workNow)
     : ranked
-  const planMinutes = plan.reduce((sum, o) => sum + jobMinutes(o), 0)
+  const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
   const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>

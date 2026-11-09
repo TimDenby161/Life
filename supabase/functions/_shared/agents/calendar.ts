@@ -146,6 +146,20 @@ export function freeMinutes(blocks: { from: number; to: number }[], from: number
   return end - lo - busy
 }
 
+/** Minutes covered by the blocks (which may overlap) from `from` to the end of the day. */
+export function coveredMinutes(blocks: { from: number; to: number }[], from: number): number {
+  return 24 * 60 - from - freeMinutes(blocks, from, 0, 24 * 60)
+}
+
+/**
+ * Work time left today for one person: their Work events (own or shared
+ * calendars, by WORK_EVENT) from `fromMinute`. Paid-work jobs fit in here.
+ */
+export function workToday(events: CalEvent[], person: string, date: ISODate, timeZone: string, fromMinute: number): number {
+  const work = events.filter((e) => WORK_EVENT.test(e.title))
+  return coveredMinutes(busyBlocks(work, person, date, timeZone).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) })), fromMinute)
+}
+
 /** Free minutes left today for these people together (both free for a Together job), from the calendar and their travel rules. */
 export function freeToday(
   events: CalEvent[],

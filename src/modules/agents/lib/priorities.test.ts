@@ -1,5 +1,5 @@
-import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway, parseTravel } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
+import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
@@ -224,5 +224,35 @@ describe('Travel time', () => {
   it('gives the AI the free time after travel', () => {
     const ctx = context({ calendar: [padel], travel: { [ALEX]: [{ word: 'padel', minutes: 60 }] }, open: [task({ title: 'Hoover', due_date: TODAY })] })
     expect(planBudget(ctx, ctx.members[0], 17 * 60)).toBe(90)
+  })
+})
+
+describe('Paid work in work time', () => {
+  const work: CalEvent = { owner_id: ALEX, title: 'Work PM', start: '2026-11-06T13:00:00Z', end: '2026-11-06T17:30:00Z', allDay: false }
+
+  it('counts the Work time left today', () => {
+    expect(workToday([work], ALEX, TODAY, 'Europe/London', 14 * 60)).toBe(210)
+    expect(workToday([work], SAM, TODAY, 'Europe/London', 14 * 60)).toBe(0)
+    expect(workToday([{ ...work, title: 'Padel' }], ALEX, TODAY, 'Europe/London', 14 * 60)).toBe(0)
+  })
+
+  it('gives the AI the work minutes and drops paid work past them', () => {
+    const ctx = context({
+      calendar: [work],
+      open: [task({ title: 'Reply to client', due_date: TODAY, category_id: 'c-work', duration_minutes: 120 }), task({ title: 'Fix the API', due_date: TODAY, category_id: 'c-work', duration_minutes: 120 })],
+    })
+    const alex = ctx.members[0]
+    const c = candidatesFor(ctx, alex)
+    expect(JSON.parse(prioritiesInput(ctx, alex, c, '14:00')).workMinutesToday).toBe(210)
+    expect(workBudget(ctx, TOGETHER, 14 * 60)).toBe(0)
+    const picks = cleanPicks(JSON.stringify({ picks: c.map((x) => ({ ref: x.ref, why: 'ok' })) }), c, 240, workBudget(ctx, alex, 14 * 60))
+    expect(picks).toHaveLength(1)
+  })
+
+  it('on Home, fits paid work to work time and the rest to free time', () => {
+    const job = (task_id: string, minutes: number, work = false) => ({ task_id, minutes, work })
+    const ranked = [job('w1', 120, true), job('w2', 120, true), job('h1', 30), job('h2', 30)]
+    const plan = todaysPlan(ranked, new Set(ranked.map((o) => o.task_id)), () => 200, (o) => o.minutes, 45, (o) => o.work, 150)
+    expect(plan.map((o) => o.task_id)).toEqual(['w1', 'h1'])
   })
 })

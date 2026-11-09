@@ -45,8 +45,8 @@ export const PLAN_MIN_SCORE = 100
  * today (`budget` minutes, from the calendar). With AI picks today (`picked`,
  * the ones still open), the AI's plan in its order, less whatever no longer
  * fits as the day fills up; once it's all done nothing else is added. Without,
- * jobs due today or late in score order. `minutes` is 0 for paid work, which
- * happens in work time.
+ * jobs due today or late in score order. Paid work (`isWork`) fits the Work
+ * time left in the calendar instead (`workBudget`).
  */
 export function todaysPlan<T extends { task_id: string }>(
   ranked: T[],
@@ -54,15 +54,23 @@ export function todaysPlan<T extends { task_id: string }>(
   score: (o: T) => number,
   minutes: (o: T) => number,
   budget: number,
+  isWork: (o: T) => boolean = () => false,
+  workBudget = 0,
 ): T[] {
   const out: T[] = []
   let total = 0
+  let worked = 0
   for (const o of ranked) {
     if (out.length >= PLAN_MAX) break
     if (picked ? !picked.has(o.task_id) : score(o) < PLAN_MIN_SCORE) continue
-    if (total + minutes(o) > budget) continue
+    if (isWork(o)) {
+      if (worked + minutes(o) > workBudget) continue
+      worked += minutes(o)
+    } else {
+      if (total + minutes(o) > budget) continue
+      total += minutes(o)
+    }
     out.push(o)
-    total += minutes(o)
   }
   return out
 }

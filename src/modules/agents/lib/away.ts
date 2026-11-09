@@ -5,7 +5,7 @@
 import { toISODate } from '@/lib/dates'
 import type { CalendarIntegration } from '@/modules/calendar/api'
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
-import { freeMinutes, type TravelRule, travelFor, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { coveredMinutes, freeMinutes, type TravelRule, travelFor, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 
 export const AWAY_MINUTES = 240
 
@@ -49,4 +49,23 @@ export function freeMinutesToday(
       }
     })
   return freeMinutes(blocks, minuteOfDay(now))
+}
+
+/** Work time left today for one person: their Work events, from now. As workToday in the agents' calendar.ts. */
+export function workMinutesToday(
+  events: CalendarEvent[],
+  integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[],
+  person: string,
+  today: string,
+  now = new Date(),
+): number {
+  const owner = new Map(integrations.map((i) => [i.id, i.owner_id]))
+  const blocks = events
+    .filter((e) => !e.allDay && WORK_EVENT.test(e.title) && [null, person].includes(owner.get(e.calendarId) ?? null))
+    .map((e) => {
+      const start = new Date(e.start)
+      const end = new Date(e.end)
+      return { from: toISODate(start) < today ? 0 : minuteOfDay(start), to: toISODate(end) > today ? 24 * 60 : minuteOfDay(end) }
+    })
+  return coveredMinutes(blocks, minuteOfDay(now))
 }
