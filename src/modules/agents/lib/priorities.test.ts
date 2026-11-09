@@ -1,5 +1,5 @@
-import { busyBlocks, type CalEvent, dayLoad, freeMinutes, freeToday, isAway, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { candidatesFor, cleanPicks, goodDayToAsk, isWorkAsk, MAX_PICKS, planBudget, prioritiesInput, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
+import { busyBlocks, type CalEvent, dayLoad, freeMinutes, freeToday, isAway, longestGap, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { candidatesFor, cleanPicks, goodDayToAsk, isShopJob, isWorkAsk, MAX_PICKS, planBudget, prioritiesInput, shopGap, shopsClose, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
@@ -138,13 +138,21 @@ describe('out and about', () => {
 
 describe('Today’s plan on Home', () => {
   const job = (task_id: string, score: number, minutes = 15) => ({ task_id, score, minutes })
-  const plan = (ranked: ReturnType<typeof job>[], picked: Set<string> | null, budget = 120) =>
-    todaysPlan(ranked, picked, (o) => o.score, (o) => o.minutes, budget).map((o) => o.task_id)
+  type Job = ReturnType<typeof job>
+  const plan = (ranked: Job[], picked: Set<string> | null, budget = 120, fits?: (o: Job) => boolean) =>
+    todaysPlan(ranked, picked, { score: (o) => o.score, minutes: (o) => o.minutes, budget, fits }).map((o) => o.task_id)
 
-  it('is exactly the AI’s plan when there is one, and empty once it’s all done', () => {
-    const ranked = [job('a', 200), job('b', 150), job('c', 120)]
-    expect(plan(ranked, new Set(['c', 'a']))).toEqual(['a', 'c'])
-    expect(plan(ranked, new Set())).toEqual([])
+  it('puts the AI’s picks first in its order, then fills spare time with what’s due or late', () => {
+    const ranked = [job('a', 200), job('b', 150), job('c', 120), job('later', 50)]
+    expect(plan(ranked, new Set(['c', 'a']), 30)).toEqual(['a', 'c'])
+    expect(plan(ranked, new Set(['c', 'a']))).toEqual(['a', 'c', 'b'])
+    // A pick moved to tomorrow leaves the list, and its time goes to the next job.
+    expect(plan(ranked.filter((o) => o.task_id !== 'c'), new Set(['c', 'a']), 30)).toEqual(['a', 'b'])
+  })
+
+  it('leaves out jobs that can’t be done today, like shopping after the shops shut', () => {
+    const ranked = [job('shop', 200, 45), job('hoover', 150, 30)]
+    expect(plan(ranked, new Set(['shop', 'hoover']), 120, (o) => o.task_id !== 'shop')).toEqual(['hoover'])
   })
 
   it('drops AI picks that no longer fit as the day fills up, keeping its order', () => {
@@ -252,7 +260,7 @@ describe('Paid work in work time', () => {
   it('on Home, fits paid work to work time and the rest to free time', () => {
     const job = (task_id: string, minutes: number, work = false) => ({ task_id, minutes, work })
     const ranked = [job('w1', 120, true), job('w2', 120, true), job('h1', 30), job('h2', 30)]
-    const plan = todaysPlan(ranked, new Set(ranked.map((o) => o.task_id)), () => 200, (o) => o.minutes, 45, (o) => o.work, 150)
+    const plan = todaysPlan(ranked, new Set(ranked.map((o) => o.task_id)), { score: () => 200, minutes: (o) => o.minutes, budget: 45, isWork: (o) => o.work, workBudget: 150 })
     expect(plan.map((o) => o.task_id)).toEqual(['w1', 'h1'])
   })
 })
@@ -284,5 +292,32 @@ describe('Asking a manager', () => {
     const raw = JSON.stringify({ picks: c.map((x) => ({ ref: x.ref, why: 'ok' })) })
     expect(cleanPicks(raw, c, 240, 240, false)!.map((p) => p.title)).toEqual(['Hoover'])
     expect(cleanPicks(raw, c, 240, 240, true)!.map((p) => p.title)).toContain('Ask for laptop')
+  })
+})
+
+describe('Shopping hours', () => {
+  it('spots shopping jobs and knows when the shops shut', () => {
+    expect(['Weekly shop', 'Do the shopping', 'Tesco run', 'Buy groceries'].every(isShopJob)).toBe(true)
+    expect(['Shop around for car insurance online', 'Clean the oven'].map(isShopJob)).toEqual([false, false])
+    expect(shopsClose('2026-11-09')).toBe(22 * 60)
+    expect(shopsClose('2026-11-15')).toBe(17 * 60)
+  })
+
+  it('finds the longest free stretch before closing', () => {
+    expect(longestGap([{ from: 1095, to: 1335 }], 1020, 1320)).toBe(75)
+    expect(longestGap([], 1020, 1020)).toBe(0)
+  })
+
+  it('gives the AI the gap before the shops shut and drops a shop that won’t fit', () => {
+    // Free 17:00 to 18:15, then padel with travel until 22:15.
+    const padel: CalEvent = { owner_id: ALEX, title: 'Padel', start: '2026-11-06T18:15:00Z', end: '2026-11-06T22:15:00Z', allDay: false }
+    const ctx = context({ calendar: [padel], open: [task({ title: 'Weekly shop', due_date: TODAY, duration_minutes: 90 }), task({ title: 'Hoover', due_date: TODAY })] })
+    const alex = ctx.members[0]
+    const c = candidatesFor(ctx, alex)
+    expect(c.find((x) => x.title === 'Weekly shop')?.shop).toBe(true)
+    expect(shopGap(ctx, alex, 17 * 60)).toBe(75)
+    expect(JSON.parse(prioritiesInput(ctx, alex, c, '17:00')).shopGapToday).toBe(75)
+    const raw = JSON.stringify({ picks: c.map((x) => ({ ref: x.ref, why: 'ok' })) })
+    expect(cleanPicks(raw, c, 240, 240, true, 75)!.map((p) => p.title)).toEqual(['Hoover'])
   })
 })

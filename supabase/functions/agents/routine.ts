@@ -18,7 +18,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import { isAway } from '../_shared/agents/calendar.ts'
 import { localNow } from '../_shared/agents/dates.ts'
 import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
-import { type Candidate, candidatesFor, cleanPicks, goodDayToAsk, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, TOGETHER, workBudget } from '../_shared/agents/priorities.ts'
+import { type Candidate, candidatesFor, cleanPicks, goodDayToAsk, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, shopGap, TOGETHER, workBudget } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
 import { type AgentPrefs, dayWindows, loadCalendar, loadContext, loadNews, loadPrefs, travelRules } from './context.ts'
 
@@ -51,7 +51,8 @@ async function contextFor(db: SupabaseClient, household: Household, now: Date, p
 
 /** Checks picks against the tab's shortlist now, keeps what fits the day's free time, and saves them for today. */
 export async function savePicks(db: SupabaseClient, householdId: string, ctx: TaskContext, tab: Tab, raw: string, candidates = shortlist(ctx, tab)) {
-  const picks = cleanPicks(raw, candidates, planBudget(ctx, tab, ctx.hour * 60), workBudget(ctx, tab, ctx.hour * 60), goodDayToAsk(ctx.today))
+  const from = ctx.hour * 60
+  const picks = cleanPicks(raw, candidates, planBudget(ctx, tab, from), workBudget(ctx, tab, from), goodDayToAsk(ctx.today), shopGap(ctx, tab, from))
   if (!picks?.length) return 0
   const saved = await db.rpc('agent_save_picks', { p_household_id: householdId, p_view: tabId(tab), p_day: ctx.today, p_picks: picks })
   if (saved.error) throw new Error(saved.error.message)

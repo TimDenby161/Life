@@ -151,6 +151,24 @@ export function freeMinutes(blocks: { from: number; to: number }[], from: number
   return end - lo - busy
 }
 
+/** The longest free stretch between `from` and `until`, after the busy blocks: what a single errand needs. */
+export function longestGap(blocks: { from: number; to: number }[], from: number, until: number): number {
+  let reach = from
+  let best = 0
+  for (const b of [...blocks].sort((x, y) => x.from - y.from)) {
+    if (b.to <= reach) continue
+    if (b.from >= until) break
+    best = Math.max(best, Math.min(b.from, until) - reach)
+    reach = Math.max(reach, b.to)
+  }
+  return Math.max(best, until - reach, 0)
+}
+
+/** Busy blocks today for these people, in minutes after midnight, with their travel. */
+export function busyMinutes(events: CalEvent[], people: string[], date: ISODate, timeZone: string, travel: (person: string) => TravelRule[] = () => []) {
+  return people.flatMap((p) => busyBlocks(events, p, date, timeZone, travel(p))).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) }))
+}
+
 /** Minutes covered by the blocks (which may overlap) from `from` to the end of the day. */
 export function coveredMinutes(blocks: { from: number; to: number }[], from: number): number {
   return 24 * 60 - from - freeMinutes(blocks, from, 0, 24 * 60)

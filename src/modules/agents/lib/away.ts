@@ -5,7 +5,7 @@
 import { toISODate } from '@/lib/dates'
 import type { CalendarIntegration } from '@/modules/calendar/api'
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
-import { coveredMinutes, DEFAULT_WINDOW, type DayWindow, freeMinutes, type TravelRule, travelFor, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { coveredMinutes, DEFAULT_WINDOW, type DayWindow, freeMinutes, longestGap, type TravelRule, travelFor, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 
 export const AWAY_MINUTES = 240
 
@@ -22,22 +22,19 @@ export function awayToday(events: CalendarEvent[], integrations: Pick<CalendarIn
 const minuteOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes()
 
 /**
- * Free minutes left today for these people together, from now: their own and
- * shared calendars' timed events count as busy, plus travel there and back
- * from each person's rules (a shared event takes the longest). As freeToday in
- * supabase/functions/_shared/agents/calendar.ts, in local time.
+ * Today's busy blocks for these people, in minutes after midnight: their own
+ * and shared calendars' timed events, plus travel there and back from each
+ * person's rules (a shared event takes the longest).
  */
-export function freeMinutesToday(
+function busyToday(
   events: CalendarEvent[],
   integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[],
   people: string[],
   today: string,
-  now = new Date(),
-  travel: (person: string) => TravelRule[] = () => [],
-  window: (person: string) => DayWindow = () => DEFAULT_WINDOW,
-): number {
+  travel: (person: string) => TravelRule[],
+) {
   const owner = new Map(integrations.map((i) => [i.id, i.owner_id]))
-  const blocks = events
+  return events
     .filter((e) => !e.allDay && (owner.get(e.calendarId) === null || people.includes(owner.get(e.calendarId) ?? '')))
     .map((e) => {
       const start = new Date(e.start)
@@ -49,9 +46,43 @@ export function freeMinutesToday(
         to: toISODate(end) > today ? 24 * 60 : Math.min(24 * 60, minuteOfDay(end) + way),
       }
     })
-  const start = Math.max(...people.map((p) => window(p).start))
-  const end = Math.min(...people.map((p) => window(p).end))
-  return freeMinutes(blocks, minuteOfDay(now), start, end)
+}
+
+/** The part of the day everyone has for jobs. */
+const sharedWindow = (people: string[], window: (person: string) => DayWindow) => ({
+  start: Math.max(...people.map((p) => window(p).start)),
+  end: Math.min(...people.map((p) => window(p).end)),
+})
+
+/** Free minutes left today for these people together, from now. As freeToday in supabase/functions/_shared/agents/calendar.ts, in local time. */
+export function freeMinutesToday(
+  events: CalendarEvent[],
+  integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[],
+  people: string[],
+  today: string,
+  now = new Date(),
+  travel: (person: string) => TravelRule[] = () => [],
+  window: (person: string) => DayWindow = () => DEFAULT_WINDOW,
+): number {
+  const { start, end } = sharedWindow(people, window)
+  return freeMinutes(busyToday(events, integrations, people, today, travel), minuteOfDay(now), start, end)
+}
+
+/** The longest free stretch from now until `until` (e.g. when the shops shut). As shopGap in the agents' priorities.ts. */
+export function longestGapToday(
+  events: CalendarEvent[],
+  integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[],
+  people: string[],
+  today: string,
+  until: number,
+  now = new Date(),
+  travel: (person: string) => TravelRule[] = () => [],
+  window: (person: string) => DayWindow = () => DEFAULT_WINDOW,
+): number {
+  const { start, end } = sharedWindow(people, window)
+  const from = Math.max(minuteOfDay(now), start)
+  const to = Math.min(until, end)
+  return to > from ? longestGap(busyToday(events, integrations, people, today, travel), from, to) : 0
 }
 
 /** Work time left today for one person: their Work events, from now. As workToday in the agents' calendar.ts. */

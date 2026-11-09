@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAgentSettings, useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
-import { awayToday, freeMinutesToday, workMinutesToday } from '@/modules/agents/lib/away'
+import { awayToday, freeMinutesToday, longestGapToday, workMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { nextTarget } from '@/modules/finances/lib/pots'
@@ -28,7 +28,7 @@ import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { DEFAULT_WINDOW, parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
 import { parseSleepGoals, planWindow } from '../../../supabase/functions/_shared/agents/sleep.ts'
-import { goodDayToAsk, isWorkAsk, MAX_PLAN_MINUTES, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
+import { goodDayToAsk, isShopJob, isWorkAsk, MAX_PLAN_MINUTES, shopsClose, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
@@ -323,10 +323,20 @@ export function TopJobsCard({
   const travel = (person: string) => (person === me.id ? myTravel : [])
   const dayWindow = (person: string) => (person === me.id ? myWindow : DEFAULT_WINDOW)
   const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel, dayWindow))
-  // Asking a manager for something waits for a good day (Tue-Thu), whatever its date.
-  const askable = (o: OccurrenceWithTask) => goodDayToAsk(today) || !isWorkAsk(o.task.title)
+  const people = who === TOGETHER ? members.map((m) => m.id) : [who]
+  const shopGapNow = longestGapToday(events, integrations, people, today, shopsClose(today), new Date(), travel, dayWindow)
+  // Asking a manager waits for a good day (Tue-Thu), and shopping for a long enough gap before the shops shut.
+  const fits = (o: OccurrenceWithTask) =>
+    (goodDayToAsk(today) || !isWorkAsk(o.task.title)) && (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
   const plan = limit
-    ? todaysPlan(ranked.filter(askable), picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow, isWork, workNow)
+    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, {
+        score: (o) => taskScore(o, categories, today),
+        minutes: jobMinutes,
+        budget: freeNow,
+        isWork,
+        workBudget: workNow,
+        fits,
+      })
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
   const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)

@@ -40,37 +40,42 @@ export const PLAN_MAX = 10
 /** A one-off on its day, a late job or a deadline day scores at least this (DUE_DAY_SCORE in tasks/lib/topJobs.ts). */
 export const PLAN_MIN_SCORE = 100
 
+export type PlanRules<T> = {
+  score: (o: T) => number
+  minutes: (o: T) => number
+  /** Free minutes left today, from the calendar. */
+  budget: number
+  /** Paid work fits the Work time left (`workBudget`) instead. */
+  isWork?: (o: T) => boolean
+  workBudget?: number
+  /** Anything else a job needs today, e.g. the shops open. */
+  fits?: (o: T) => boolean
+}
+
 /**
- * Home's Today's tasks: what can realistically get done in the free time left
- * today (`budget` minutes, from the calendar). With AI picks today (`picked`,
- * the ones still open), the AI's plan in its order, less whatever no longer
- * fits as the day fills up; once it's all done nothing else is added. Without,
- * jobs due today or late in score order. Paid work (`isWork`) fits the Work
- * time left in the calendar instead (`workBudget`).
+ * Home's Today's tasks: what can realistically get done in the time left today.
+ * The AI's picks still open (`picked`) come first, in its order, less whatever
+ * no longer fits as the day fills up; any time they leave (a job moved to
+ * tomorrow, or done quickly) is filled with jobs due today or late, best first.
+ * Without AI picks it's those alone.
  */
-export function todaysPlan<T extends { task_id: string }>(
-  ranked: T[],
-  picked: ReadonlySet<string> | null,
-  score: (o: T) => number,
-  minutes: (o: T) => number,
-  budget: number,
-  isWork: (o: T) => boolean = () => false,
-  workBudget = 0,
-): T[] {
+export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: ReadonlySet<string> | null, rules: PlanRules<T>): T[] {
+  const { score, minutes, budget, isWork = () => false, workBudget = 0, fits = () => true } = rules
   const out: T[] = []
   let total = 0
   let worked = 0
-  for (const o of ranked) {
-    if (out.length >= PLAN_MAX) break
-    if (picked ? !picked.has(o.task_id) : score(o) < PLAN_MIN_SCORE) continue
+  const take = (o: T) => {
+    if (out.length >= PLAN_MAX || out.includes(o) || !fits(o)) return
     if (isWork(o)) {
-      if (worked + minutes(o) > workBudget) continue
+      if (worked + minutes(o) > workBudget) return
       worked += minutes(o)
     } else {
-      if (total + minutes(o) > budget) continue
+      if (total + minutes(o) > budget) return
       total += minutes(o)
     }
     out.push(o)
   }
+  if (picked) ranked.filter((o) => picked.has(o.task_id)).forEach(take)
+  ranked.filter((o) => score(o) >= PLAN_MIN_SCORE).forEach(take)
   return out
 }
