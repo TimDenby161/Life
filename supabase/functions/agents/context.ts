@@ -5,7 +5,8 @@
 // health data only exercise sessions, takeaways and weight (for the Weight &
 // Food agent and the owner's own briefing line; never periods).
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { type CalEvent, parseTravel, type TravelRule } from '../_shared/agents/calendar.ts'
+import { type CalEvent, type DayWindow, parseTravel, type TravelRule } from '../_shared/agents/calendar.ts'
+import { parseSleepGoals, planWindow } from '../_shared/agents/sleep.ts'
 import { addDays } from '../_shared/agents/dates.ts'
 import type { Headline } from '../_shared/agents/headlines.ts'
 import { CALENDAR_SCOPE, googleAccessToken, listEvents } from '../_shared/google-calendar.ts'
@@ -106,6 +107,12 @@ export type AgentPrefs = {
 /** Each person's travel to and from events, from their Chief of Staff settings. */
 export const travelRules = (ctx: TaskContext, prefs: AgentPrefs): Record<string, TravelRule[]> =>
   Object.fromEntries(ctx.members.map((m) => [m.id, parseTravel(prefs.config('chief_of_staff', m.id))]))
+
+/** Each person's day for jobs, from their Sleep Coach goals (7am to 10pm without). */
+export const dayWindows = (ctx: TaskContext, prefs: AgentPrefs): Record<string, DayWindow> =>
+  Object.fromEntries(
+    ctx.members.map((m) => [m.id, planWindow(prefs.enabled('sleep').includes(m.id) ? parseSleepGoals(prefs.config('sleep', m.id)) : null)]),
+  )
 
 export async function loadPrefs(db: SupabaseClient, householdId: string): Promise<AgentPrefs> {
   const members = await db.from('household_members').select('user_id').eq('household_id', householdId)

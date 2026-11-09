@@ -1,7 +1,7 @@
 // The goal-driven rules: events and limits in the Fitness Coach, Weight & Food,
 // event coaching, savings pace, trip offers, language targets, side projects,
 // friends, and the goal lines at the top of the briefing.
-import type { CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { type CalEvent, freeToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 import { analyseEvents, parseCareerConfig } from '../../../../supabase/functions/_shared/agents/career.ts'
 import { addDays } from '../../../../supabase/functions/_shared/agents/dates.ts'
 import { analyseSavings, type FinanceInput, type SavingsGoal } from '../../../../supabase/functions/_shared/agents/finance.ts'
@@ -11,7 +11,7 @@ import { analyseTargets, parseLanguageTargets } from '../../../../supabase/funct
 import { analyseFood, MEAL_PLAN_TASK, parseFoodGoals, reachBy, type Takeaway, type WeightReading } from '../../../../supabase/functions/_shared/agents/nutrition.ts'
 import { analysePeople, nextBirthday, type Person } from '../../../../supabase/functions/_shared/agents/people.ts'
 import { analyseProjects, parseProjectsConfig } from '../../../../supabase/functions/_shared/agents/projects.ts'
-import { analyseSleep, bedtime, nightsFrom, parseSleepGoals } from '../../../../supabase/functions/_shared/agents/sleep.ts'
+import { analyseSleep, bedtime, nightsFrom, parseSleepGoals, planWindow } from '../../../../supabase/functions/_shared/agents/sleep.ts'
 import { analyseTravel, type Trip } from '../../../../supabase/functions/_shared/agents/travel.ts'
 import { ALEX, BOTH, context, SAM, task } from './fixtures'
 
@@ -346,5 +346,19 @@ describe('Sleep Coach', () => {
   it('adds a sleep line to the briefing', () => {
     const lines = goalLines(MONDAY, { fitness: null, food: null, weights: [], sleep: goals, nights: [night(MONDAY, 7), night('2026-11-08', 8)], projects: { projects: [], sponsorTeam: null }, languages: [], savings: [] })
     expect(lines).toEqual([{ label: 'Sleep', value: '7h 30m → 8h' }])
+  })
+})
+
+describe('The planning day', () => {
+  it('runs from the alarm to half an hour before bed, else 7am to 10pm', () => {
+    expect(planWindow(parseSleepGoals({ targetHours: 8, wakeTime: '07:30' }))).toEqual({ start: 7 * 60 + 30, end: 22 * 60 + 45 })
+    expect(planWindow(null)).toEqual({ start: 7 * 60, end: 22 * 60 })
+  })
+
+  it('limits free time, using the shorter day for Together', () => {
+    const late = planWindow(parseSleepGoals({ targetHours: 8, wakeTime: '07:30' }))
+    const win = (p: string) => (p === ALEX ? late : planWindow(null))
+    expect(freeToday([], [ALEX], MONDAY, 'Europe/London', 20 * 60, () => [], win)).toBe(165)
+    expect(freeToday([], [ALEX, SAM], MONDAY, 'Europe/London', 20 * 60, () => [], win)).toBe(120)
   })
 })

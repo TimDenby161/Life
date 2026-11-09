@@ -165,7 +165,14 @@ export function workToday(events: CalEvent[], person: string, date: ISODate, tim
   return coveredMinutes(busyBlocks(work, person, date, timeZone).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) })), fromMinute)
 }
 
-/** Free minutes left today for these people together (both free for a Together job), from the calendar and their travel rules. */
+/** The part of the day jobs can go in, as minutes after midnight: by default 7am to 10pm. */
+export type DayWindow = { start: number; end: number }
+export const DEFAULT_WINDOW: DayWindow = { start: DAY_START, end: DAY_END }
+
+/**
+ * Free minutes left today for these people together (both free for a Together
+ * job, inside everyone's day), from the calendar and their travel rules.
+ */
 export function freeToday(
   events: CalEvent[],
   people: string[],
@@ -173,9 +180,12 @@ export function freeToday(
   timeZone: string,
   fromMinute: number,
   travel: (person: string) => TravelRule[] = () => [],
+  window: (person: string) => DayWindow = () => DEFAULT_WINDOW,
 ): number {
   const blocks = people.flatMap((p) => busyBlocks(events, p, date, timeZone, travel(p))).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) }))
-  return freeMinutes(blocks, fromMinute)
+  const start = Math.max(...people.map((p) => window(p).start))
+  const end = Math.min(...people.map((p) => window(p).end))
+  return freeMinutes(blocks, fromMinute, start, end)
 }
 
 /**

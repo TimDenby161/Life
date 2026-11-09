@@ -26,7 +26,8 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
-import { parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
+import { DEFAULT_WINDOW, parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
+import { parseSleepGoals, planWindow } from '../../../supabase/functions/_shared/agents/sleep.ts'
 import { goodDayToAsk, isWorkAsk, MAX_PLAN_MINUTES, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
@@ -315,9 +316,13 @@ export function TopJobsCard({
   const isWork = (o: OccurrenceWithTask) => WORK_JOB.test(categoryName(o.task.category_id) ?? '')
   const workNow = who === TOGETHER ? 0 : workMinutesToday(events, integrations, who, today)
   // Travel rules are each person's own settings: mine apply here (my partner's live with the agents).
-  const myTravel = parseTravel(useAgentSettings().data?.find((s) => s.agent_id === 'chief_of_staff')?.config)
+  const settings = useAgentSettings().data
+  const myTravel = parseTravel(settings?.find((s) => s.agent_id === 'chief_of_staff')?.config)
+  const sleepRow = settings?.find((s) => s.agent_id === 'sleep')
+  const myWindow = planWindow(sleepRow?.enabled === false ? null : parseSleepGoals(sleepRow?.config))
   const travel = (person: string) => (person === me.id ? myTravel : [])
-  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel))
+  const dayWindow = (person: string) => (person === me.id ? myWindow : DEFAULT_WINDOW)
+  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel, dayWindow))
   // Asking a manager for something waits for a good day (Tue-Thu), whatever its date.
   const askable = (o: OccurrenceWithTask) => goodDayToAsk(today) || !isWorkAsk(o.task.title)
   const plan = limit

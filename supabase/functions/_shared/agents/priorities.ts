@@ -9,7 +9,7 @@
 // API key. Claude sees job titles, categories, dates and flags, plus today's
 // busy times from the calendar, never event titles, health data or amounts.
 // It can only choose from the shortlist; anything else in its answer is dropped.
-import { busyBlocks, freeToday, isAway, toMinutes, workToday } from './calendar.ts'
+import { busyBlocks, DEFAULT_WINDOW, freeToday, isAway, toMinutes, workToday } from './calendar.ts'
 import { addDays, daysBetween, type ISODate, isoWeekday } from './dates.ts'
 import { cycleDays, estimateMinutes, ownerOf } from './taskManager.ts'
 import type { Member, OpenTask, TaskContext } from './types.ts'
@@ -37,7 +37,7 @@ export const goodDayToAsk = (date: ISODate) => [2, 3, 4].includes(isoWeekday(dat
  */
 export function planBudget(ctx: TaskContext, view: Member | typeof TOGETHER, fromMinute: number): number {
   const people = view === TOGETHER ? ctx.members.map((m) => m.id) : [view.id]
-  return Math.min(MAX_PLAN_MINUTES, freeToday(ctx.calendar ?? [], people, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute, (p) => ctx.travel?.[p] ?? []))
+  return Math.min(MAX_PLAN_MINUTES, freeToday(ctx.calendar ?? [], people, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute, (p) => ctx.travel?.[p] ?? [], (p) => ctx.window?.[p] ?? DEFAULT_WINDOW))
 }
 
 /** Minutes of Work left today for paid-work jobs (none for Together: those are never paid work). */

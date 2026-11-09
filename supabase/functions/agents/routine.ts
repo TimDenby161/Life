@@ -20,7 +20,7 @@ import { localNow } from '../_shared/agents/dates.ts'
 import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
 import { type Candidate, candidatesFor, cleanPicks, goodDayToAsk, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, TOGETHER, workBudget } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
-import { type AgentPrefs, loadCalendar, loadContext, loadNews, loadPrefs, travelRules } from './context.ts'
+import { type AgentPrefs, dayWindows, loadCalendar, loadContext, loadNews, loadPrefs, travelRules } from './context.ts'
 
 type Household = { id: string; timezone: string }
 export type Tab = Member | typeof TOGETHER
@@ -42,7 +42,9 @@ async function contextFor(db: SupabaseClient, household: Household, now: Date, p
   const { date, hour } = localNow(now, household.timezone)
   const ctx = await loadContext(db, household.id, date, hour)
   ctx.timezone = household.timezone
-  ctx.travel = travelRules(ctx, prefs ?? (await loadPrefs(db, household.id)))
+  const p = prefs ?? (await loadPrefs(db, household.id))
+  ctx.travel = travelRules(ctx, p)
+  ctx.window = dayWindows(ctx, p)
   ctx.calendar = await loadCalendar(db, household.id, date).catch(() => [])
   return ctx
 }

@@ -34,7 +34,8 @@ export function SleepGoals({ row }: { row: AgentSetting | undefined }) {
         <Button type="submit" size="sm" className="ml-auto" disabled={save.isPending}>Save</Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        In bed by {bedtime({ targetHours: target, wakeTime: wake })}. Log sleep each morning in the check-in on Home; only you get its advice.
+        In bed by {bedtime({ targetHours: target, wakeTime: wake })}; your daily plan runs from your alarm until half an hour before that. Log sleep each
+        morning in the check-in on Home; only you get its advice.
       </p>
     </form>
   )

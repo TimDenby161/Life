@@ -1,6 +1,6 @@
 // What the agents read and produce. The Edge Function loads a TaskContext with
 // narrow, household-scoped selects; the analysis functions are pure.
-import type { CalEvent, TravelRule } from './calendar.ts'
+import type { CalEvent, DayWindow, TravelRule } from './calendar.ts'
 import type { ISODate } from './dates.ts'
 
 export type Member = { id: string; name: string }
@@ -65,6 +65,8 @@ export type TaskContext = {
   calendar?: CalEvent[]
   /** Each person's travel to and from events (Chief of Staff settings), by user id. */
   travel?: Record<string, TravelRule[]>
+  /** Each person's day for jobs (from their Sleep Coach goals), by user id. */
+  window?: Record<string, DayWindow>
 }
 
 export type Action =

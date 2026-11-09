@@ -64,6 +64,7 @@ import {
   loadTrips,
   loadWedding,
   loadReadings,
+  dayWindows,
   travelRules,
   weightsOf,
 } from './context.ts'
@@ -233,6 +234,7 @@ async function runAgent(
     ctx.timezone = household.timezone
     // Only these plan around the calendar. A calendar problem never stops the run.
     ctx.travel = travelRules(ctx, prefs)
+    ctx.window = dayWindows(ctx, prefs)
     if (agentId === 'task_manager' || agentId === 'chief_of_staff' || agentId === 'career' || agentId === 'sleep') {
       ctx.calendar = await loadCalendar(db, household.id, date).catch(() => {
         console.warn('agents: calendar unavailable')

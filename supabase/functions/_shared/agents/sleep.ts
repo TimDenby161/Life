@@ -6,7 +6,7 @@
 //   sleep:<id>:short:<date>    last night under target: a bedtime for tonight,
 //                              warning when the evening runs late
 //   sleep:<id>:week:<week>     Mondays: last week's nights against the target
-import { busyBlocks, type CalEvent, toMinutes, type TravelRule } from './calendar.ts'
+import { busyBlocks, type CalEvent, DEFAULT_WINDOW, type DayWindow, toMinutes, type TravelRule } from './calendar.ts'
 import { addDays, type ISODate, isoWeekday, isoWeekKey } from './dates.ts'
 import { formatMinutes } from './taskManager.ts'
 import type { Member, SuggestionDraft } from './types.ts'
@@ -50,6 +50,15 @@ const hm = (hours: number) => formatMinutes(Math.round(hours * 60))
 const clock = (minutes: number) => {
   const m = ((minutes % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
+
+/** Plans stop this long before bed, to wind down. */
+export const PLAN_STOPS_BEFORE_BED = 30
+
+/** The part of the day for jobs: from the alarm to half an hour before bed; 7am to 10pm without a sleep goal. */
+export function planWindow(goals: SleepGoals | null): DayWindow {
+  if (!goals) return DEFAULT_WINDOW
+  return { start: toMinutes(goals.wakeTime), end: toMinutes(bedtime(goals)) - PLAN_STOPS_BEFORE_BED }
 }
 
 /** When to be in bed to sleep the target before waking: wake time less the target and time to settle. */
