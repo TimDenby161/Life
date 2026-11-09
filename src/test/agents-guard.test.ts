@@ -81,7 +81,7 @@ describe('agents Edge Function', () => {
   it('gives the AI priorities only jobs and busy times, never event titles, health or money', () => {
     const pr = shared.find((x) => x.f === 'priorities.ts')!.text
     expect(pr).not.toMatch(/dayLoad|\.title\b.*calendar|fitness|wedding|finance|Session|BudgetItem/i)
-    expect(shared.find((x) => x.f === 'calendar.ts')!.text).toMatch(/export function busyBlocks[\s\S]*?out\.push\(\{ from, to \}\)/)
+    expect(shared.find((x) => x.f === 'calendar.ts')!.text).toMatch(/export function busyBlocks[\s\S]*?out\.push\(\{ from: lo, to: hi \}\)/)
   })
 
   it('never gives the LLM anything but the task briefing', () => {

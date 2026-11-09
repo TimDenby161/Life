@@ -49,3 +49,12 @@ describe('free time today (app)', () => {
     expect(freeMinutesToday([work, sophie], calendars, ['tim', 'sophie'], TODAY, at('17:00'))).toBe(30 + 60)
   })
 })
+
+describe('travel time (app)', () => {
+  it('blocks the journey both sides of my own matching events', () => {
+    const at = (hhmm: string) => new Date(`${TODAY}T${hhmm}:00`)
+    const padel = { ...ev('tim', at('19:00').toISOString(), at('20:30').toISOString()), title: 'Padel' } as CalendarEvent
+    const rules = (p: string) => (p === 'tim' ? [{ word: 'padel', minutes: 60 }] : [])
+    expect(freeMinutesToday([padel], calendars, ['tim'], TODAY, at('17:00'), rules)).toBe(60 + 30)
+  })
+})

@@ -5,7 +5,7 @@
 import { toISODate } from '@/lib/dates'
 import type { CalendarIntegration } from '@/modules/calendar/api'
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
-import { freeMinutes, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { freeMinutes, type TravelRule, travelFor, WORK_EVENT } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 
 export const AWAY_MINUTES = 240
 
@@ -23,8 +23,9 @@ const minuteOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes()
 
 /**
  * Free minutes left today for these people together, from now: their own and
- * shared calendars' timed events count as busy (titles aren't looked at). As
- * freeToday in supabase/functions/_shared/agents/calendar.ts, in local time.
+ * shared calendars' timed events count as busy, plus travel there and back
+ * from each person's rules (a shared event takes the longest). As freeToday in
+ * supabase/functions/_shared/agents/calendar.ts, in local time.
  */
 export function freeMinutesToday(
   events: CalendarEvent[],
@@ -32,6 +33,7 @@ export function freeMinutesToday(
   people: string[],
   today: string,
   now = new Date(),
+  travel: (person: string) => TravelRule[] = () => [],
 ): number {
   const owner = new Map(integrations.map((i) => [i.id, i.owner_id]))
   const blocks = events
@@ -39,7 +41,12 @@ export function freeMinutesToday(
     .map((e) => {
       const start = new Date(e.start)
       const end = new Date(e.end)
-      return { from: toISODate(start) < today ? 0 : minuteOfDay(start), to: toISODate(end) > today ? 24 * 60 : minuteOfDay(end) }
+      const whose = owner.get(e.calendarId)
+      const way = Math.max(0, ...(whose ? [whose] : people).map((p) => travelFor(e.title, travel(p))))
+      return {
+        from: toISODate(start) < today ? 0 : Math.max(0, minuteOfDay(start) - way),
+        to: toISODate(end) > today ? 24 * 60 : Math.min(24 * 60, minuteOfDay(end) + way),
+      }
     })
   return freeMinutes(blocks, minuteOfDay(now))
 }

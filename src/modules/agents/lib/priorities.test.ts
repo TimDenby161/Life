@@ -1,4 +1,4 @@
-import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway, parseTravel } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
@@ -206,5 +206,23 @@ describe('Free time', () => {
     const ref = (t: string) => c.find((x) => x.title === t)!.ref
     const picks = cleanPicks(JSON.stringify({ picks: ['Clean the oven', 'Reply to client', 'Hoover'].map((t) => ({ ref: ref(t), why: 'ok' })) }), c, 40)
     expect(picks!.map((p) => p.title)).toEqual(['Clean the oven', 'Reply to client'])
+  })
+})
+
+describe('Travel time', () => {
+  const padel: CalEvent = { owner_id: ALEX, title: 'Padel', start: '2026-11-06T19:00:00Z', end: '2026-11-06T20:30:00Z', allDay: false }
+
+  it('reads rules and blocks the journey both sides of a matching event', () => {
+    const travel = parseTravel({ travel: [{ word: ' Padel ', minutes: 60 }, { word: 'x', minutes: 10 }, { word: 'Gym', minutes: 999 }] })
+    expect(travel).toEqual([{ word: 'padel', minutes: 60 }])
+    expect(busyBlocks([padel], ALEX, TODAY, 'Europe/London', travel)).toEqual([{ from: '18:00', to: '21:30' }])
+    // From 5pm: 17:00 to 18:00 and 21:30 to 22:00.
+    expect(freeToday([padel], [ALEX], TODAY, 'Europe/London', 17 * 60, () => travel)).toBe(90)
+    expect(freeToday([padel], [ALEX], TODAY, 'Europe/London', 17 * 60)).toBe(120 + 90)
+  })
+
+  it('gives the AI the free time after travel', () => {
+    const ctx = context({ calendar: [padel], travel: { [ALEX]: [{ word: 'padel', minutes: 60 }] }, open: [task({ title: 'Hoover', due_date: TODAY })] })
+    expect(planBudget(ctx, ctx.members[0], 17 * 60)).toBe(90)
   })
 })

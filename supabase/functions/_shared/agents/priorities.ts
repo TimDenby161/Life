@@ -31,7 +31,7 @@ const WORK_JOB = /^c4\b/i
  */
 export function planBudget(ctx: TaskContext, view: Member | typeof TOGETHER, fromMinute: number): number {
   const people = view === TOGETHER ? ctx.members.map((m) => m.id) : [view.id]
-  return Math.min(MAX_PLAN_MINUTES, freeToday(ctx.calendar ?? [], people, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute))
+  return Math.min(MAX_PLAN_MINUTES, freeToday(ctx.calendar ?? [], people, ctx.today, ctx.timezone ?? 'Europe/London', fromMinute, (p) => ctx.travel?.[p] ?? []))
 }
 
 export type Candidate = {
@@ -120,7 +120,7 @@ export const PRIORITIES_PROMPT = [
 /** What Claude sees for one tab: no ids, no event titles. For Together, both people's busy times. */
 export function prioritiesInput(ctx: TaskContext, view: Member | typeof TOGETHER, candidates: Candidate[], nowTime: string): string {
   const tz = ctx.timezone ?? 'Europe/London'
-  const busy = (id: string) => (ctx.calendar?.length ? busyBlocks(ctx.calendar, id, ctx.today, tz) : [])
+  const busy = (id: string) => (ctx.calendar?.length ? busyBlocks(ctx.calendar, id, ctx.today, tz, ctx.travel?.[id]) : [])
   const away = (id: string) => (ctx.calendar?.length ? isAway(ctx.calendar, id, ctx.today, tz) : false)
   const [first, second] = view === TOGETHER ? ctx.members : [view, ctx.members.find((m) => m.id !== view.id)]
   return JSON.stringify({

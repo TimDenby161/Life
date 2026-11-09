@@ -20,7 +20,7 @@ import { localNow } from '../_shared/agents/dates.ts'
 import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/agents/headlines.ts'
 import { type Candidate, candidatesFor, cleanPicks, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, TOGETHER } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
-import { type AgentPrefs, loadCalendar, loadContext, loadNews, loadPrefs } from './context.ts'
+import { type AgentPrefs, loadCalendar, loadContext, loadNews, loadPrefs, travelRules } from './context.ts'
 
 type Household = { id: string; timezone: string }
 export type Tab = Member | typeof TOGETHER
@@ -38,10 +38,11 @@ export function tabsFor(ctx: TaskContext, prefs: AgentPrefs): Tab[] {
 /** The routine answers with task ids, so a job finished meanwhile can't shift which pick means what. */
 const shortlist = (ctx: TaskContext, tab: Tab): Candidate[] => candidatesFor(ctx, tab).map((c) => ({ ...c, ref: c.task_id }))
 
-async function contextFor(db: SupabaseClient, household: Household, now: Date) {
+async function contextFor(db: SupabaseClient, household: Household, now: Date, prefs?: AgentPrefs) {
   const { date, hour } = localNow(now, household.timezone)
   const ctx = await loadContext(db, household.id, date, hour)
   ctx.timezone = household.timezone
+  ctx.travel = travelRules(ctx, prefs ?? (await loadPrefs(db, household.id)))
   ctx.calendar = await loadCalendar(db, household.id, date).catch(() => [])
   return ctx
 }
@@ -66,7 +67,7 @@ export async function routineInput(db: SupabaseClient, now: Date) {
     if (headlines.length) news.push({ key: `${household.id}:news:${date}`, headlines: headlinesInput(headlines) })
     const prefs = await loadPrefs(db, household.id)
     if (!prefs.aiPriorities.size) continue
-    const ctx = await contextFor(db, household, now)
+    const ctx = await contextFor(db, household, now, prefs)
     const time = hhmm(localNow(now, household.timezone))
     for (const tab of tabsFor(ctx, prefs)) {
       const candidates = shortlist(ctx, tab)

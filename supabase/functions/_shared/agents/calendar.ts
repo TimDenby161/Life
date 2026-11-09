@@ -70,19 +70,47 @@ export function loadText(load: DayLoad): string {
   return `${load.timed} ${load.timed === 1 ? 'event' : 'events'}${hours ? `, about ${hours} ${hours === 1 ? 'hour' : 'hours'}` : ''}`
 }
 
-/** One person's busy times on a day, as "HH:MM" ranges with no titles (for the AI). All-day events don't block time. */
-export function busyBlocks(events: CalEvent[], person: string, date: ISODate, timeZone: string): { from: string; to: string }[] {
-  const out: { from: string; to: string }[] = []
+/** Getting to and from events: minutes each way for events whose title has the word (e.g. padel, 60). */
+export type TravelRule = { word: string; minutes: number }
+
+/** Travel rules as saved in the Chief of Staff's agent_settings.config, cleaned. */
+export function parseTravel(config: unknown): TravelRule[] {
+  const t = (config as { travel?: unknown } | null)?.travel
+  return (Array.isArray(t) ? t : [])
+    .map((r) => r as { word?: unknown; minutes?: unknown })
+    .filter((r) => typeof r.word === 'string' && r.word.trim().length > 1 && Number.isInteger(r.minutes) && (r.minutes as number) > 0 && (r.minutes as number) <= 240)
+    .slice(0, 12)
+    .map((r) => ({ word: (r.word as string).trim().toLowerCase().slice(0, 30), minutes: r.minutes as number }))
+}
+
+/** Minutes each way to get to an event, from the rules: the longest that matches its title. */
+export function travelFor(title: string, travel: TravelRule[]): number {
+  const t = title.toLowerCase()
+  return Math.max(0, ...travel.filter((r) => t.includes(r.word)).map((r) => r.minutes))
+}
+
+const pad = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+
+/**
+ * One person's busy times on a day, as "HH:MM" ranges with no titles (for the
+ * AI), including travel there and back from their rules. All-day events don't
+ * block time.
+ */
+export function busyBlocks(events: CalEvent[], person: string, date: ISODate, timeZone: string, travel: TravelRule[] = []): { from: string; to: string }[] {
+  const out: { from: number; to: number }[] = []
   for (const e of events) {
     if (e.allDay || (e.owner_id !== null && e.owner_id !== person)) continue
     const start = localNow(new Date(e.start), timeZone)
     const end = localNow(new Date(e.end), timeZone)
-    if (start.date > date || end.date < date) continue
-    const from = start.date === date ? hhmm(start) : '00:00'
-    const to = end.date === date ? hhmm(end) : '24:00'
-    if (to > from) out.push({ from, to })
+    const way = travelFor(e.title, travel)
+    const from = start.date === date ? start.hour * 60 + start.minute - way : start.date < date ? 0 : null
+    const to = end.date === date ? end.hour * 60 + end.minute + way : end.date > date ? 24 * 60 : null
+    if (from === null || to === null) continue
+    const lo = Math.max(0, from)
+    const hi = Math.min(24 * 60, to)
+    if (hi > lo) out.push({ from: lo, to: hi })
   }
-  return out.sort((a, b) => a.from.localeCompare(b.from))
+  return out.sort((a, b) => a.from - b.from).map((b) => ({ from: pad(b.from), to: pad(b.to) }))
 }
 
 /** An event this long means a day out (a match, a day trip, a wedding)… */
@@ -118,9 +146,16 @@ export function freeMinutes(blocks: { from: number; to: number }[], from: number
   return end - lo - busy
 }
 
-/** Free minutes left today for these people together (both free for a Together job), from the calendar. */
-export function freeToday(events: CalEvent[], people: string[], date: ISODate, timeZone: string, fromMinute: number): number {
-  const blocks = people.flatMap((p) => busyBlocks(events, p, date, timeZone)).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) }))
+/** Free minutes left today for these people together (both free for a Together job), from the calendar and their travel rules. */
+export function freeToday(
+  events: CalEvent[],
+  people: string[],
+  date: ISODate,
+  timeZone: string,
+  fromMinute: number,
+  travel: (person: string) => TravelRule[] = () => [],
+): number {
+  const blocks = people.flatMap((p) => busyBlocks(events, p, date, timeZone, travel(p))).map((b) => ({ from: toMinutes(b.from), to: toMinutes(b.to) }))
   return freeMinutes(blocks, fromMinute)
 }
 

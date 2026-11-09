@@ -11,7 +11,7 @@ import { addDaysISO, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
-import { useAiPicks } from '@/modules/agents/api'
+import { useAgentSettings, useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
 import { awayToday, freeMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -26,6 +26,7 @@ import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
+import { parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
 import { MAX_PLAN_MINUTES } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
@@ -312,7 +313,10 @@ export function TopJobsCard({
   // Paid work (C4) happens in work time, so it takes none of it.
   const jobMinutes = (o: OccurrenceWithTask) =>
     /^c4\b/i.test(categoryName(o.task.category_id) ?? '') ? 0 : estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes)
-  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today))
+  // Travel rules are each person's own settings: mine apply here (my partner's live with the agents).
+  const myTravel = parseTravel(useAgentSettings().data?.find((s) => s.agent_id === 'chief_of_staff')?.config)
+  const travel = (person: string) => (person === me.id ? myTravel : [])
+  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel))
   const plan = limit
     ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow)
     : ranked
