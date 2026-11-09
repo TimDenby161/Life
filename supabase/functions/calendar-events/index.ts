@@ -23,6 +23,8 @@ type CalendarEvent = {
   end: string
   allDay: boolean
   htmlLink: string | null
+  /** Title hidden in Settings: the app doesn't show it, but counts its time for plans. */
+  hidden?: boolean
 }
 
 const cache = new TtlCache<CalendarEvent[]>(2 * 60_000)
@@ -95,7 +97,12 @@ Deno.serve(async (req) => {
         if (hit) return hit
         const raw = await listEvents(token, integration.google_calendar_id!, timeMin, timeMax)
         const hidden = new Set(((integration.hidden_event_titles as string[] | null) ?? []).map(titleKey))
-        const events = raw.flatMap((e) => (hidden.has(titleKey(e.summary ?? '')) ? [] : (normalise(e, integration) ?? [])))
+        // Hidden titles come back marked, without description or location: the app never shows them, but counts their time.
+        const events = raw.flatMap((e) => {
+          const event = normalise(e, integration)
+          if (!event) return []
+          return hidden.has(titleKey(e.summary ?? '')) ? [{ ...event, description: null, location: null, htmlLink: null, hidden: true }] : [event]
+        })
         cache.set(key, events)
         return events
       }),

@@ -12,7 +12,7 @@ export const AWAY_MINUTES = 240
 export function awayToday(events: CalendarEvent[], integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[], person: string, today: string): boolean {
   const own = new Set(integrations.filter((i) => i.owner_id === person).map((i) => i.id))
   return events.some((e) => {
-    if (!own.has(e.calendarId)) return false
+    if (!own.has(e.calendarId) || e.hidden) return false
     if (e.allDay) return e.start <= today && today < e.end
     if (WORK_EVENT.test(e.title)) return false
     return (new Date(e.end).getTime() - new Date(e.start).getTime()) / 60_000 >= AWAY_MINUTES

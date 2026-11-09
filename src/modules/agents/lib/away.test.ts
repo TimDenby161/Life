@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
 import { isAway, type CalEvent } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { awayToday, freeMinutesToday } from './away'
+import { awayToday, freeMinutesToday, workMinutesToday } from './away'
 
 const TODAY = '2026-11-07'
 const calendars = [{ id: 'tim', owner_id: 'tim' }, { id: 'sophie', owner_id: 'sophie' }, { id: 'shared', owner_id: null }]
@@ -56,5 +56,16 @@ describe('travel time (app)', () => {
     const padel = { ...ev('tim', at('19:00').toISOString(), at('20:30').toISOString()), title: 'Padel' } as CalendarEvent
     const rules = (p: string) => (p === 'tim' ? [{ word: 'padel', minutes: 60 }] : [])
     expect(freeMinutesToday([padel], calendars, ['tim'], TODAY, at('17:00'), rules)).toBe(60 + 30)
+  })
+})
+
+describe('hidden events (app)', () => {
+  it('count as busy and work time but never as away', () => {
+    const at = (hhmm: string) => new Date(`${TODAY}T${hhmm}:00`)
+    const work = { ...ev('tim', at('09:00').toISOString(), at('17:30').toISOString()), title: 'Work', hidden: true } as CalendarEvent
+    const dayOut = { ...ev('tim', at('08:00').toISOString(), at('18:00').toISOString()), title: 'Private', hidden: true } as CalendarEvent
+    expect(workMinutesToday([work], calendars, 'tim', TODAY, at('14:00'))).toBe(210)
+    expect(freeMinutesToday([work], calendars, ['tim'], TODAY, at('14:00'))).toBe(8 * 60 - 210)
+    expect(awayToday([dayOut], calendars, 'tim', TODAY)).toBe(false)
   })
 })

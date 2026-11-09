@@ -17,6 +17,11 @@ export type CalEvent = {
   /** As start; an all-day event's end date is the day after it ends. */
   end: string
   allDay: boolean
+  /**
+   * A title hidden in Settings (e.g. Work): never shown or listed, and not a
+   * packed day or a day away, but still busy time (and Work time) for plans.
+   */
+  hidden?: boolean
 }
 
 /** What's on one person's day: events in time order (all-day first), and the minutes booked by timed ones. */
@@ -27,7 +32,7 @@ const hhmm = (p: { hour: number; minute: number }) => `${String(p.hour).padStart
 export function dayLoad(events: CalEvent[], person: string, date: ISODate, timeZone: string): DayLoad {
   const load: DayLoad = { date, events: [], minutes: 0, timed: 0 }
   for (const e of events) {
-    if (e.owner_id !== null && e.owner_id !== person) continue
+    if (e.hidden || (e.owner_id !== null && e.owner_id !== person)) continue
     if (e.allDay) {
       if (e.start <= date && date < e.end) load.events.push({ time: null, title: e.title })
       continue
@@ -180,7 +185,7 @@ export function freeToday(
  */
 export function isAway(events: CalEvent[], person: string, date: ISODate, timeZone: string): boolean {
   return events.some((e) => {
-    if (e.owner_id !== person) return false
+    if (e.owner_id !== person || e.hidden) return false
     if (e.allDay) return e.start <= date && date < e.end
     if (WORK_EVENT.test(e.title)) return false
     const start = localNow(new Date(e.start), timeZone)

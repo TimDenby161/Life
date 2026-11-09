@@ -37,7 +37,7 @@ export default function CalendarPage() {
   }, [view, cursor])
 
   const events = useCalendarEvents(range.from, range.to, Boolean(connected))
-  const eventList = events.data?.status === 'ok' ? events.data.events : []
+  const eventList = useMemo(() => (events.data?.status === 'ok' ? events.data.events.filter((e) => !e.hidden) : []), [events.data])
   const byDay = useMemo(() => bucketByDay(eventList), [eventList])
 
   const step = (dir: 1 | -1) =>

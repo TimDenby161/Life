@@ -33,7 +33,7 @@ export function TodayCalendar({ max, compact = false }: { max?: number; compact?
   const integrations = useCalendarIntegrations()
   const events = useCalendarEvents(today, today)
   const result = events.data
-  const items = result?.status === 'ok' ? upcomingToday(result.events, integrations.data ?? [], me.id, now) : []
+  const items = result?.status === 'ok' ? upcomingToday(result.events.filter((e) => !e.hidden), integrations.data ?? [], me.id, now) : []
 
   return (
     <Card>

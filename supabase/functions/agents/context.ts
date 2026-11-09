@@ -303,8 +303,9 @@ const titleKey = (title: string) => title.trim().replace(/\s+/g, ' ').toLowerCas
 /**
  * The household's connected calendars from yesterday to a week ahead: times,
  * titles and whose calendar only (descriptions and locations are dropped
- * here). Titles hidden in Settings stay hidden, as do calendars switched off
- * for planning (e.g. Birthdays). Empty when none is connected.
+ * here). Titles hidden in Settings are marked hidden: never shown, but still
+ * busy time. Calendars switched off for planning (e.g. Birthdays) are left
+ * out. Empty when none is connected.
  */
 export async function loadCalendar(db: SupabaseClient, householdId: string, today: string): Promise<CalEvent[]> {
   const serviceAccount = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON')
@@ -326,13 +327,15 @@ export async function loadCalendar(db: SupabaseClient, householdId: string, toda
     rows.map(async (row) => {
       const hidden = new Set((row.hidden_event_titles ?? []).map(titleKey))
       return (await listEvents(token, row.google_calendar_id, timeMin, timeMax))
-        .filter((e) => e.status !== 'cancelled' && !hidden.has(titleKey(e.summary ?? '')))
+        .filter((e) => e.status !== 'cancelled')
         .map((e): CalEvent => ({
           owner_id: row.owner_id,
           title: e.summary?.trim() || '(No title)',
           start: (e.start.dateTime ?? e.start.date)!,
           end: (e.end.dateTime ?? e.end.date)!,
           allDay: Boolean(e.start.date),
+          // Hidden titles still take up time: they're just never shown or listed.
+          ...(hidden.has(titleKey(e.summary ?? '')) ? { hidden: true } : {}),
         }))
     }),
   )

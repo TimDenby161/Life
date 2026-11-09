@@ -1,4 +1,4 @@
-import { busyBlocks, type CalEvent, freeMinutes, freeToday, isAway, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
+import { busyBlocks, type CalEvent, dayLoad, freeMinutes, freeToday, isAway, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
 import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
@@ -254,5 +254,17 @@ describe('Paid work in work time', () => {
     const ranked = [job('w1', 120, true), job('w2', 120, true), job('h1', 30), job('h2', 30)]
     const plan = todaysPlan(ranked, new Set(ranked.map((o) => o.task_id)), () => 200, (o) => o.minutes, 45, (o) => o.work, 150)
     expect(plan.map((o) => o.task_id)).toEqual(['w1', 'h1'])
+  })
+})
+
+describe('Hidden calendar titles', () => {
+  const work: CalEvent = { owner_id: ALEX, title: 'Work PM', start: '2026-11-06T13:00:00Z', end: '2026-11-06T17:30:00Z', allDay: false, hidden: true }
+
+  it('still count as busy and as work time, but never as a packed day, a day away or a listed event', () => {
+    expect(workToday([work], ALEX, TODAY, 'Europe/London', 14 * 60)).toBe(210)
+    expect(freeToday([work], [ALEX], TODAY, 'Europe/London', 14 * 60)).toBe(8 * 60 - 210)
+    const long = { ...work, title: 'Secret day out', start: '2026-11-06T08:00:00Z', end: '2026-11-06T18:00:00Z' }
+    expect(isAway([long], ALEX, TODAY, 'Europe/London')).toBe(false)
+    expect(dayLoad([long, work], ALEX, TODAY, 'Europe/London')).toMatchObject({ events: [], minutes: 0, timed: 0 })
   })
 })

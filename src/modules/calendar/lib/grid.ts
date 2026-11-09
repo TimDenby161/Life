@@ -14,6 +14,8 @@ export type CalendarEvent = {
   end: string
   allDay: boolean
   htmlLink: string | null
+  /** A title hidden in Settings: never shown, but its time counts for plans. */
+  hidden?: boolean
 }
 
 type WeekStart = 0 | 1

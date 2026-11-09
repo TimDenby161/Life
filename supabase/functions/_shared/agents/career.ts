@@ -58,7 +58,7 @@ export function analyseEvents(
     if (!words.length) continue
     const seen = new Set<string>()
     for (const e of events) {
-      if (e.owner_id !== null && e.owner_id !== person) continue
+      if (e.hidden || (e.owner_id !== null && e.owner_id !== person)) continue
       const title = e.title.toLowerCase()
       if (!words.some((w) => title.includes(w)) || seen.has(e.title)) continue
       const { first, last } = eventDays(e, timeZone)
