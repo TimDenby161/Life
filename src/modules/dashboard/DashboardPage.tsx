@@ -257,7 +257,7 @@ export function TopJobsCard({
   adding?: boolean
   onToggleAdding?: () => void
   onMessage?: () => void
-  /** Show just this many, with no Show more (Home, to fit one screen). */
+  /** Show just this many, with a Show all to open the rest (Home, to fit one screen). */
   limit?: number
   /** Anything else to show at the foot of the card (Home: what the agents flagged). */
   footer?: React.ReactNode
@@ -273,9 +273,12 @@ export function TopJobsCard({
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
   const [shown, setShown] = useState(JOBS_PER_STEP)
+  // Compact (with a limit): closed shows `limit`, open shows everything recommended for today.
+  const [expanded, setExpanded] = useState(false)
   const pickWho = (view: string) => {
     setWho(view)
     setShown(JOBS_PER_STEP)
+    setExpanded(false)
   }
   const today = todayISO()
   // A score of 0 means nothing needs doing yet, so it stays off the list.
@@ -303,7 +306,7 @@ export function TopJobsCard({
         .filter((o) => !(swiped.has(o.id) && o.due_date && o.due_date > today))
         .filter((o) => !out || canDoAnywhere(o.task.title, categoryName(o.task.category_id), ai.where.get(o.task_id)))
   const awayNames = members.filter((m) => away(m.id)).map((m) => (m.id === me.id ? 'you' : m.display_name))
-  const visible = ranked.slice(0, limit ?? shown)
+  const visible = ranked.slice(0, limit ? (expanded ? ranked.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -370,6 +373,11 @@ export function TopJobsCard({
         ) : (
           renderRows(visible)
         )}
+        {limit && (ranked.length > limit || expanded) ? (
+          <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show all {ranked.length}</>}
+          </Button>
+        ) : null}
         {footer}
         <div className={limit ? 'hidden' : 'mt-1 flex'}>
           {ranked.length > shown ? (
