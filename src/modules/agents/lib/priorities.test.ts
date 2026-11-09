@@ -1,5 +1,5 @@
 import { busyBlocks, type CalEvent, dayLoad, freeMinutes, freeToday, isAway, parseTravel, workToday } from '../../../../supabase/functions/_shared/agents/calendar.ts'
-import { candidatesFor, cleanPicks, MAX_PICKS, planBudget, prioritiesInput, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
+import { candidatesFor, cleanPicks, goodDayToAsk, isWorkAsk, MAX_PICKS, planBudget, prioritiesInput, TOGETHER, workBudget } from '../../../../supabase/functions/_shared/agents/priorities.ts'
 import { aiFirst, canDoAnywhere, PLAN_MAX, todaysPlan } from './aiOrder'
 import { estimateMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
 import { ALEX, ALEX_LIST, context, SAM, SAM_LIST, task } from './fixtures'
@@ -266,5 +266,23 @@ describe('Hidden calendar titles', () => {
     const long = { ...work, title: 'Secret day out', start: '2026-11-06T08:00:00Z', end: '2026-11-06T18:00:00Z' }
     expect(isAway([long], ALEX, TODAY, 'Europe/London')).toBe(false)
     expect(dayLoad([long, work], ALEX, TODAY, 'Europe/London')).toMatchObject({ events: [], minutes: 0, timed: 0 })
+  })
+})
+
+describe('Asking a manager', () => {
+  it('spots asks, not parcels or shelves', () => {
+    expect(['Negotiate package', 'Ask for laptop', 'Ask Sebastien about a pay rise', 'Salary review'].every(isWorkAsk)).toBe(true)
+    expect(['Collect package from the post office', 'Raise the shelf', 'Buy a laptop bag'].some(isWorkAsk)).toBe(false)
+  })
+
+  it('waits for Tuesday to Thursday, and the AI knows it', () => {
+    expect(['2026-11-09', '2026-11-10', '2026-11-12', '2026-11-13', '2026-11-14'].map(goodDayToAsk)).toEqual([false, true, true, false, false])
+    const ctx = context({ today: '2026-11-09', open: [task({ title: 'Ask for laptop', due_date: '2026-11-02' }), task({ title: 'Hoover', due_date: '2026-11-09' })] })
+    const c = candidatesFor(ctx, ctx.members[0])
+    expect(c.find((x) => x.title === 'Ask for laptop')?.ask).toBe(true)
+    expect(JSON.parse(prioritiesInput(ctx, ctx.members[0], c, '06:15')).goodDayToAsk).toBe(false)
+    const raw = JSON.stringify({ picks: c.map((x) => ({ ref: x.ref, why: 'ok' })) })
+    expect(cleanPicks(raw, c, 240, 240, false)!.map((p) => p.title)).toEqual(['Hoover'])
+    expect(cleanPicks(raw, c, 240, 240, true)!.map((p) => p.title)).toContain('Ask for laptop')
   })
 })

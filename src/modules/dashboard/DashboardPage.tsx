@@ -27,7 +27,7 @@ import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
 import type { OccurrenceWithTask } from '@/modules/tasks/api'
 import { parseTravel } from '../../../supabase/functions/_shared/agents/calendar.ts'
-import { MAX_PLAN_MINUTES, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
+import { goodDayToAsk, isWorkAsk, MAX_PLAN_MINUTES, WORK_JOB } from '../../../supabase/functions/_shared/agents/priorities.ts'
 import { estimateMinutes, formatMinutes } from '../../../supabase/functions/_shared/agents/taskManager.ts'
 
 /** Open tasks for one view: what a person could do, or what takes both of us. Waiting and out-of-hours tasks stay off Home. */
@@ -318,8 +318,10 @@ export function TopJobsCard({
   const myTravel = parseTravel(useAgentSettings().data?.find((s) => s.agent_id === 'chief_of_staff')?.config)
   const travel = (person: string) => (person === me.id ? myTravel : [])
   const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel))
+  // Asking a manager for something waits for a good day (Tue-Thu), whatever its date.
+  const askable = (o: OccurrenceWithTask) => goodDayToAsk(today) || !isWorkAsk(o.task.title)
   const plan = limit
-    ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow, isWork, workNow)
+    ? todaysPlan(ranked.filter(askable), picks?.length ? new Set(ai.notes.keys()) : null, (o) => taskScore(o, categories, today), jobMinutes, freeNow, isWork, workNow)
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
   const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
