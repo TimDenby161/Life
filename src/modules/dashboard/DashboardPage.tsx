@@ -248,34 +248,6 @@ function useSwipedToday(today: string): [Set<string>, (id: string) => void] {
   return [new Set(ids), mark]
 }
 
-export type MoveReason = 'no_time' | 'later'
-
-/**
- * Why each of today's picks was moved to another day, on this device: no time
- * today (its time isn't free for another job) or just putting it off (it is).
- */
-function useMoveReasons(today: string): [Record<string, MoveReason>, (taskId: string, reason: MoveReason) => void] {
-  const read = (): Record<string, MoveReason> => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('life.moved') ?? '{}') as { day?: string; reasons?: Record<string, MoveReason> }
-      return saved.day === today ? (saved.reasons ?? {}) : {}
-    } catch {
-      return {}
-    }
-  }
-  const [reasons, setReasons] = useState(read)
-  const mark = (taskId: string, reason: MoveReason) => {
-    const next = { ...read(), [taskId]: reason }
-    setReasons(next)
-    try {
-      localStorage.setItem('life.moved', JSON.stringify({ day: today, reasons: next }))
-    } catch {
-      // Private browsing: it just won't be remembered.
-    }
-  }
-  return [reasons, mark]
-}
-
 /** The open tasks that most need doing: today's AI picks first, then score order, five more at a time on request (or a fixed few when compact). */
 export function TopJobsCard({
   title = 'Top jobs',
@@ -303,7 +275,6 @@ export function TopJobsCard({
   const complete = useCompleteOccurrence()
   const recentlyDone = useRecentlyDone(1)
   const reopen = useReopenOccurrence()
-  const [moveReasons, setMoveReason] = useMoveReasons(todayISO())
   // Tasks open in place, so editing one doesn't leave Home.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
@@ -362,19 +333,17 @@ export function TopJobsCard({
     !(o.due_date && o.due_date > today) &&
     (goodDayToAsk(today) || !isWorkAsk(o.task.title)) &&
     (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
-  // Finishing a job never brings in another. With the AI's plan, only time freed by a pick moved to another day
+  // Finishing a job never brings in another. With the AI's plan, only time freed by a pick swiped off to tomorrow
   // is refilled; without it, jobs done today still count against today's free time.
   const doneToday = (recentlyDone.data ?? []).filter(
     (o) => o.completed_at && toISODate(new Date(o.completed_at)) === today && inView(o.task, who, categories, lists),
   )
   const doneMinutes = doneToday.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
-  // Picks moved to another day: only one put off (not "no time today") frees its time, and nothing comes in until you say.
-  const moved = (picks ?? []).flatMap((p) => {
+  // A pick swiped off to tomorrow frees its time for another job; one whose date was changed by hand doesn't.
+  const movedMinutes = (picks ?? []).reduce((sum, p) => {
     const o = open.data?.find((x) => x.task_id === p.task_id)
-    return o?.due_date && o.due_date > today ? [o] : []
-  })
-  const movedMinutes = moved.filter((o) => moveReasons[o.task_id] === 'later').reduce((sum, o) => sum + jobMinutes(o), 0)
-  const unasked = limit ? moved.find((o) => !moveReasons[o.task_id]) : undefined
+    return o?.due_date && o.due_date > today && swiped.has(o.id) ? sum + jobMinutes(o) : sum
+  }, 0)
   const plan = limit
     ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, {
         score: (o) => taskScore(o, categories, today),
@@ -473,19 +442,6 @@ export function TopJobsCard({
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
             {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {todayList.length - doneShown.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
           </Button>
-        ) : null}
-        {unasked ? (
-          <div className="mx-1 mb-1.5 grid gap-1.5 rounded-lg bg-muted/60 p-2 text-sm">
-            <p className="min-w-0 truncate">Moved “{unasked.task.title}”: why?</p>
-            <div className="flex gap-1.5">
-              <Button size="sm" variant="outline" className="h-7 flex-1" onClick={() => setMoveReason(unasked.task_id, 'no_time')}>
-                No time today
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 flex-1" onClick={() => setMoveReason(unasked.task_id, 'later')}>
-                Just putting it off
-              </Button>
-            </div>
-          </div>
         ) : null}
         {limit && doneShown.length ? (
           <p className="flex items-center gap-1.5 px-2 pb-1 text-xs text-success">
