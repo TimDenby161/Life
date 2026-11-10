@@ -21,7 +21,7 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
-import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useRecentlyDone, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
+import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useRecentlyDone, useReopenOccurrence, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
@@ -302,6 +302,7 @@ export function TopJobsCard({
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
   const recentlyDone = useRecentlyDone(1)
+  const reopen = useReopenOccurrence()
   const [moveReasons, setMoveReason] = useMoveReasons(todayISO())
   // Tasks open in place, so editing one doesn't leave Home.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
@@ -386,7 +387,13 @@ export function TopJobsCard({
       })
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
-  const visible = plan.slice(0, limit ? (expanded ? plan.length : limit) : shown)
+  // Compact: finished jobs stay on today's list, ticked, where they were, so finishing one never pulls another into view.
+  const pickOrder = new Map((picks ?? []).map((p, i) => [p.task_id, i]))
+  const doneShown = limit ? doneToday.filter((o) => !picks?.length || pickOrder.has(o.task_id)) : []
+  const place = (o: OccurrenceWithTask) =>
+    picks?.length ? (pickOrder.get(o.task_id) ?? picks.length + plan.indexOf(o)) : -taskScore(o, categories, today)
+  const todayList = limit ? [...plan, ...doneShown].sort((a, b) => place(a) - place(b)) : plan
+  const visible = todayList.slice(0, limit ? (expanded ? todayList.length : limit) : shown)
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -397,6 +404,8 @@ export function TopJobsCard({
           categories={categories}
           showList
           showVotes
+          done={o.status === 'done'}
+          onReopen={() => reopen.mutate(o.id)}
           aiNote={ai.notes.get(o.task_id)}
           swipeDays={limit ? 1 : undefined}
           onSwiped={() => markSwiped(o.id)}
@@ -457,9 +466,9 @@ export function TopJobsCard({
         ) : (
           renderRows(visible)
         )}
-        {limit && (plan.length > limit || expanded) ? (
+        {limit && (todayList.length > limit || expanded) ? (
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {plan.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
+            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {todayList.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
           </Button>
         ) : null}
         {unasked ? (
@@ -475,9 +484,9 @@ export function TopJobsCard({
             </div>
           </div>
         ) : null}
-        {limit && doneToday.length ? (
+        {limit && doneShown.length ? (
           <p className="flex items-center gap-1.5 px-2 pb-1 text-xs text-success">
-            <CheckCircle2 className="size-3.5" /> {doneToday.length} done today
+            <CheckCircle2 className="size-3.5" /> {doneShown.length} of {todayList.length} done
           </p>
         ) : null}
         {footer}
