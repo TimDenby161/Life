@@ -11,7 +11,10 @@ begin
 end $$;
 grant execute on all functions in schema pg_temp to authenticated, anon;
 
-select set_config('t.task', (select t.id::text from tasks t join task_lists l on l.id = t.list_id where l.kind = 'joint' limit 1), true);
+-- Its own joint task, so the test doesn't depend on what the seed or other tests left behind.
+insert into tasks (household_id, list_id, title, created_by)
+select household_id, id, 'Duration test', '11111111-1111-1111-1111-111111111111' from task_lists where kind = 'joint' limit 1;
+select set_config('t.task', (select id::text from tasks where title = 'Duration test'), true);
 
 select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
 select lives_ok(format($$update tasks set duration_minutes = 45 where id = %L$$, current_setting('t.task')), 'a member sets how long a joint task takes');
