@@ -1966,6 +1966,53 @@ export type Database = {
           },
         ]
       }
+      recipes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          ingredients: Json
+          meal_key: string
+          minutes: number | null
+          name: string
+          serves: number
+          steps: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          ingredients?: Json
+          meal_key: string
+          minutes?: number | null
+          name: string
+          serves: number
+          steps?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          ingredients?: Json
+          meal_key?: string
+          minutes?: number | null
+          name?: string
+          serves?: number
+          steps?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       renewals: {
         Row: {
           created_at: string
@@ -2228,6 +2275,7 @@ export type Database = {
           household_id: string
           id: string
           item_count: number
+          kind: string
           llm_cost_micro_usd: number
           llm_input_tokens: number
           llm_output_tokens: number
@@ -2241,6 +2289,7 @@ export type Database = {
           household_id: string
           id?: string
           item_count?: number
+          kind?: string
           llm_cost_micro_usd?: number
           llm_input_tokens?: number
           llm_output_tokens?: number
@@ -2254,6 +2303,7 @@ export type Database = {
           household_id?: string
           id?: string
           item_count?: number
+          kind?: string
           llm_cost_micro_usd?: number
           llm_input_tokens?: number
           llm_output_tokens?: number
@@ -3406,6 +3456,17 @@ export type Database = {
       }
       push_subscriptions_gone: {
         Args: { p_household_id: string; p_ids: string[] }
+        Returns: undefined
+      }
+      recipes_save: {
+        Args: {
+          p_household_id: string
+          p_recipes: Json
+          p_serves: number
+          p_usage: Json
+          p_user_id: string
+          p_week_start: string
+        }
         Returns: undefined
       }
       recurrence_next_date: {

@@ -1,6 +1,12 @@
 import {
   AISLES,
   cleanItems,
+  cleanRecipes,
+  mealKey,
+  RECIPES_PER_CALL,
+  recipesInput,
+  weekMeals,
+  withRecipes,
   isMonday,
   isSplit,
   MAX_ITEMS,
@@ -141,5 +147,82 @@ describe('cleanItems', () => {
   it(`stops at ${MAX_ITEMS} items`, () => {
     const many = Array.from({ length: MAX_ITEMS + 20 }, (_, i) => ({ name: `Item ${i}`, quantity: '1', aisle: 'other' }))
     expect(cleanItems(answer(many))).toHaveLength(MAX_ITEMS)
+  })
+})
+
+describe('recipes', () => {
+  const rows = [
+    meal('2026-11-09', 'dinner', 'Chicken curry'),
+    meal('2026-11-10', 'lunch', 'Soup', TIM),
+    meal('2026-11-10', 'lunch', 'Salad', SOPHIE),
+    meal('2026-11-12', 'dinner', ' chicken  CURRY '),
+  ]
+
+  it('lists each different meal of the week once, with every slot it is eaten in', () => {
+    expect(weekMeals(WEEK, rows)).toEqual([
+      { key: 'chicken curry', name: 'Chicken curry', when: [{ day: 'Mon', slot: 'dinner' }, { day: 'Thu', slot: 'dinner' }] },
+      { key: 'salad', name: 'Salad', when: [{ day: 'Tue', slot: 'lunch' }] },
+      { key: 'soup', name: 'Soup', when: [{ day: 'Tue', slot: 'lunch' }] },
+    ])
+  })
+
+  it('sends Claude only the meal names and how many to cook for', () => {
+    expect(JSON.parse(recipesInput(['Chicken curry', 'Soup'], 2))).toEqual({ serves: 2, meals: ['Chicken curry', 'Soup'] })
+    expect(RECIPES_PER_CALL).toBeLessThanOrEqual(6)
+  })
+
+  const answer = (recipes: unknown) => JSON.stringify({ recipes })
+  const curry = {
+    meal: 'Chicken curry',
+    cook: true,
+    minutes: 45,
+    ingredients: [{ item: 'Chicken thighs', quantity: '600g' }, { item: 'Onion', quantity: '1' }],
+    steps: ['Fry the onion for 5 minutes until soft.', 'Add the chicken and cook until the juices run clear (under 75°C is not done: aim for > 75°C).'],
+  }
+
+  it('keeps a recipe for a meal that was asked about, under that meal\'s key', () => {
+    expect(cleanRecipes(answer([curry]), [' Chicken  curry '])).toEqual([
+      { key: 'chicken curry', name: 'Chicken curry', minutes: 45, ingredients: curry.ingredients, steps: curry.steps },
+    ])
+    expect(mealKey(' Chicken  CURRY ')).toBe('chicken curry')
+  })
+
+  it('ignores recipes nobody asked for and repeats', () => {
+    expect(cleanRecipes(answer([curry, { ...curry, meal: 'Trifle' }, curry]), ['Chicken curry'])).toHaveLength(1)
+  })
+
+  it('keeps a meal with nothing to cook, with no steps, so it is not asked about again', () => {
+    expect(cleanRecipes(answer([{ meal: 'Leftovers', cook: false, minutes: 0, ingredients: [], steps: [] }]), ['Leftovers'])).toEqual([
+      { key: 'leftovers', name: 'Leftovers', minutes: null, ingredients: [], steps: [] },
+    ])
+  })
+
+  it('drops a recipe whole rather than saving one with a step or ingredient missing', () => {
+    const linked = { ...curry, steps: [...curry.steps, 'See https://example.com for the rest.'] }
+    const marked = { ...curry, ingredients: [...curry.ingredients, { item: '<b>Rice</b>', quantity: '200g' }] }
+    const empty = { ...curry, steps: [] }
+    expect(cleanRecipes(answer([linked]), ['Chicken curry'])).toEqual([])
+    expect(cleanRecipes(answer([marked]), ['Chicken curry'])).toEqual([])
+    expect(cleanRecipes(answer([empty]), ['Chicken curry'])).toEqual([])
+    expect(cleanRecipes('not json', ['Chicken curry'])).toBeNull()
+  })
+
+  it('blanks a time it does not trust', () => {
+    expect(cleanRecipes(answer([{ ...curry, minutes: 100000 }]), ['Chicken curry'])![0].minutes).toBeNull()
+  })
+
+  it('gives the shopping list the saved recipe\'s ingredients, and nothing extra for meals without one', () => {
+    const saved = [
+      { meal_key: 'chicken curry', serves: 2, ingredients: curry.ingredients },
+      { meal_key: 'soup', serves: 2, ingredients: [] },
+    ]
+    const sent = JSON.parse(shoppingInput(withRecipes(plannedMeals(WEEK, rows), saved))).meals
+    expect(sent[0]).toEqual({ day: 'Mon', slot: 'dinner', meal: 'Chicken curry', people: 2, recipe: { serves: 2, ingredients: curry.ingredients } })
+    expect(sent.find((m: { meal: string }) => m.meal === 'Soup')).toEqual({ day: 'Tue', slot: 'lunch', meal: 'Soup', people: 1 })
+    expect(sent.find((m: { meal: string }) => m.meal === 'Salad')).not.toHaveProperty('recipe')
+  })
+
+  it('does not let a recipe change which meals a list was built from', () => {
+    expect(mealsKey(WEEK, rows)).toBe(mealsKey(WEEK, [...rows].reverse()))
   })
 })

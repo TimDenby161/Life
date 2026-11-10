@@ -9,20 +9,21 @@ const shared = readFileSync(join(__dirname, '../../supabase/functions/_shared/me
 const agents = readFileSync(join(__dirname, '../../supabase/functions/agents/index.ts'), 'utf8')
 
 describe('shopping-list Edge Function', () => {
-  it('reads only the household, its meals and what has been spent', () => {
+  it('reads only the household, its meals, its recipes and what has been spent', () => {
     const tables = [...fn.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1])
-    expect(tables.sort()).toEqual(['household_members', 'meals', 'shopping_list_runs'])
+    expect(tables.sort()).toEqual(['household_members', 'meals', 'recipes', 'shopping_list_runs'])
   })
 
-  it('reads as the signed-in person, and uses the service role only to save the list', () => {
+  it('reads as the signed-in person, and uses the service role only to save the list or the recipes', () => {
     expect(fn).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-    expect([...fn.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1])).toEqual(['shopping_save_list'])
-    expect(fn.match(/serviceClient\(\)/g)).toHaveLength(1)
-    expect(fn).toContain("serviceClient().rpc('shopping_save_list'")
+    expect([...fn.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['recipes_save', 'shopping_save_list'])
+    // Every use of the service-role client is one of those two calls.
+    expect([...fn.matchAll(/serviceClient\(\)(\.rpc\('[a-z_]+')?/g)].map((m) => m[1]).sort()).toEqual([".rpc('recipes_save'", ".rpc('shopping_save_list'"])
   })
 
-  it('selects only what Claude needs from a meal', () => {
+  it('selects only what Claude needs from a meal and a recipe', () => {
     expect(fn).toContain(".select('id, day, slot, person_id, name')")
+    expect(fn).toContain(".select('meal_key, serves, ingredients')")
   })
 
   it('has its own API key, so setting it does not switch on paid calls in the agents function', () => {

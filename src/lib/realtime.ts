@@ -45,6 +45,7 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   meals: ['meals'],
   shopping_items: ['meals'],
   shopping_list_runs: ['meals'],
+  recipes: ['meals'],
   profiles: ['household'],
 }
 

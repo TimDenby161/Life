@@ -6,6 +6,7 @@ import { type Slot, type SlotPlan, weekDates } from '../../../supabase/functions
 
 export type MealRow = Tables<'meals'>
 export type ShoppingItemRow = Tables<'shopping_items'>
+export type RecipeRow = Tables<'recipes'>
 
 // Shared within the household by RLS. person_id null = a meal for both of you.
 export const mealsKeys = {
@@ -14,6 +15,7 @@ export const mealsKeys = {
   names: ['meals', 'names'] as const,
   items: (weekStart: string) => ['meals', 'items', weekStart] as const,
   run: (weekStart: string) => ['meals', 'run', weekStart] as const,
+  recipes: ['meals', 'recipes'] as const,
 }
 
 export const useWeekMeals = (weekStart: string) =>
@@ -54,6 +56,7 @@ export const useListMealsKey = (weekStart: string) =>
         .from('shopping_list_runs')
         .select('meals_key')
         .eq('week_start', weekStart)
+        .eq('kind', 'list')
         .eq('ok', true)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -62,6 +65,10 @@ export const useListMealsKey = (weekStart: string) =>
       return data?.meals_key ?? null
     },
   })
+
+/** Every recipe the household has; one per meal name, so a meal planned again already has its recipe. */
+export const useRecipes = () =>
+  useQuery({ queryKey: mealsKeys.recipes, queryFn: async () => unwrap(await supabase.from('recipes').select('*').order('name')) })
 
 function useMealsMutation<TArgs>(fn: (householdId: string, args: TArgs) => Promise<unknown>) {
   const { household } = useHousehold()
@@ -121,6 +128,9 @@ export const useAddItem = () =>
 
 export const useDeleteItem = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('shopping_items').delete().eq('id', id)))
 
+/** Removes a recipe, so it is written afresh next time. */
+export const useDeleteRecipe = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('recipes').delete().eq('id', id)))
+
 export type MakeListResult =
   | { status: 'ok'; count: number }
   | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
@@ -140,6 +150,38 @@ export function useMakeShoppingList() {
       return data ?? { status: 'error', message: 'Empty response' }
     },
     // A failed call can still have been recorded, so refresh either way.
+    onSettled: () => qc.invalidateQueries({ queryKey: mealsKeys.all }),
+  })
+}
+
+export type WriteRecipesResult =
+  | { status: 'ok'; written: number; remaining: number }
+  | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
+
+/**
+ * Asks the same function for recipes for the week's meals that have none. It
+ * writes a few per call, so this keeps asking until none are left or a call
+ * makes no progress; recipes appear on the page as each batch lands.
+ */
+export function useWriteRecipes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (weekStart: string): Promise<WriteRecipesResult> => {
+      let written = 0
+      for (let call = 0; call < 8; call++) {
+        const { data, error } = await supabase.functions.invoke<WriteRecipesResult>('shopping-list', { body: { weekStart, mode: 'recipes' } })
+        let result: WriteRecipesResult = data ?? { status: 'error', message: 'Empty response' }
+        if (error) {
+          const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
+          result = body?.status ? (body as WriteRecipesResult) : { status: 'error', message: 'The recipe service could not be reached.' }
+        }
+        if (result.status !== 'ok') return result
+        written += result.written
+        await qc.invalidateQueries({ queryKey: mealsKeys.recipes })
+        if (!result.remaining || !result.written) return { status: 'ok', written, remaining: result.remaining }
+      }
+      return { status: 'ok', written, remaining: 1 }
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: mealsKeys.all }),
   })
 }

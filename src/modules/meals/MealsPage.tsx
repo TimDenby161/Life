@@ -1,23 +1,26 @@
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { useSearchParams } from 'react-router'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/misc'
 import { addDaysISO, parseISODate, todayISO } from '@/lib/dates'
+import { getErrorMessage } from '@/lib/errors'
 import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { isMonday, mealsKey, plannedMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
-import { useListMealsKey, useMakeShoppingList, useMealNames, useShoppingItems, useWeekMeals } from './api'
+import { isMonday, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
+import { useDeleteRecipe, useListMealsKey, useMakeShoppingList, useMealNames, useRecipes, useShoppingItems, useWeekMeals, useWriteRecipes } from './api'
+import { Recipes } from './components/Recipes'
 import { ShoppingList } from './components/ShoppingList'
 import { WeekMeals } from './components/WeekMeals'
 
-type View = 'meals' | 'list'
+type View = 'meals' | 'list' | 'recipes'
 
 /**
- * The week's meals and the shopping list made from them, one at a time behind
- * a switch. The week and the view live in the address (?week=…&view=list), so
+ * The week's meals, the shopping list made from them and their recipes, one at
+ * a time behind a switch. The week and the view live in the address (?week=…&view=list), so
  * a reload keeps you where you were.
  */
 export default function MealsPage() {
@@ -26,7 +29,8 @@ export default function MealsPage() {
   const thisWeek = weekDays(todayISO())[0]
   const asked = params.get('week') ?? ''
   const week = isMonday(asked) ? asked : thisWeek
-  const view: View = params.get('view') === 'list' ? 'list' : 'meals'
+  const askedView = params.get('view')
+  const view: View = askedView === 'list' || askedView === 'recipes' ? askedView : 'meals'
 
   const change = (patch: { week?: string; view?: View }) =>
     setParams(
@@ -47,6 +51,9 @@ export default function MealsPage() {
   const listKey = useListMealsKey(week)
   const names = useMealNames()
   const make = useMakeShoppingList()
+  const recipes = useRecipes()
+  const write = useWriteRecipes()
+  const delRecipe = useDeleteRecipe()
 
   const rows = meals.data ?? []
   const hasMeals = plannedMeals(week, rows, members.length).length > 0
@@ -63,8 +70,10 @@ export default function MealsPage() {
   const days = weekDays(week)
   const title = week === thisWeek ? 'Meals this week' : week === addDaysISO(thisWeek, 7) ? 'Meals next week' : week === addDaysISO(thisWeek, -7) ? 'Meals last week' : 'Meals'
   const range = `${format(parseISODate(days[0]), 'd MMM')} – ${format(parseISODate(days[6]), 'd MMM')}`
-  const error = view === 'meals' ? meals.error : (items.error ?? meals.error)
-  const pending = view === 'meals' ? meals.isPending : items.isPending || meals.isPending
+  const recipeNotice = write.variables === week && write.data && write.data.status !== 'ok' ? write.data : null
+  const shown = view === 'list' ? items : view === 'recipes' ? recipes : meals
+  const error = meals.error ?? shown.error
+  const pending = meals.isPending || shown.isPending
 
   return (
     <>
@@ -104,11 +113,12 @@ export default function MealsPage() {
               </>
             ),
           },
+          { value: 'recipes', label: 'Recipes' },
         ]}
       />
 
       {error ? (
-        <ErrorState error={error} onRetry={() => (view === 'meals' ? meals.refetch() : items.refetch())} />
+        <ErrorState error={error} onRetry={() => (meals.error ? meals.refetch() : shown.refetch())} />
       ) : pending ? (
         <ListSkeleton rows={5} />
       ) : view === 'meals' ? (
@@ -126,6 +136,16 @@ export default function MealsPage() {
             ))}
           </datalist>
         </>
+      ) : view === 'recipes' ? (
+        <Recipes
+          meals={weekMeals(week, rows)}
+          recipes={recipes.data ?? []}
+          openDay={week === thisWeek ? format(new Date(), 'EEE') : null}
+          writing={write.isPending && write.variables === week}
+          notice={recipeNotice}
+          onWrite={() => write.mutate(week)}
+          onRewrite={(r) => delRecipe.mutate(r.id, { onSuccess: () => write.mutate(week), onError: (e) => toast.error(getErrorMessage(e)) })}
+        />
       ) : (
         <ShoppingList
           weekStart={week}
