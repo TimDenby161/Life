@@ -10,8 +10,8 @@ export type PageAgent = {
   agents: AgentId[]
   /** Only these kinds (from any of the agents above); all kinds when absent. */
   kinds?: string[]
-  /** Extra agent output shown above the suggestions: the rest of today's calendar (live), or today and packed days from the briefing. */
-  extra?: 'today' | 'calendar'
+  /** Extra output shown above the suggestions: the rest of today's calendar (live), today and packed days from the briefing, or the live goals and trend cards instead of any suggestions (finance). */
+  extra?: 'today' | 'calendar' | 'finance'
   /** Cap on suggestions shown (Home shows the top few). */
   limit?: number
   /** No visible title, description or agent / Details switch (Home keeps it clean). */
@@ -23,7 +23,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
   tasks: { label: 'Task Manager', description: 'Put-off and overdue tasks, deadline risks, duplicates and moves off packed days.', agents: ['task_manager'], kinds: ['overdue', 'put_off', 'deadline_risk', 'blocked', 'undated', 'duplicate', 'automate', 'packed_day', 'workload'] },
   jobs: { label: 'Household', description: 'Upkeep that’s easy to forget, rooms with nothing set up, and jobs that keep slipping.', agents: ['household', 'task_manager'], kinds: ['maintenance', 'empty_room', 'missed_repeat', 'repeat'] },
   calendar: { label: 'This week', description: 'Today’s calendar, packed days ahead, and jobs worth moving off them.', agents: ['chief_of_staff', 'task_manager'], kinds: ['packed_day'], extra: 'calendar' },
-  finances: { label: 'Finance', description: 'Your overall position: net worth, what moved it, and anything going the wrong way.', agents: ['finance'] },
+  finances: { label: 'Finance', description: 'What each goal needs a month, and anything worrying from month to month.', agents: ['finance'], extra: 'finance' },
   investments: { label: 'Finance', description: 'Your overall position: net worth, what moved it, and anything going the wrong way.', agents: ['finance'] },
   wedding: { label: 'Planner', description: 'Payments, suppliers, progress and what’s next for September 2028.', agents: ['wedding'] },
   languages: { label: 'Coach', description: 'Reviews piling up, words that keep slipping, and languages left alone.', agents: ['language_coach'] },

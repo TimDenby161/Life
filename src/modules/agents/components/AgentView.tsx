@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
 import { MorningCheckIn } from '@/modules/health/components/MorningCheckIn'
+import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
@@ -26,6 +27,8 @@ const isNote = (s: Suggestion) => !s.action && OBSERVATION_KINDS.has(s.kind)
 /** A page's agent view: what its agents noticed and suggest, then when they last looked. */
 export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDetails: () => void }) {
   if (scope.extra === 'today') return <HomeToday />
+  // Finance is the live goals and trend cards only: the agent's notes repeated them.
+  if (scope.extra === 'finance') return <div className="grid grid-cols-1 gap-4"><FinanceOverview /></div>
   return <AgentSuggestions scope={scope} onDetails={onDetails} />
 }
 
