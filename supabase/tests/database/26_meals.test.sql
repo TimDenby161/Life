@@ -58,8 +58,10 @@ select throws_ok(format($$insert into shopping_items (household_id, week_start, 
   '23514', null, 'a list belongs to a week starting on a Monday');
 select throws_ok(format($$insert into shopping_list_runs (household_id, week_start, ok) values (%L, '2026-11-09', true)$$, current_setting('t.hh')),
   '42501', null, 'a client cannot record a run');
-select throws_ok(format($$select shopping_save_list(%L, '2026-11-09', %L, 'k', '[]'::jsonb, '{}'::jsonb)$$, current_setting('t.hh'), current_setting('t.tim')),
-  '42501', null, 'or call shopping_save_list');
+-- Checked as a privilege, not a call (see 16_agents: refused calls crash CI's Postgres image).
+select ok(not has_function_privilege('authenticated', 'public.shopping_save_list(uuid, date, uuid, text, jsonb, jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.shopping_save_list(uuid, date, uuid, text, jsonb, jsonb)', 'execute'),
+  'or call shopping_save_list');
 
 -- The function, as the Edge Function calls it (service role).
 reset role;
