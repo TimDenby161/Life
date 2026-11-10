@@ -387,13 +387,14 @@ export function TopJobsCard({
       })
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
-  // Compact: finished jobs stay on today's list, ticked, where they were, so finishing one never pulls another into view.
+  // Compact: finished jobs stay in today's list, where they were, so finishing one never pulls another into view.
   const pickOrder = new Map((picks ?? []).map((p, i) => [p.task_id, i]))
   const doneShown = limit ? doneToday.filter((o) => !picks?.length || pickOrder.has(o.task_id)) : []
   const place = (o: OccurrenceWithTask) =>
     picks?.length ? (pickOrder.get(o.task_id) ?? picks.length + plan.indexOf(o)) : -taskScore(o, categories, today)
   const todayList = limit ? [...plan, ...doneShown].sort((a, b) => place(a) - place(b)) : plan
-  const visible = todayList.slice(0, limit ? (expanded ? todayList.length : limit) : shown)
+  // Finished jobs keep their slot but aren't shown, so the rows shrink rather than the next job sliding up.
+  const visible = todayList.slice(0, limit ? (expanded ? todayList.length : limit) : shown).filter((o) => o.status !== 'done')
   const renderRows = (rows: OccurrenceWithTask[]) => (
     <ul>
       {rows.map((o) => (
@@ -455,10 +456,12 @@ export function TopJobsCard({
             <CheckCircle2 className="size-4 text-success" />{' '}
             {togetherOff
               ? `Nothing together today${awayNames.length ? `: ${awayNames.join(' and ')} ${awayNames.length > 1 || awayNames[0] === 'you' ? 'are' : 'is'} away` : ''}`
-              : limit && freeNow === 0
-                ? 'No free time left today'
-                : limit && picks?.length
+              : limit && todayList.some((o) => o.status !== 'done')
+                ? 'These are done: the rest of today is below'
+                : limit && (doneShown.length || picks?.length)
                 ? 'Today’s plan is done'
+                : limit && freeNow === 0
+                ? 'No free time left today'
                 : out
                   ? 'Nothing that can be done on a phone'
                   : 'Nothing to do'}
@@ -466,9 +469,9 @@ export function TopJobsCard({
         ) : (
           renderRows(visible)
         )}
-        {limit && (todayList.length > limit || expanded) ? (
+        {limit && (todayList.slice(limit).some((o) => o.status !== 'done') || expanded) ? (
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {todayList.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
+            {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {todayList.length - doneShown.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
           </Button>
         ) : null}
         {unasked ? (
