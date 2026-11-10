@@ -50,22 +50,26 @@ export type PlanRules<T> = {
   workBudget?: number
   /** Anything else a job needs today, e.g. the shops open. */
   fits?: (o: T) => boolean
+  /** Most minutes of other jobs to add after the AI's picks: the time freed by picks moved to another day. */
+  backfill?: number
 }
 
 /**
  * Home's Today's tasks: what can realistically get done in the time left today.
  * The AI's picks still open (`picked`) come first, in its order, less whatever
- * no longer fits as the day fills up; any time they leave (a job moved to
- * tomorrow, or done quickly) is filled with jobs due today or late, best first.
- * Without AI picks it's those alone.
+ * no longer fits as the day fills up. Time freed by a pick moved to another day
+ * (`backfill`) is filled with jobs due today or late, best first; finishing a
+ * job never brings in another. Without AI picks it's those jobs alone.
  */
 export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: ReadonlySet<string> | null, rules: PlanRules<T>): T[] {
-  const { score, minutes, budget, isWork = () => false, workBudget = 0, fits = () => true } = rules
+  const { score, minutes, budget, isWork = () => false, workBudget = 0, fits = () => true, backfill = Infinity } = rules
   const out: T[] = []
   let total = 0
   let worked = 0
-  const take = (o: T) => {
+  let added = 0
+  const take = (o: T, extra: boolean) => {
     if (out.length >= PLAN_MAX || out.includes(o) || !fits(o)) return
+    if (extra && added + minutes(o) > backfill) return
     if (isWork(o)) {
       if (worked + minutes(o) > workBudget) return
       worked += minutes(o)
@@ -73,9 +77,10 @@ export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: R
       if (total + minutes(o) > budget) return
       total += minutes(o)
     }
+    if (extra) added += minutes(o)
     out.push(o)
   }
-  if (picked) ranked.filter((o) => picked.has(o.task_id)).forEach(take)
-  ranked.filter((o) => score(o) >= PLAN_MIN_SCORE).forEach(take)
+  if (picked) ranked.filter((o) => picked.has(o.task_id)).forEach((o) => take(o, false))
+  ranked.filter((o) => score(o) >= PLAN_MIN_SCORE).forEach((o) => take(o, Boolean(picked)))
   return out
 }

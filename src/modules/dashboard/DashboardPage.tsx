@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
-import { addDaysISO, todayISO } from '@/lib/dates'
+import { addDaysISO, toISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
@@ -21,7 +21,7 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { useTaskOpener } from '@/modules/tasks/components/useTaskOpener'
 import { TaskRow } from '@/modules/tasks/components/TaskRow'
-import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
+import { useCompleteOccurrence, useCreateTask, useOpenOccurrences, useRecentlyDone, useTaskCategories, useTaskLists } from '@/modules/tasks/hooks'
 import { inView, TOGETHER } from '@/modules/tasks/lib/owner'
 import { isOutOfHours, taskScore, topJobs } from '@/modules/tasks/lib/topJobs'
 import { waitingOnTitle } from '@/modules/tasks/lib/waiting'
@@ -273,6 +273,7 @@ export function TopJobsCard({
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
   const complete = useCompleteOccurrence()
+  const recentlyDone = useRecentlyDone(1)
   // Tasks open in place, so editing one doesn't leave Home.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const opener = useTaskOpener(categories, lists, setOpenTaskId)
@@ -331,14 +332,25 @@ export function TopJobsCard({
     !(o.due_date && o.due_date > today) &&
     (goodDayToAsk(today) || !isWorkAsk(o.task.title)) &&
     (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
+  // Finishing a job never brings in another. With the AI's plan, only time freed by a pick moved to another day
+  // is refilled; without it, jobs done today still count against today's free time.
+  const doneToday = (recentlyDone.data ?? []).filter(
+    (o) => o.completed_at && toISODate(new Date(o.completed_at)) === today && inView(o.task, who, categories, lists),
+  )
+  const doneMinutes = doneToday.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
+  const movedMinutes = (picks ?? []).reduce((sum, p) => {
+    const o = open.data?.find((x) => x.task_id === p.task_id)
+    return o?.due_date && o.due_date > today ? sum + jobMinutes(o) : sum
+  }, 0)
   const plan = limit
     ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, {
         score: (o) => taskScore(o, categories, today),
         minutes: jobMinutes,
-        budget: freeNow,
+        budget: picks?.length ? freeNow : Math.max(0, freeNow - doneMinutes),
         isWork,
         workBudget: workNow,
         fits,
+        backfill: movedMinutes,
       })
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
@@ -417,6 +429,11 @@ export function TopJobsCard({
           <Button variant="ghost" size="sm" className="h-7 w-full text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
             {expanded ? <><ChevronUp /> Show fewer</> : <><ChevronDown /> Show today’s {plan.length} · ~{formatMinutes(planMinutes)} of {formatMinutes(freeNow)} free</>}
           </Button>
+        ) : null}
+        {limit && doneToday.length ? (
+          <p className="flex items-center gap-1.5 px-2 pb-1 text-xs text-success">
+            <CheckCircle2 className="size-3.5" /> {doneToday.length} done today
+          </p>
         ) : null}
         {footer}
         <div className={limit ? 'hidden' : 'mt-1 flex'}>
