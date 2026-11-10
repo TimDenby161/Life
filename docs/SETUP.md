@@ -64,6 +64,19 @@ supabase secrets set ALLOWED_ORIGINS="https://<github-user>.github.io,http://loc
 
 All functions require a signed-in user's JWT and use RLS to scope what they read.
 
+### Shopping list (Meals)
+
+The Meals page plans the week; its shopping list is written by Claude from the meal names. That needs a paid Anthropic API key (console.anthropic.com → API keys, with some credit added):
+
+```bash
+supabase functions deploy shopping-list
+supabase secrets set MEALS_ANTHROPIC_API_KEY=<key>          # secret
+supabase secrets set MEALS_LLM_MONTHLY_BUDGET_USD=3         # optional, default 3
+supabase secrets set MEALS_LLM_MODEL=claude-opus-5-5        # optional, this is the default
+```
+
+Use that exact secret name. Do **not** set `ANTHROPIC_API_KEY` for this: the `agents` function treats that name as permission to make its own paid calls (AI summaries and daily picks, which the free morning routine does today). Without the key the meal planner works and the list says it needs one. Only the day, slot, meal name and number of people are sent to Anthropic.
+
 ## 5. Google Calendar (read-only, recommended method)
 
 1. console.cloud.google.com → create a project (free) → *APIs & Services → Library* → enable **Google Calendar API**.
@@ -109,4 +122,5 @@ The sheet is read-only to the app. Opening the Accounts tab re-syncs if the last
 | Supabase service-role key | Nowhere in this app | **Yes**, never use it here |
 | Google service-account JSON | `supabase secrets` | **Yes** |
 | API-Football key | `supabase secrets` | **Yes** |
+| Anthropic key for shopping lists (`MEALS_ANTHROPIC_API_KEY`) | `supabase secrets` | **Yes** |
 | Calendar ID, RSS URLs, team ID | In the app (database) | No |

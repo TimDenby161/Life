@@ -1,0 +1,145 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase, type Tables } from '@/lib/supabase'
+import { unwrap } from '@/lib/utils'
+import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { type Slot, type SlotPlan, weekDates } from '../../../supabase/functions/_shared/meals.ts'
+
+export type MealRow = Tables<'meals'>
+export type ShoppingItemRow = Tables<'shopping_items'>
+
+// Shared within the household by RLS. person_id null = a meal for both of you.
+export const mealsKeys = {
+  all: ['meals'] as const,
+  week: (weekStart: string) => ['meals', 'week', weekStart] as const,
+  names: ['meals', 'names'] as const,
+  items: (weekStart: string) => ['meals', 'items', weekStart] as const,
+  run: (weekStart: string) => ['meals', 'run', weekStart] as const,
+}
+
+export const useWeekMeals = (weekStart: string) =>
+  useQuery({
+    queryKey: mealsKeys.week(weekStart),
+    queryFn: async () => {
+      const days = weekDates(weekStart)
+      return unwrap(await supabase.from('meals').select('*').gte('day', days[0]).lte('day', days[6]))
+    },
+  })
+
+/** Meals typed before, newest first, to suggest while typing. */
+export const useMealNames = () =>
+  useQuery({
+    queryKey: mealsKeys.names,
+    queryFn: async () => {
+      const rows = unwrap(await supabase.from('meals').select('name').order('created_at', { ascending: false }).limit(300))
+      const seen = new Map<string, string>()
+      for (const r of rows) if (!seen.has(r.name.toLowerCase())) seen.set(r.name.toLowerCase(), r.name)
+      return [...seen.values()]
+    },
+    staleTime: 5 * 60_000,
+  })
+
+export const useShoppingItems = (weekStart: string) =>
+  useQuery({
+    queryKey: mealsKeys.items(weekStart),
+    queryFn: async () =>
+      unwrap(await supabase.from('shopping_items').select('*').eq('week_start', weekStart).order('position').order('created_at')),
+  })
+
+/** The meals the week's list was last built from (null when no list has been made). */
+export const useListMealsKey = (weekStart: string) =>
+  useQuery({
+    queryKey: mealsKeys.run(weekStart),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shopping_list_runs')
+        .select('meals_key')
+        .eq('week_start', weekStart)
+        .eq('ok', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      return data?.meals_key ?? null
+    },
+  })
+
+function useMealsMutation<TArgs>(fn: (householdId: string, args: TArgs) => Promise<unknown>) {
+  const { household } = useHousehold()
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (args: TArgs) => fn(household.id, args), onSuccess: () => qc.invalidateQueries({ queryKey: mealsKeys.all }) })
+}
+
+/** Sets the meal in a slot; an empty name clears it. `id` is the row already there, if any. */
+export const useSaveMeal = () =>
+  useMealsMutation(async (h, m: { id?: string; day: string; slot: Slot; person_id: string | null; name: string }) => {
+    const name = m.name.replace(/\s+/g, ' ').trim()
+    if (!name) return m.id ? unwrap(await supabase.from('meals').delete().eq('id', m.id)) : null
+    return m.id
+      ? unwrap(await supabase.from('meals').update({ name }).eq('id', m.id))
+      : unwrap(await supabase.from('meals').insert({ household_id: h, day: m.day, slot: m.slot, person_id: m.person_id, name }))
+  })
+
+/** One meal each: the shared meal (if there is one) becomes each person's own. */
+export const useSplitSlot = () =>
+  useMealsMutation(async (h, { plan, people }: { plan: SlotPlan; people: string[] }) => {
+    if (!plan.shared) return
+    const rows = people.map((person_id) => ({ household_id: h, day: plan.day, slot: plan.slot, person_id, name: plan.shared!.name }))
+    unwrap(await supabase.from('meals').insert(rows))
+    unwrap(await supabase.from('meals').delete().eq('id', plan.shared.id))
+  })
+
+/** Back to one meal for both: keeps `keep`'s meal (yours, when you both had one). */
+export const useMergeSlot = () =>
+  useMealsMutation(async (h, { plan, keep }: { plan: SlotPlan; keep: string }) => {
+    const name = (plan.personal.find((r) => r.person_id === keep) ?? plan.personal[0])?.name
+    if (plan.shared) unwrap(await supabase.from('meals').delete().eq('id', plan.shared.id))
+    if (plan.personal.length) unwrap(await supabase.from('meals').delete().in('id', plan.personal.map((r) => r.id)))
+    if (name) unwrap(await supabase.from('meals').insert({ household_id: h, day: plan.day, slot: plan.slot, person_id: null, name }))
+  })
+
+/** Ticks straight away, then saves; puts the tick back if the save fails. */
+export function useToggleItem(weekStart: string) {
+  const qc = useQueryClient()
+  const key = mealsKeys.items(weekStart)
+  return useMutation({
+    mutationFn: async ({ id, checked }: { id: string; checked: boolean }) => unwrap(await supabase.from('shopping_items').update({ checked }).eq('id', id)),
+    onMutate: async ({ id, checked }) => {
+      await qc.cancelQueries({ queryKey: key })
+      const before = qc.getQueryData<ShoppingItemRow[]>(key)
+      qc.setQueryData<ShoppingItemRow[]>(key, (rows) => rows?.map((r) => (r.id === id ? { ...r, checked } : r)))
+      return { before }
+    },
+    onError: (_e, _v, ctx) => qc.setQueryData(key, ctx?.before),
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
+  })
+}
+
+export const useAddItem = () =>
+  useMealsMutation(async (h, { weekStart, name }: { weekStart: string; name: string }) =>
+    unwrap(await supabase.from('shopping_items').insert({ household_id: h, week_start: weekStart, name: name.replace(/\s+/g, ' ').trim() })),
+  )
+
+export const useDeleteItem = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('shopping_items').delete().eq('id', id)))
+
+export type MakeListResult =
+  | { status: 'ok'; count: number }
+  | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
+
+/** Asks the shopping-list Edge Function to write the week's list; the API key never reaches the browser. */
+export function useMakeShoppingList() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (weekStart: string): Promise<MakeListResult> => {
+      const { data, error } = await supabase.functions.invoke<MakeListResult>('shopping-list', { body: { weekStart } })
+      if (error) {
+        // Non-2xx responses still carry our JSON body.
+        const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
+        if (body?.status) return body as MakeListResult
+        return { status: 'error', message: 'The shopping list service could not be reached.' }
+      }
+      return data ?? { status: 'error', message: 'Empty response' }
+    },
+    // A failed call can still have been recorded, so refresh either way.
+    onSettled: () => qc.invalidateQueries({ queryKey: mealsKeys.all }),
+  })
+}

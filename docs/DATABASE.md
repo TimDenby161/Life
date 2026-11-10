@@ -53,6 +53,9 @@ Postgres on Supabase. Migrations in `supabase/migrations/` (apply with `supabase
 | | `career_goals` | One person's career goals: title, target date, check-in period, last check-in, done. Both read; owner writes. |
 | | `takeaways` | One row per takeaway for the Weight & Food agent: date, and on your own or together. Both read; only the logger adds or deletes. |
 | | `people` | Friends and family for the Friends agent: owner (null = joint), birthday as month and day, how often you'd like to see them, last seen. Household-shared. |
+| | `meals` | The week's meal plan: a day, a slot (breakfast, lunch, dinner) and who it is for (`person_id` null = both; a split slot has a row per person). One meal per slot per person. Household-shared. |
+| | `shopping_items` | The week's shopping list (`week_start` is its Monday): name, quantity, aisle, ticked. `source` is `ai` (written by the `shopping-list` function from Claude's answer) or `manual` (added by you); clients can only add `manual` rows, tick and delete. |
+| | `shopping_list_runs` | Append-only, read-only to clients: one row per call to Claude with the meals the list was built from (`meals_key`), token counts and cost. The month's rows are the spend checked against the budget. Written only by `shopping_save_list` (service role), which also swaps the week's `ai` items and keeps ticks on unchanged names. |
 | | `push_subscriptions` | Devices a person allowed briefing notifications on (Web Push endpoint and keys). Endpoint must be a browser push service. Owner only; `user_preferences.briefing_push` is the on/off switch (off by default). |
 | | `investment_settings` | Per person: monthly contribution, how much to keep as cash for the wedding (null = undecided), date values were checked. The plan is computed in `investments/lib/plan.ts`. |
 

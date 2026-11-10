@@ -1786,6 +1786,57 @@ export type Database = {
           },
         ]
       }
+      meals: {
+        Row: {
+          created_at: string
+          created_by: string
+          day: string
+          household_id: string
+          id: string
+          name: string
+          person_id: string | null
+          slot: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          day: string
+          household_id: string
+          id?: string
+          name: string
+          person_id?: string | null
+          slot: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          day?: string
+          household_id?: string
+          id?: string
+          name?: string
+          person_id?: string | null
+          slot?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meals_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meals_household_id_person_id_fkey"
+            columns: ["household_id", "person_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       people: {
         Row: {
           birthday_day: number | null
@@ -2113,6 +2164,106 @@ export type Database = {
           },
           {
             foreignKeyName: "savings_pots_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopping_items: {
+        Row: {
+          aisle: string
+          checked: boolean
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          name: string
+          position: number
+          quantity: string | null
+          source: string
+          week_start: string
+        }
+        Insert: {
+          aisle?: string
+          checked?: boolean
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          name: string
+          position?: number
+          quantity?: string | null
+          source?: string
+          week_start: string
+        }
+        Update: {
+          aisle?: string
+          checked?: boolean
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          name?: string
+          position?: number
+          quantity?: string | null
+          source?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopping_list_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          item_count: number
+          llm_cost_micro_usd: number
+          llm_input_tokens: number
+          llm_output_tokens: number
+          meals_key: string
+          ok: boolean
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          item_count?: number
+          llm_cost_micro_usd?: number
+          llm_input_tokens?: number
+          llm_output_tokens?: number
+          meals_key?: string
+          ok: boolean
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          item_count?: number
+          llm_cost_micro_usd?: number
+          llm_input_tokens?: number
+          llm_output_tokens?: number
+          meals_key?: string
+          ok?: boolean
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_runs_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
@@ -3334,6 +3485,17 @@ export type Database = {
         }
       }
       shares_household_with: { Args: { p_user_id: string }; Returns: boolean }
+      shopping_save_list: {
+        Args: {
+          p_household_id: string
+          p_items: Json
+          p_meals_key: string
+          p_usage: Json
+          p_user_id: string
+          p_week_start: string
+        }
+        Returns: undefined
+      }
       skip_task_occurrence: {
         Args: { p_note?: string; p_occurrence_id: string }
         Returns: {

@@ -13,6 +13,7 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  UtensilsCrossed,
   Wallet,
 } from 'lucide-react'
 import { lazy, type LazyExoticComponent, type ComponentType } from 'react'
@@ -34,12 +35,13 @@ export type AppModule = {
 
 export const modules: AppModule[] = [
   { id: 'home', label: 'Home', path: '/', icon: Home, mobilePrimary: 1, component: lazy(() => import('./dashboard/DashboardPage')) },
+  { id: 'meals', label: 'Meals', path: '/meals', icon: UtensilsCrossed, mobilePrimary: 2, component: lazy(() => import('./meals/MealsPage')) },
   { id: 'tasks', label: 'Tasks', path: '/tasks', icon: CheckCircle2, component: lazy(() => import('./tasks/pages/TasksPage')) },
   { id: 'jobs', label: 'Jobs', path: '/jobs', icon: ListRestart, component: lazy(() => import('./tasks/pages/JobsPage')) },
   { id: 'finances', label: 'Finances', path: '/finances', icon: Wallet, mobilePrimary: 3, component: lazy(() => import('./finances/pages/FinancesPage')) },
   { id: 'investments', label: 'Investments', path: '/investments', icon: TrendingUp, component: lazy(() => import('./investments/InvestmentsPage')) },
   { id: 'wedding', label: 'Wedding', path: '/wedding', icon: Gem, mobilePrimary: 4, component: lazy(() => import('./wedding/WeddingPage')) },
-  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, mobilePrimary: 2, component: lazy(() => import('./calendar/CalendarPage')) },
+  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, component: lazy(() => import('./calendar/CalendarPage')) },
   { id: 'feed', label: 'Feed', path: '/feed', icon: MessagesSquare, component: lazy(() => import('./feed/FeedPage')) },
   { id: 'languages', label: 'Languages', path: '/languages', icon: Languages, component: lazy(() => import('./languages/LanguagesPage')) },
   { id: 'health', label: 'Health', path: '/health', icon: HeartPulse, component: lazy(() => import('./health/HealthPage')) },

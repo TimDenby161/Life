@@ -20,6 +20,7 @@ Validation actually run against the local Supabase stack (Docker):
 - `external-feed` against live RSS hosts and API-Football (no API key used). The code paths for missing configuration were exercised; live responses were not.
 - Hosted Supabase project, invite emails and the GitHub Pages deployment (nothing was deployed or pushed).
 - Installing the PWA on a physical iPhone or Android phone.
+- The Meals shopping list's real call to Claude (no API key was used). Locally the `shopping-list` function was run for a bad week, an empty week, no login and no key, and the list was checked in the browser with rows saved through `shopping_save_list`; the prompt input and the check on Claude's answer are unit-tested.
 
 ## Decisions for you
 
