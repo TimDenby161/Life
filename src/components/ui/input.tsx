@@ -4,8 +4,13 @@ import { cn } from '@/lib/utils'
 const fieldBase =
   'w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base shadow-xs transition-colors placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive md:text-sm'
 
+// iPhone Safari gives date and time boxes their own width, height and centred text, so they don't line up
+// with the boxes beside them; this makes them fill their space and sit like any other box.
+const DATE_TYPES = new Set(['date', 'time', 'month', 'datetime-local'])
+const dateFix = 'min-w-0 w-full appearance-none text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-date-and-time-value]:text-left'
+
 export function Input({ className, type = 'text', ...props }: React.ComponentProps<'input'>) {
-  return <input type={type} className={cn(fieldBase, 'h-10', className)} {...props} />
+  return <input type={type} className={cn(fieldBase, 'h-10', DATE_TYPES.has(type) && dateFix, className)} {...props} />
 }
 
 export function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
