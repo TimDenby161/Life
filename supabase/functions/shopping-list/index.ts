@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
         .lt('day', dates[0])
         .order('day', { ascending: false }),
       supabase.from('meal_availability').select('day, slot, person_id, available').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
-      supabase.from('meal_slot_notes').select('day, slot, note').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
+      supabase.from('meal_slot_notes').select('day, slot, note, effort').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
       haveNames(),
     ])
     if (planned.error || recentRows.error || availability.error || notes.error || pantry.error) {

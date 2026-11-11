@@ -58,7 +58,12 @@ export const isSplit = (s: SlotPlan) => s.personal.length > 0
 
 /** All 21 slots of the week in order, empty ones included. */
 export function weekPlan(weekStart: string, rows: readonly MealRow[]): SlotPlan[] {
-  return weekDates(weekStart).flatMap((day) =>
+  return daysPlan(weekDates(weekStart), rows)
+}
+
+/** Every slot of the given days in order, empty ones included. */
+export function daysPlan(days: readonly string[], rows: readonly MealRow[]): SlotPlan[] {
+  return days.flatMap((day) =>
     SLOTS.map((slot) => {
       const here = rows.filter((r) => r.day === day && r.slot === slot)
       return { day, slot, shared: here.find((r) => r.person_id === null) ?? null, personal: here.filter((r) => r.person_id !== null) }
@@ -341,9 +346,10 @@ export function cleanRecipes(raw: string, asked: readonly string[]): Recipe[] | 
 // Planning the next few days -----------------------------------------------------------
 //
 // From the Plan view: who is in for each lunch and dinner, what you want for
-// each (the note), and the ingredients you have. Claude fills each empty slot
-// someone is in for; it is sent the date, the slot, how many are eating, your
-// note for it, the ingredients you have and recent meal names. Never who is eating.
+// each (the note, and whether it should be quick or a longer cook), and the
+// ingredients you have. Claude fills each empty slot someone is in for; it is
+// sent the date, the slot, how many are eating, your note and quick/long for it,
+// the ingredients you have and recent meal names. Never who is eating.
 
 /** Days planned unless more are added; never more than MAX_PLAN_DAYS (the calendars fill who is in that far). */
 export const PLAN_DAYS = 4
@@ -353,9 +359,13 @@ export type PlanSlot = (typeof PLAN_SLOTS)[number]
 export const MAX_RECENT = 40
 
 export type PlanAvailability = { day: string; slot: string; person_id: string; available: boolean }
-export type PlanNote = { day: string; slot: string; note: string }
-/** A slot to fill: who is eating it and what you asked for. */
-export type OpenSlot = { day: string; slot: PlanSlot; eaters: string[]; note: string }
+export const EFFORTS = ['quick', 'long'] as const
+export type Effort = (typeof EFFORTS)[number]
+export type PlanNote = { day: string; slot: string; note: string; effort?: string | null }
+/** A slot to fill: who is eating it, what you asked for and whether it should be quick or a longer cook. */
+export type OpenSlot = { day: string; slot: PlanSlot; eaters: string[]; note: string; effort?: Effort }
+
+const asEffort = (v: unknown): Effort | undefined => (EFFORTS as readonly unknown[]).includes(v) ? (v as Effort) : undefined
 
 /** A real "YYYY-MM-DD". */
 export function isISODate(value: string): boolean {
@@ -393,7 +403,9 @@ export function openSlots(
       if (meals.some((m) => m.day === day && m.slot === slot)) return []
       const eaters = members.filter((p) => availability.find((a) => a.day === day && a.slot === slot && a.person_id === p)?.available ?? true)
       if (!eaters.length) return []
-      return [{ day, slot, eaters, note: tidy(notes.find((n) => n.day === day && n.slot === slot)?.note ?? '') }]
+      const n = notes.find((n) => n.day === day && n.slot === slot)
+      const effort = asEffort(n?.effort)
+      return [{ day, slot, eaters, note: tidy(n?.note ?? ''), ...(effort ? { effort } : {}) }]
     }),
   )
 }
@@ -407,7 +419,7 @@ export function planInput(
 ): string {
   const weekday = (day: string) => DAY_NAMES[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]
   return JSON.stringify({
-    slots: open.map((s) => ({ date: s.day, weekday: weekday(s.day), slot: s.slot, people: s.eaters.length, ...(s.note ? { note: s.note } : {}) })),
+    slots: open.map((s) => ({ date: s.day, weekday: weekday(s.day), slot: s.slot, people: s.eaters.length, ...(s.note ? { note: s.note } : {}), ...(s.effort ? { effort: s.effort } : {}) })),
     already_planned: distinctPlanned(planned).map((m) => ({ date: m.day, weekday: weekday(m.day), slot: m.slot, meal: tidy(m.name) })),
     recently_eaten: distinctNames(recent, MAX_RECENT),
     ...haveField(have),
@@ -427,8 +439,10 @@ function distinctPlanned(rows: readonly MealRow[]): MealRow[] {
 
 export const PLAN_PROMPT = [
   'You plan lunches and dinners for a UK household over the next few days.',
-  'The JSON you are given lists the slots to fill (date, slot, how many people are eating, and sometimes a note saying what they want for that meal), meals already planned around them, and meals eaten recently.',
-  'Give every slot exactly one meal. Follow each slot\'s note first: when it names a meal, use that meal, written as given. Fill the rest with ordinary home cooking at a sensible time (bigger or slower meals for dinner or the weekend, quicker ones on weekdays), without repeating a meal eaten recently or planned nearby.',
+  'The JSON you are given lists the slots to fill (date, slot, how many people are eating, sometimes a note saying what they want for that meal, and sometimes an effort), meals already planned around them, and meals eaten recently.',
+  'Give every slot exactly one meal. Follow each slot\'s note first: when it names a meal, use that meal, written as given.',
+  '"effort", when present, is how long they have to cook: "quick" means on the table in about 30 minutes or less with little prep; "long" means they have time for a slower cook or a bigger recipe (a roast, a stew, a curry from scratch, a bake). Choose meals that fit it.',
+  'Fill the rest with ordinary home cooking at a sensible time (where no effort is given: bigger or slower meals for dinner or the weekend, quicker ones on weekdays), without repeating a meal eaten recently or planned nearby.',
   '"have", when present, lists ingredients already in the kitchen: where the notes leave a choice, choose meals that use them up.',
   'Lunches can be simple: sandwiches, soup, salads, or "Leftovers" of the dinner before when that dinner makes enough. Use "Leftovers" only straight after a dinner that suits it.',
   'Keep meal names short and plain, as someone would write them on a meal plan ("Chicken stir fry"), with no brands or descriptions.',

@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { Coffee, type LucideIcon, Merge, Sandwich, Split, Utensils } from 'lucide-react'
+import { ArrowLeftRight, Coffee, type LucideIcon, Merge, Sandwich, Split, Utensils } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { type Member, useHousehold } from '@/modules/household/HouseholdProvider'
 import { isSplit, type Slot, type SlotPlan, SLOTS } from '../../../../supabase/functions/_shared/meals.ts'
 import { useMergeSlot, useSaveMeal, useSplitSlot } from '../api'
+import { SwapMeal } from './SwapMeal'
 
 const SLOT: Record<Slot, { label: string; icon: LucideIcon }> = {
   breakfast: { label: 'Breakfast', icon: Coffee },
@@ -78,6 +79,21 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
   const onError = (e: unknown) => toast.error(getErrorMessage(e))
   const { label, icon: Icon } = SLOT[plan.slot]
   const what = `${dayName} ${label.toLowerCase()}`
+  // Whose meal is being swapped: undefined = none, null = the meal for both.
+  const [swapping, setSwapping] = useState<string | null | undefined>(undefined)
+  const swapRow = swapping === null ? plan.shared : plan.personal.find((r) => r.person_id === swapping)
+  const swapButton = (person: string | null, whose: string) => (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      className="size-8 shrink-0 text-muted-foreground"
+      aria-label={`Swap ${whose}`}
+      title="Swap for a meal you've had"
+      onClick={() => setSwapping(person)}
+    >
+      <ArrowLeftRight />
+    </Button>
+  )
 
   return (
     <li className="flex items-start gap-1.5">
@@ -96,12 +112,13 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
                   className="h-8 px-2 text-sm"
                   onSave={(name) => save.mutate({ id: row?.id, day: plan.day, slot: plan.slot, person_id: p.id, name }, { onError })}
                 />
+                {swapButton(p.id, `${what}, ${p.display_name}`)}
               </div>
             )
           })}
         </div>
       ) : (
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center">
           <MealInput
             value={plan.shared?.name ?? ''}
             label={what}
@@ -109,8 +126,16 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
             className="h-8 px-2 text-sm"
             onSave={(name) => save.mutate({ id: plan.shared?.id, day: plan.day, slot: plan.slot, person_id: null, name }, { onError })}
           />
+          {swapButton(null, what)}
         </div>
       )}
+      <SwapMeal
+        open={swapping !== undefined}
+        onOpenChange={(o) => !o && setSwapping(undefined)}
+        what={what}
+        current={swapRow?.name ?? ''}
+        onPick={(name) => save.mutate({ id: swapRow?.id, day: plan.day, slot: plan.slot, person_id: swapping ?? null, name }, { onError })}
+      />
       {people.length > 1 ? (
         <Button
           size="icon-sm"
@@ -132,7 +157,10 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
   )
 }
 
-/** The week's 21 slots, a line per day in one card, kept tight so more of the week fits on a phone. Any slot can be split into a meal each. */
+/**
+ * Slots a line per day in one card (the days Plan meals filled, or a whole week), kept tight so they fit on a phone.
+ * Any meal can be swapped for one you have had, and any slot split into a meal each.
+ */
 export function WeekMeals({ plans }: { plans: SlotPlan[] }) {
   const { me, partner } = useHousehold()
   const people = partner ? [me, partner] : [me]

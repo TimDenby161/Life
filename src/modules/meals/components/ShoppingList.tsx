@@ -13,7 +13,7 @@ import { AISLES } from '../../../../supabase/functions/_shared/meals.ts'
 import { type ShoppingItemRow, useAddItem, useDeleteItem, useToggleItem } from '../api'
 
 /**
- * The week's shopping list by aisle. Plan meals has Claude write it from the
+ * The week's shopping list by aisle. Complete on Meals has Claude write it from the
  * week's recipes; you can tick things off, add your own and remove what you don't need.
  */
 export function ShoppingList({
@@ -28,7 +28,7 @@ export function ShoppingList({
   hasMeals: boolean
   /** The meals have changed since the list was written. */
   stale: boolean
-  /** Plan meals is writing it now. */
+  /** Complete is writing it now. */
   making: boolean
 }) {
   const toggle = useToggleItem(weekStart)
@@ -36,7 +36,7 @@ export function ShoppingList({
   const del = useDeleteItem()
   const [text, setText] = useState('')
   const onError = (e: unknown) => toast.error(getErrorMessage(e))
-  const note = making ? 'Claude is writing your list.' : stale ? 'Meals changed since this list: Plan meals updates it.' : null
+  const note = making ? 'Claude is writing your list.' : stale ? 'Meals changed since this list: Complete on Meals updates it.' : null
 
   return (
     <>
@@ -62,7 +62,7 @@ export function ShoppingList({
 
       {!items.length ? (
         <Card className="mt-3">
-          <EmptyState icon={ShoppingBasket} title="No list yet" description={hasMeals ? 'Plan meals writes it, or add items yourself.' : 'Plan meals writes it from the week’s meals.'} />
+          <EmptyState icon={ShoppingBasket} title="No list yet" description={hasMeals ? 'Complete on Meals writes it, or add items yourself.' : 'Complete on Meals writes it from the week’s meals.'} />
         </Card>
       ) : (
         AISLES.map((aisle) => {

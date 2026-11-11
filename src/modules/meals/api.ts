@@ -1,8 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { todayISO } from '@/lib/dates'
 import { supabase, type Tables } from '@/lib/supabase'
 import { unwrap } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type Slot, type SlotPlan, weekDates } from '../../../supabase/functions/_shared/meals.ts'
+import { type Effort, type Slot, type SlotPlan, weekDates } from '../../../supabase/functions/_shared/meals.ts'
 
 export type MealRow = Tables<'meals'>
 export type ShoppingItemRow = Tables<'shopping_items'>
@@ -12,6 +13,7 @@ export type RecipeRow = Tables<'recipes'>
 export const mealsKeys = {
   all: ['meals'] as const,
   week: (weekStart: string) => ['meals', 'week', weekStart] as const,
+  days: (from: string, to: string) => ['meals', 'days', from, to] as const,
   names: ['meals', 'names'] as const,
   items: (weekStart: string) => ['meals', 'items', weekStart] as const,
   run: (weekStart: string) => ['meals', 'run', weekStart] as const,
@@ -27,14 +29,30 @@ export const useWeekMeals = (weekStart: string) =>
     },
   })
 
-/** Meals typed before, newest first, to suggest while typing. */
+/** The meals on the days from `from` to `to` (the days Plan meals filled). */
+export const useDaysMeals = (from: string, to: string) =>
+  useQuery({
+    queryKey: mealsKeys.days(from, to),
+    queryFn: async () => unwrap(await supabase.from('meals').select('*').gte('day', from).lte('day', to)),
+    placeholderData: keepPreviousData,
+  })
+
+/** A meal you have had: the last day you had it and how many times. */
+export type PastMeal = { name: string; last: string; times: number }
+
+/** Meals you have had (up to today), the most recent first: suggested while typing, and to swap a meal for. */
 export const useMealNames = () =>
   useQuery({
     queryKey: mealsKeys.names,
     queryFn: async () => {
-      const rows = unwrap(await supabase.from('meals').select('name').order('created_at', { ascending: false }).limit(300))
-      const seen = new Map<string, string>()
-      for (const r of rows) if (!seen.has(r.name.toLowerCase())) seen.set(r.name.toLowerCase(), r.name)
+      const rows = unwrap(await supabase.from('meals').select('name, day').lte('day', todayISO()).order('day', { ascending: false }).limit(600))
+      const seen = new Map<string, PastMeal>()
+      for (const r of rows) {
+        const key = r.name.replace(/\s+/g, ' ').trim().toLowerCase()
+        const hit = seen.get(key)
+        if (hit) hit.times += 1
+        else seen.set(key, { name: r.name, last: r.day, times: 1 })
+      }
       return [...seen.values()]
     },
     staleTime: 5 * 60_000,
@@ -236,15 +254,15 @@ export const useSetAvailable = () =>
       : unwrap(await supabase.from('meal_availability').insert({ household_id: h, day: a.day, slot: a.slot, person_id: a.person_id, available: a.available })),
   )
 
-/** What you want for a meal; empty clears it. */
+/** What you want for a meal and whether it should be quick or a longer cook; with neither, the row goes. */
 export const useSaveSlotNote = () =>
-  useMealsMutation(async (h, n: { day: string; slot: PlanSlot; note: string; exists: boolean }) => {
+  useMealsMutation(async (h, n: { day: string; slot: PlanSlot; note: string; effort: Effort | null; exists: boolean }) => {
     const note = n.note.replace(/\s+/g, ' ').trim()
     const row = () => supabase.from('meal_slot_notes')
-    if (!note) return n.exists ? unwrap(await row().delete().eq('household_id', h).eq('day', n.day).eq('slot', n.slot)) : null
+    if (!note && !n.effort) return n.exists ? unwrap(await row().delete().eq('household_id', h).eq('day', n.day).eq('slot', n.slot)) : null
     return n.exists
-      ? unwrap(await row().update({ note }).eq('household_id', h).eq('day', n.day).eq('slot', n.slot))
-      : unwrap(await row().insert({ household_id: h, day: n.day, slot: n.slot, note }))
+      ? unwrap(await row().update({ note, effort: n.effort }).eq('household_id', h).eq('day', n.day).eq('slot', n.slot))
+      : unwrap(await row().insert({ household_id: h, day: n.day, slot: n.slot, note, effort: n.effort }))
   })
 
 export type PlanMealsResult =

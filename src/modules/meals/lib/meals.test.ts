@@ -284,6 +284,25 @@ describe('planning the next few days', () => {
     expect(JSON.parse(planInput(open, [], [], []))).not.toHaveProperty('have')
   })
 
+  it('tells Claude when a meal should be quick or a longer cook, and ignores anything else', () => {
+    const open = openSlots(
+      FROM,
+      [TIM, SOPHIE],
+      [],
+      [
+        { day: FROM, slot: 'lunch', note: '', effort: 'quick' },
+        { day: FROM, slot: 'dinner', note: 'Curry', effort: 'long' },
+        { day: '2026-11-14', slot: 'lunch', note: '', effort: 'medium' },
+      ],
+      [],
+    )
+    const slots = JSON.parse(planInput(open.slice(0, 3), [], [])).slots
+    expect(slots[0]).toMatchObject({ slot: 'lunch', effort: 'quick' })
+    expect(slots[0]).not.toHaveProperty('note')
+    expect(slots[1]).toMatchObject({ slot: 'dinner', note: 'Curry', effort: 'long' })
+    expect(slots[2]).not.toHaveProperty('effort')
+  })
+
   it('keeps only open slots, one meal each, as a meal for both or one each for whoever is in', () => {
     const open = openSlots(FROM, [TIM, SOPHIE], [{ day: FROM, slot: 'dinner', person_id: SOPHIE, available: false }], [], [])
     const raw = JSON.stringify({

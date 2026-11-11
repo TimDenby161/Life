@@ -6,7 +6,7 @@ import type { RecipeRow } from '../api'
 
 /**
  * A recipe for each different meal of the week, written by Claude when you
- * Plan meals (the planned days' recipes are rewritten each time, with what you
+ * Complete on Meals (the planned days' recipes are rewritten each time, with what you
  * have in) and kept, so a meal planned again already has one.
  */
 export function Recipes({
@@ -19,7 +19,7 @@ export function Recipes({
   recipes: RecipeRow[]
   /** "Mon"…"Sun": that day's recipes start open (today, when looking at this week). */
   openDay: string | null
-  /** Plan meals is writing them now. */
+  /** Complete is writing them now. */
   writing: boolean
 }) {
   const byKey = new Map(recipes.map((r) => [r.meal_key, r]))
@@ -56,7 +56,7 @@ export function Recipes({
             return (
               <Card key={meal.key} className="flex items-center gap-3 p-3">
                 {heading}
-                <span className="shrink-0 text-sm text-muted-foreground">{recipe ? 'Nothing to cook' : writing ? 'Writing…' : 'Plan meals writes it'}</span>
+                <span className="shrink-0 text-sm text-muted-foreground">{recipe ? 'Nothing to cook' : writing ? 'Writing…' : 'Complete on Meals writes it'}</span>
               </Card>
             )
           }

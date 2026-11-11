@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -11,8 +11,9 @@ import { addDaysISO, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { isMonday, isPlanDays, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
+import { daysPlan, isMonday, isPlanDays, mealsKey, planDates, plannedMeals, weekMeals, weekStartOf } from '../../../supabase/functions/_shared/meals.ts'
 import {
+  useDaysMeals,
   useListMealsKey,
   useMakeShoppingList,
   useMealNames,
@@ -32,10 +33,12 @@ import { WeekMeals } from './components/WeekMeals'
 type View = 'plan' | 'meals' | 'list' | 'recipes'
 
 /**
- * Planning (who is in over the next four days, or more when days are added,
- * and what you have in), the week's meals, the shopping list made from them and
- * their recipes, one at a time behind a switch. The week, the view and any added
- * days live in the address (?week=…&view=list&days=5), so a reload keeps you where you were.
+ * Two steps. Plan: who is in over the next four days (or more when days are
+ * added), what you have in, what you want and whether it should be quick, then
+ * Plan meals. Meals: those days filled in, any meal swapped for one you have
+ * had, then Complete writes the recipes and the shopping list. The list and the
+ * recipes are by week. The week, the view and any added days live in the
+ * address (?week=…&view=list&days=5), so a reload keeps you where you were.
  */
 export default function MealsPage() {
   const { members } = useHousehold()
@@ -77,36 +80,51 @@ export default function MealsPage() {
   const pantry = usePantry()
   const planDays = usePlanDays(today, planTo)
   const planMeals = usePlanMeals()
+  const dayMeals = useDaysMeals(today, planTo)
   const [busy, setBusy] = useState<string | null>(null)
 
-  /**
-   * The one thing that uses Claude: it fills the empty slots, rewrites the recipes for the planned days (with what
-   * you have in), then writes the shopping list from those recipes. You see the meals while it works.
-   */
+  /** Step one: Claude fills the empty lunches and dinners, then you see them on Meals to swap any you don't fancy. */
   const runPlan = async () => {
     const id = 'meal-plan'
     try {
       setBusy('Planning meals…')
       const planned = await planMeals.mutateAsync({ from: today, days: planDayCount })
       if (planned.status !== 'ok') return void toast.error(planned.message, { id })
-      change({ view: 'meals', week: weekDays(today)[0] })
+      change({ view: 'meals' })
+      toast.success(planned.placed ? `${planned.placed} meals planned: swap any, then Complete` : 'Every meal already has something: swap any, then Complete', { id })
+    } catch (e) {
+      toast.error(getErrorMessage(e), { id })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Step two: rewrites the recipes for the planned days (with what you have in), then writes each week's shopping
+   * list from those recipes, and shows the list.
+   */
+  const runComplete = async () => {
+    const id = 'meal-complete'
+    const weeks = [...new Set(planDates(today, planDayCount).map(weekStartOf))]
+    try {
       setBusy('Writing recipes…')
-      toast.loading(planned.placed ? `${planned.placed} meals planned. Writing recipes…` : 'Writing recipes…', { id })
-      const fresh = { from: today, days: planDayCount, since: planned.at }
-      for (const w of planned.weeks) {
+      toast.loading('Writing recipes…', { id })
+      const fresh = { from: today, days: planDayCount, since: new Date().toISOString() }
+      for (const w of weeks) {
         const written = await write.mutateAsync({ weekStart: w, fresh })
         if (written.status !== 'ok' && written.status !== 'no_meals') return void toast.error(written.message, { id })
       }
       setBusy('Writing the shopping list…')
       toast.loading('Writing the shopping list…', { id })
-      let lists = 0
-      for (const w of planned.weeks) {
+      const listed: string[] = []
+      for (const w of weeks) {
         const list = await make.mutateAsync(w)
-        if (list.status === 'ok') lists++
+        if (list.status === 'ok') listed.push(w)
         else if (list.status !== 'no_meals') return void toast.error(list.message, { id })
       }
-      if (!lists) return void toast.info('Nobody is in for any of these meals', { id })
-      toast.success('Meals, shopping list and recipes are ready', { id })
+      if (!listed.length) return void toast.info('No meals to shop for yet', { id })
+      change({ view: 'list', week: listed[0] })
+      toast.success('Recipes and shopping list are ready', { id })
     } catch (e) {
       toast.error(getErrorMessage(e), { id })
     } finally {
@@ -122,22 +140,25 @@ export default function MealsPage() {
   const days = weekDays(week)
   const title = week === thisWeek ? 'Meals this week' : week === addDaysISO(thisWeek, 7) ? 'Meals next week' : week === addDaysISO(thisWeek, -7) ? 'Meals last week' : 'Meals'
   const range = `${format(parseISODate(days[0]), 'd MMM')} – ${format(parseISODate(days[6]), 'd MMM')}`
-  const shown = view === 'list' ? items : view === 'recipes' ? recipes : view === 'plan' ? planDays : meals
-  const error = view === 'plan' ? (pantry.error ?? planDays.error) : (meals.error ?? shown.error)
-  const pending = view === 'plan' ? pantry.isPending || planDays.isPending : meals.isPending || shown.isPending
+  const planRange = `${format(parseISODate(today), 'd MMM')} – ${format(parseISODate(planTo), 'd MMM')}`
+  const shown = view === 'list' ? items : view === 'recipes' ? recipes : view === 'plan' ? planDays : dayMeals
+  const error = view === 'plan' ? (pantry.error ?? planDays.error) : view === 'meals' ? dayMeals.error : (meals.error ?? shown.error)
+  const pending = view === 'plan' ? pantry.isPending || planDays.isPending : view === 'meals' ? dayMeals.isPending : meals.isPending || shown.isPending
   const retry = () => {
+    if (view === 'meals') return dayMeals.refetch()
     if (view !== 'plan') return meals.error ? meals.refetch() : shown.refetch()
     void pantry.refetch()
     return planDays.refetch()
   }
+  const byWeek = view === 'list' || view === 'recipes'
 
   return (
     <>
       <PageHeader
-        title={view === 'plan' ? 'Meal plan' : title}
-        description={view === 'plan' ? `${format(parseISODate(today), 'd MMM')} – ${format(parseISODate(planTo), 'd MMM')}` : range}
+        title={view === 'plan' ? 'Meal plan' : view === 'meals' ? 'Meals' : title}
+        description={byWeek ? range : planRange}
         actions={
-          view === 'plan' ? null : (
+          !byWeek ? null : (
             <>
               {week !== thisWeek ? (
                 <Button variant="ghost" size="sm" onClick={() => change({ week: thisWeek })}>
@@ -158,7 +179,7 @@ export default function MealsPage() {
       {/* Meals you've had before, suggested while typing in Plan and Meals. */}
       <datalist id="meal-names">
         {(names.data ?? []).map((n) => (
-          <option key={n} value={n} />
+          <option key={n.name} value={n.name} />
         ))}
       </datalist>
 
@@ -199,10 +220,12 @@ export default function MealsPage() {
           onPlan={() => void runPlan()}
         />
       ) : view === 'meals' ? (
-        <>
-          <WeekMeals key={week} plans={weekPlan(week, rows)} />
-          {stale ? <p className="mt-3 text-sm text-muted-foreground">Meals changed since the shopping list: Plan meals updates it.</p> : null}
-        </>
+        <div className="grid gap-2 md:max-w-xl">
+          <WeekMeals key={today} plans={daysPlan(planDates(today, planDayCount), dayMeals.data ?? [])} />
+          <Button onClick={() => void runComplete()} disabled={Boolean(busy) || !(dayMeals.data ?? []).length} className="w-full">
+            <Check /> {busy ?? 'Complete'}
+          </Button>
+        </div>
       ) : view === 'recipes' ? (
         <Recipes
           meals={weekMeals(week, rows)}

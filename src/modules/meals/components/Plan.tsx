@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { CalendarDays, Minus, Plus, Sparkles, X } from 'lucide-react'
+import { CalendarDays, CookingPot, Minus, Plus, Sparkles, Timer, X, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -20,7 +20,7 @@ import {
   useSaveSlotNote,
   useSetAvailable,
 } from '../api'
-import { MAX_PLAN_DAYS, PLAN_DAYS } from '../../../../supabase/functions/_shared/meals.ts'
+import { type Effort, MAX_PLAN_DAYS, PLAN_DAYS } from '../../../../supabase/functions/_shared/meals.ts'
 import { MealInput } from './WeekMeals'
 
 export { PLAN_DAYS }
@@ -110,6 +110,34 @@ function PersonToggle({ person, row, day, slot, what }: { person: Member; row: A
   )
 }
 
+const EFFORT: Record<Effort | 'any', { icon: typeof Zap; title: string; next: Effort | null }> = {
+  any: { icon: Timer, title: 'Any length', next: 'quick' },
+  quick: { icon: Zap, title: 'Quick', next: 'long' },
+  long: { icon: CookingPot, title: 'Longer cook', next: null },
+}
+
+/** Quick or a longer cook for one meal: tap to go any → quick → long → any. Shows the tap straight away. */
+function EffortToggle({ note, day, slot, what }: { note: SlotNoteRow | undefined; day: string; slot: PlanSlot; what: string }) {
+  const save = useSaveSlotNote()
+  const saved = (note?.effort ?? null) as Effort | null
+  const shown = save.isPending && save.variables ? save.variables.effort : saved
+  const { icon: Icon, title } = EFFORT[shown ?? 'any']
+  return (
+    <button
+      type="button"
+      aria-label={`${title}, ${what}. Tap to change`}
+      title={title}
+      className={cn(
+        'grid size-6 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        shown ? 'bg-primary/10 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground',
+      )}
+      onClick={() => save.mutate({ day, slot, note: note?.note ?? '', effort: EFFORT[saved ?? 'any'].next, exists: Boolean(note) }, { onError })}
+    >
+      <Icon className="size-3.5" />
+    </button>
+  )
+}
+
 /**
  * The next few days, a line each: who is in for lunch and dinner, and what you want for that meal.
  * A day can be added at the foot, or an added one taken off.
@@ -167,13 +195,14 @@ function Grid({
                       />
                     ))}
                   </div>
+                  <EffortToggle note={note} day={day} slot={slot} what={what} />
                   <MealInput
                     value={note?.note ?? ''}
                     label={`What you want, ${what}`}
                     placeholder="Anything?"
                     maxLength={120}
                     className="h-8 min-w-0 px-2 text-sm"
-                    onSave={(text) => save.mutate({ day, slot, note: text, exists: Boolean(note) }, { onError })}
+                    onSave={(text) => save.mutate({ day, slot, note: text, effort: (note?.effort ?? null) as Effort | null, exists: Boolean(note) }, { onError })}
                   />
                 </div>
               )
@@ -195,6 +224,14 @@ function Grid({
           ) : null}
         </div>
       ) : null}
+      <p className="flex flex-wrap items-center gap-x-3 border-t pt-1.5 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Zap className="size-3" aria-hidden /> quick
+        </span>
+        <span className="flex items-center gap-1">
+          <CookingPot className="size-3" aria-hidden /> longer cook
+        </span>
+      </p>
     </Card>
   )
 }
@@ -202,9 +239,9 @@ function Grid({
 /**
  * Plan, sized to fit a phone screen: what you already have, then a line per
  * day (who is in for lunch and dinner, filled overnight from the calendars, and
- * what you want for each; days can be added, up to a week), then Plan meals:
- * the one button that uses Claude. It fills the empty meals, rewrites the
- * planned days' recipes and writes the shopping list.
+ * what you want for each, and quick or a longer cook; days can be added, up to
+ * a week), then Plan meals: Claude fills the empty meals and you go to Meals to
+ * look them over, swap any, and press Complete for the recipes and list.
  */
 export function Plan({
   from,

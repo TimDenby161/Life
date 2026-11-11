@@ -5,7 +5,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(26);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -69,6 +69,14 @@ select lives_ok(format($$insert into meal_slot_notes (household_id, day, slot, n
   current_setting('t.hh')), 'a member writes what they want for a meal');
 select throws_ok(format($$insert into meal_slot_notes (household_id, day, slot, note) values (%L, '2026-11-12', 'dinner', 'Again')$$,
   current_setting('t.hh')), '23505', null, 'one note per meal');
+select lives_ok(format($$insert into meal_slot_notes (household_id, day, slot, effort) values (%L, '2026-11-13', 'lunch', 'quick')$$,
+  current_setting('t.hh')), 'a meal can be marked quick with no note');
+update meal_slot_notes set effort = 'long' where day = '2026-11-12' and slot = 'dinner';
+select is((select effort from meal_slot_notes where day = '2026-11-12' and slot = 'dinner'), 'long', 'or changed to a longer cook');
+select throws_ok(format($$insert into meal_slot_notes (household_id, day, slot, effort) values (%L, '2026-11-14', 'lunch', 'medium')$$,
+  current_setting('t.hh')), '23514', null, 'only quick or long');
+select throws_ok(format($$insert into meal_slot_notes (household_id, day, slot) values (%L, '2026-11-14', 'dinner')$$,
+  current_setting('t.hh')), '23514', null, 'a row with neither a note nor an effort is refused');
 
 -- Claude's plan, as the shopping-list function saves it (service role) ------------------
 select ok(not has_function_privilege('authenticated', 'public.meals_save_plan(uuid, date, uuid, jsonb, jsonb)', 'execute'),
