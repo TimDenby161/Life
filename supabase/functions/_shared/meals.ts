@@ -23,6 +23,9 @@ export const AISLES = [
 export type Aisle = (typeof AISLES)[number]['key']
 const AISLE_KEYS: readonly string[] = AISLES.map((a) => a.key)
 
+/** Meals runs on Sonnet to keep each Plan meals cheap (about half Opus's price); MEALS_LLM_MODEL overrides it. */
+export const MEALS_MODEL = 'claude-sonnet-5-5'
+
 export const MAX_ITEMS = 80
 export const MAX_ITEM_NAME = 60
 export const MAX_QUANTITY = 30

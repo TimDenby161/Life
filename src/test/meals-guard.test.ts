@@ -54,6 +54,11 @@ describe('shopping-list Edge Function', () => {
     expect(agents).not.toContain('MEALS_ANTHROPIC_API_KEY')
   })
 
+  it('runs on Sonnet unless MEALS_LLM_MODEL says otherwise, to keep it cheap', () => {
+    expect(shared).toContain("export const MEALS_MODEL = 'claude-sonnet-5-5'")
+    expect(fn).toContain("Deno.env.get('MEALS_LLM_MODEL') || MEALS_MODEL")
+  })
+
   it('never logs what was asked or answered', () => {
     for (const [, args] of fn.matchAll(/console\.\w+\(([^)]*)\)/g)) expect(args).not.toMatch(/input|raw|items|meals|rows|body/)
   })

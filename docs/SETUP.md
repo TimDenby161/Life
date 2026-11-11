@@ -72,7 +72,7 @@ The Meals page plans the week; its shopping list and its recipes are written by 
 supabase functions deploy shopping-list
 supabase secrets set MEALS_ANTHROPIC_API_KEY=<key>          # secret
 supabase secrets set MEALS_LLM_MONTHLY_BUDGET_USD=3         # optional, default 3
-supabase secrets set MEALS_LLM_MODEL=claude-opus-5-5        # optional, this is the default
+supabase secrets set MEALS_LLM_MODEL=claude-sonnet-5-5      # optional, this is the default
 ```
 
 Use that exact secret name. Do **not** set `ANTHROPIC_API_KEY` for this: the `agents` function treats that name as permission to make its own paid calls (AI summaries and daily picks, which the free morning routine does today). Without the key the meal planner works and the list says it needs one. Only the day, slot, meal name and number of people are sent to Anthropic (for recipes, the meal names and how many to cook for; for a list, also the saved recipe's ingredients so the list buys what the recipe uses).

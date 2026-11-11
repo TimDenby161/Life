@@ -29,12 +29,12 @@
 //   MEALS_ANTHROPIC_API_KEY       this function's own key. It has its own name
 //                                 on purpose: the agents function starts making
 //                                 paid calls as soon as the usual key name is set.
-//   MEALS_LLM_MODEL               optional, defaults to DEFAULT_MODEL
+//   MEALS_LLM_MODEL               optional, defaults to MEALS_MODEL (Sonnet, to keep it cheap)
 //   MEALS_LLM_MONTHLY_BUDGET_USD  optional, defaults to $3 a month (lists and recipes together)
 //   ALLOWED_ORIGINS               optional
 import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0'
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { costMicroUsd, DEFAULT_MODEL, monthlyBudgetMicroUsd, withinBudget } from '../_shared/agents/llm.ts'
+import { costMicroUsd, monthlyBudgetMicroUsd, withinBudget } from '../_shared/agents/llm.ts'
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import {
   cleanItems,
@@ -42,6 +42,7 @@ import {
   cleanRecipes,
   isISODate,
   isPlanDays,
+  MEALS_MODEL,
   isMonday,
   type MealRow,
   mealKey,
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
   const memberIds = members!.filter((m) => m.household_id === householdId).map((m) => m.user_id as string)
 
   const apiKey = Deno.env.get('MEALS_ANTHROPIC_API_KEY')
-  const model = Deno.env.get('MEALS_LLM_MODEL') || DEFAULT_MODEL
+  const model = Deno.env.get('MEALS_LLM_MODEL') || MEALS_MODEL
 
   /** Null when this call fits in the month's budget, else the reply to send. */
   const overBudget = async (system: string, input: string) => {
