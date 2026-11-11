@@ -22,7 +22,23 @@ const SLOT: Record<Slot, { label: string; icon: LucideIcon }> = {
 const tidy = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 /** A meal you type straight into. Saves when you leave it or press Enter; emptying it clears the meal. */
-function MealInput({ value, label, placeholder, onSave }: { value: string; label: string; placeholder: string; onSave: (name: string) => void }) {
+export function MealInput({
+  value,
+  label,
+  placeholder,
+  onSave,
+  list = 'meal-names',
+  maxLength = 80,
+  className,
+}: {
+  value: string
+  label: string
+  placeholder: string
+  onSave: (name: string) => void
+  list?: string
+  maxLength?: number
+  className?: string
+}) {
   const [text, setText] = useState(value)
   const [seen, setSeen] = useState(value)
   const [focused, setFocused] = useState(false)
@@ -35,11 +51,11 @@ function MealInput({ value, label, placeholder, onSave }: { value: string; label
     <Input
       aria-label={label}
       placeholder={placeholder}
-      list="meal-names"
-      maxLength={80}
+      list={list || undefined}
+      maxLength={maxLength}
       autoComplete="off"
       enterKeyHint="done"
-      className="h-9"
+      className={cn('h-9', className)}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onFocus={() => setFocused(true)}

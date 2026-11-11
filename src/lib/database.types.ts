@@ -1786,6 +1786,108 @@ export type Database = {
           },
         ]
       }
+      meal_availability: {
+        Row: {
+          available: boolean
+          day: string
+          household_id: string
+          person_id: string
+          slot: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          available?: boolean
+          day: string
+          household_id: string
+          person_id: string
+          slot: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          available?: boolean
+          day?: string
+          household_id?: string
+          person_id?: string
+          slot?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_availability_household_id_person_id_fkey"
+            columns: ["household_id", "person_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      meal_slot_notes: {
+        Row: {
+          day: string
+          household_id: string
+          note: string
+          slot: string
+          updated_at: string
+        }
+        Insert: {
+          day: string
+          household_id: string
+          note: string
+          slot: string
+          updated_at?: string
+        }
+        Update: {
+          day?: string
+          household_id?: string
+          note?: string
+          slot?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_slot_notes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_wishes: {
+        Row: {
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_wishes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meals: {
         Row: {
           created_at: string
@@ -3371,6 +3473,10 @@ export type Database = {
       }
       agent_save_headlines: {
         Args: { p_day: string; p_household_id: string; p_items: Json }
+        Returns: undefined
+      }
+      agent_save_meal_availability: {
+        Args: { p_household_id: string; p_rows: Json; p_today: string }
         Returns: undefined
       }
       agent_save_picks: {

@@ -89,10 +89,10 @@ describe('agents Edge Function', () => {
     expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth|goals|weight|takeaway|people/i)
   })
 
-  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone and agent_save_picks', () => {
+  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone, agent_save_picks and agent_save_meal_availability', () => {
     for (const { f, text } of fn) {
       expect(text, f).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines'], f).toContain(rpc)
+      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines', 'agent_save_meal_availability'], f).toContain(rpc)
     }
   })
 

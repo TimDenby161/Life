@@ -11,16 +11,29 @@ import { getErrorMessage } from '@/lib/errors'
 import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { isMonday, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
-import { useDeleteRecipe, useListMealsKey, useMakeShoppingList, useMealNames, useRecipes, useShoppingItems, useWeekMeals, useWriteRecipes } from './api'
+import {
+  useDeleteRecipe,
+  useListMealsKey,
+  useMakeShoppingList,
+  useMealNames,
+  useMealWishes,
+  usePlanDays,
+  useRecipes,
+  useShoppingItems,
+  useWeekMeals,
+  useWriteRecipes,
+} from './api'
+import { Plan, PLAN_DAYS } from './components/Plan'
 import { Recipes } from './components/Recipes'
 import { ShoppingList } from './components/ShoppingList'
 import { WeekMeals } from './components/WeekMeals'
 
-type View = 'meals' | 'list' | 'recipes'
+type View = 'plan' | 'meals' | 'list' | 'recipes'
 
 /**
- * The week's meals, the shopping list made from them and their recipes, one at
- * a time behind a switch. The week and the view live in the address (?week=…&view=list), so
+ * Planning (meals you want, who is in over the next four days), the week's
+ * meals, the shopping list made from them and their recipes, one at a time
+ * behind a switch. The week and the view live in the address (?week=…&view=list), so
  * a reload keeps you where you were.
  */
 export default function MealsPage() {
@@ -30,7 +43,7 @@ export default function MealsPage() {
   const asked = params.get('week') ?? ''
   const week = isMonday(asked) ? asked : thisWeek
   const askedView = params.get('view')
-  const view: View = askedView === 'list' || askedView === 'recipes' ? askedView : 'meals'
+  const view: View = askedView === 'plan' || askedView === 'list' || askedView === 'recipes' ? askedView : 'meals'
 
   const change = (patch: { week?: string; view?: View }) =>
     setParams(
@@ -54,6 +67,10 @@ export default function MealsPage() {
   const recipes = useRecipes()
   const write = useWriteRecipes()
   const delRecipe = useDeleteRecipe()
+  const today = todayISO()
+  const planTo = addDaysISO(today, PLAN_DAYS - 1)
+  const wishes = useMealWishes()
+  const planDays = usePlanDays(today, planTo)
 
   const rows = meals.data ?? []
   const hasMeals = plannedMeals(week, rows, members.length).length > 0
@@ -71,38 +88,53 @@ export default function MealsPage() {
   const title = week === thisWeek ? 'Meals this week' : week === addDaysISO(thisWeek, 7) ? 'Meals next week' : week === addDaysISO(thisWeek, -7) ? 'Meals last week' : 'Meals'
   const range = `${format(parseISODate(days[0]), 'd MMM')} – ${format(parseISODate(days[6]), 'd MMM')}`
   const recipeNotice = write.variables === week && write.data && write.data.status !== 'ok' ? write.data : null
-  const shown = view === 'list' ? items : view === 'recipes' ? recipes : meals
-  const error = meals.error ?? shown.error
-  const pending = meals.isPending || shown.isPending
+  const shown = view === 'list' ? items : view === 'recipes' ? recipes : view === 'plan' ? planDays : meals
+  const error = view === 'plan' ? (wishes.error ?? planDays.error) : (meals.error ?? shown.error)
+  const pending = view === 'plan' ? wishes.isPending || planDays.isPending : meals.isPending || shown.isPending
+  const retry = () => {
+    if (view !== 'plan') return meals.error ? meals.refetch() : shown.refetch()
+    void wishes.refetch()
+    return planDays.refetch()
+  }
 
   return (
     <>
       <PageHeader
-        title={title}
-        description={range}
+        title={view === 'plan' ? 'Meal plan' : title}
+        description={view === 'plan' ? `${format(parseISODate(today), 'd MMM')} – ${format(parseISODate(planTo), 'd MMM')}` : range}
         actions={
-          <>
-            {week !== thisWeek ? (
-              <Button variant="ghost" size="sm" onClick={() => change({ week: thisWeek })}>
-                This week
+          view === 'plan' ? null : (
+            <>
+              {week !== thisWeek ? (
+                <Button variant="ghost" size="sm" onClick={() => change({ week: thisWeek })}>
+                  This week
+                </Button>
+              ) : null}
+              <Button variant="outline" size="icon-sm" aria-label="Previous week" onClick={() => change({ week: addDaysISO(week, -7) })}>
+                <ChevronLeft />
               </Button>
-            ) : null}
-            <Button variant="outline" size="icon-sm" aria-label="Previous week" onClick={() => change({ week: addDaysISO(week, -7) })}>
-              <ChevronLeft />
-            </Button>
-            <Button variant="outline" size="icon-sm" aria-label="Next week" onClick={() => change({ week: addDaysISO(week, 7) })}>
-              <ChevronRight />
-            </Button>
-          </>
+              <Button variant="outline" size="icon-sm" aria-label="Next week" onClick={() => change({ week: addDaysISO(week, 7) })}>
+                <ChevronRight />
+              </Button>
+            </>
+          )
         }
       />
 
+      {/* Meals you've had before, suggested while typing in Plan and Meals. */}
+      <datalist id="meal-names">
+        {(names.data ?? []).map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+
       <Segmented
-        aria-label="Meals or shopping list"
+        aria-label="Plan, meals, shopping list or recipes"
         className="mb-4 w-full sm:w-auto [&>*]:flex-1"
         value={view}
         onChange={(v) => change({ view: v })}
         options={[
+          { value: 'plan', label: 'Plan' },
           { value: 'meals', label: 'Meals' },
           {
             value: 'list',
@@ -118,9 +150,11 @@ export default function MealsPage() {
       />
 
       {error ? (
-        <ErrorState error={error} onRetry={() => (meals.error ? meals.refetch() : shown.refetch())} />
+        <ErrorState error={error} onRetry={retry} />
       ) : pending ? (
         <ListSkeleton rows={5} />
+      ) : view === 'plan' ? (
+        <Plan from={today} wishes={wishes.data ?? []} availability={planDays.data?.availability ?? []} notes={planDays.data?.notes ?? []} />
       ) : view === 'meals' ? (
         <>
           <WeekMeals key={week} plans={weekPlan(week, rows)} />
@@ -130,11 +164,6 @@ export default function MealsPage() {
             </Button>
             {stale ? <span className="text-sm text-muted-foreground">Meals changed since the last list.</span> : null}
           </div>
-          <datalist id="meal-names">
-            {(names.data ?? []).map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
         </>
       ) : view === 'recipes' ? (
         <Recipes

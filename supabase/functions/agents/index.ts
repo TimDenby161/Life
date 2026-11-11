@@ -14,7 +14,8 @@
 //              notification to their own devices.
 //
 // Agents only read (context.ts, always scoped by household) and write through
-// agent_claim_run / agent_finish_run, which touch agent tables only. Nothing
+// agent_claim_run / agent_finish_run, which touch agent tables only. Overnight
+// the calendars also fill meal_availability via agent_save_meal_availability. Nothing
 // here changes tasks, money or anything else. After a scheduled briefing the
 // headline goes to the phones of people who turned notifications on (notify.ts).
 //
@@ -39,9 +40,11 @@ import { analyseProjects, parseProjectsConfig } from '../_shared/agents/projects
 import { analyseSleep, nightsFrom, parseSleepGoals } from '../_shared/agents/sleep.ts'
 import { analyseLifeAdmin } from '../_shared/agents/lifeAdmin.ts'
 import { monthlyBudgetMicroUsd } from '../_shared/agents/llm.ts'
+import { mealAvailability } from '../_shared/agents/meals.ts'
+import { parseTravel } from '../_shared/agents/calendar.ts'
 import { candidatesFor, prioritiesInput } from '../_shared/agents/priorities.ts'
 import { agentById, LIVE_AGENTS } from '../_shared/agents/registry.ts'
-import { agentDue, chiefOfStaffDue, manualKey } from '../_shared/agents/schedule.ts'
+import { agentDue, chiefOfStaffDue, manualKey, MORNING_HOUR } from '../_shared/agents/schedule.ts'
 import { analyseTasks } from '../_shared/agents/taskManager.ts'
 import { analyseTravel } from '../_shared/agents/travel.ts'
 import type { BriefingDraft, SuggestionDraft, TaskContext } from '../_shared/agents/types.ts'
@@ -308,6 +311,26 @@ async function runAgent(
   return true
 }
 
+/** Overnight hours: who is in for lunch and dinner over the next four days goes into meal_availability. */
+const MEALS_FROM_HOUR = 2
+
+/**
+ * Who is in for each lunch and dinner over the next four days, from the
+ * calendars, for the Plan view on /meals. Rows someone set by hand are left
+ * alone by agent_save_meal_availability. A failure here never stops the agents.
+ */
+async function saveMealAvailability(db: SupabaseClient, household: Household, prefs: AgentPrefs, today: string) {
+  try {
+    const events = await loadCalendar(db, household.id, today)
+    const travel = Object.fromEntries(prefs.members.map((id) => [id, parseTravel(prefs.config('chief_of_staff', id))]))
+    const rows = mealAvailability(events, prefs.members, today, household.timezone, (id) => travel[id] ?? [])
+    const saved = await db.rpc('agent_save_meal_availability', { p_household_id: household.id, p_today: today, p_rows: rows })
+    if (saved.error) throw new Error(saved.error.message)
+  } catch {
+    console.warn('agents: meal availability failed for a household')
+  }
+}
+
 /** Hourly: due runs for every household, plus queued events and retries. */
 async function runScheduled(db: SupabaseClient, now: Date) {
   const { data: households, error } = await db.from('households').select('id, timezone')
@@ -316,6 +339,9 @@ async function runScheduled(db: SupabaseClient, now: Date) {
   for (const household of (households ?? []) as Household[]) {
     const prefs = await loadPrefs(db, household.id)
     const { date, hour } = localNow(now, household.timezone)
+
+    // Overnight (each night tick, so a late calendar change is caught).
+    if (hour >= MEALS_FROM_HOUR && hour < MORNING_HOUR) await saveMealAvailability(db, household, prefs, date)
 
     // Task completions queue event runs; failed ones get up to three attempts.
     const { data: pending } = await db

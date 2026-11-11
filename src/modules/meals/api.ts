@@ -185,3 +185,63 @@ export function useWriteRecipes() {
     onSettled: () => qc.invalidateQueries({ queryKey: mealsKeys.all }),
   })
 }
+
+// Planning: meals you want, who is in for each meal, and what you want for it ----------
+
+export type MealWishRow = Tables<'meal_wishes'>
+export type AvailabilityRow = Tables<'meal_availability'>
+export type SlotNoteRow = Tables<'meal_slot_notes'>
+export type PlanSlot = 'lunch' | 'dinner'
+
+const planKeys = {
+  wishes: ['meals', 'wishes'] as const,
+  days: (from: string, to: string) => ['meals', 'plan', from, to] as const,
+}
+
+export const useMealWishes = () =>
+  useQuery({ queryKey: planKeys.wishes, queryFn: async () => unwrap(await supabase.from('meal_wishes').select('*').order('created_at')) })
+
+/** Availability and notes for the days from `from` to `to`. No availability row = in. */
+export const usePlanDays = (from: string, to: string) =>
+  useQuery({
+    queryKey: planKeys.days(from, to),
+    queryFn: async () => {
+      const [availability, notes] = await Promise.all([
+        supabase.from('meal_availability').select('*').gte('day', from).lte('day', to),
+        supabase.from('meal_slot_notes').select('*').gte('day', from).lte('day', to),
+      ])
+      return { availability: unwrap(availability), notes: unwrap(notes) }
+    },
+  })
+
+export const useAddWish = () =>
+  useMealsMutation(async (h, name: string) => unwrap(await supabase.from('meal_wishes').insert({ household_id: h, name: name.replace(/\s+/g, ' ').trim() })))
+
+export const useDeleteWish = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('meal_wishes').delete().eq('id', id)))
+
+/** In or out for a meal. `exists` = there is a row already (from the calendar or set before). */
+export const useSetAvailable = () =>
+  useMealsMutation(async (h, a: { day: string; slot: PlanSlot; person_id: string; available: boolean; exists: boolean }) =>
+    a.exists
+      ? unwrap(
+          await supabase
+            .from('meal_availability')
+            .update({ available: a.available })
+            .eq('household_id', h)
+            .eq('day', a.day)
+            .eq('slot', a.slot)
+            .eq('person_id', a.person_id),
+        )
+      : unwrap(await supabase.from('meal_availability').insert({ household_id: h, day: a.day, slot: a.slot, person_id: a.person_id, available: a.available })),
+  )
+
+/** What you want for a meal; empty clears it. */
+export const useSaveSlotNote = () =>
+  useMealsMutation(async (h, n: { day: string; slot: PlanSlot; note: string; exists: boolean }) => {
+    const note = n.note.replace(/\s+/g, ' ').trim()
+    const row = () => supabase.from('meal_slot_notes')
+    if (!note) return n.exists ? unwrap(await row().delete().eq('household_id', h).eq('day', n.day).eq('slot', n.slot)) : null
+    return n.exists
+      ? unwrap(await row().update({ note }).eq('household_id', h).eq('day', n.day).eq('slot', n.slot))
+      : unwrap(await row().insert({ household_id: h, day: n.day, slot: n.slot, note }))
+  })
