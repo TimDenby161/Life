@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, PiggyBank } from 'lucide-react'
 import { useMemo } from 'react'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/misc'
+import { Progress } from '@/components/ui/misc'
 import { todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -52,16 +52,16 @@ export function FinanceOverview() {
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1">
           <CardTitle>Saving a month</CardTitle>
           {needed ? (
-            <span className="text-right">
+            <span className="text-right leading-tight">
               <span className="block text-lg font-semibold tabular">{money(needed)}</span>
               {both ? <span className="block text-xs text-muted-foreground tabular">{money(Math.ceil(needed / 2 / 100) * 100)} each</span> : null}
             </span>
           ) : null}
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-2 pt-0 sm:px-3">
           {plans.length ? (
             <ul className="divide-y">
               {plans.map((p) => <GoalRow key={p.id} plan={p} owner={p.owner_id ? member(p.owner_id)?.display_name : undefined} />)}
@@ -73,16 +73,16 @@ export function FinanceOverview() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Month to month</CardTitle></CardHeader>
-        <CardContent className="grid gap-4">
+        <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1"><CardTitle>Month to month</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 px-3 pb-3 pt-0 sm:px-3">
           {concerns.length ? (
-            <ul className="grid gap-3">
+            <ul className="grid gap-1.5">
               {concerns.map((c) => (
-                <li key={c.key} className="flex gap-2.5 text-sm">
-                  <AlertTriangle className={cn('mt-0.5 size-4 shrink-0', c.severity === 'high' ? 'text-destructive' : 'text-warning')} aria-hidden />
+                <li key={c.key} className="flex gap-2 text-sm leading-snug">
+                  <AlertTriangle className={cn('mt-0.5 size-3.5 shrink-0', c.severity === 'high' ? 'text-destructive' : 'text-warning')} aria-hidden />
                   <span className="min-w-0">
-                    <span className="block font-medium">{c.title}</span>
-                    {c.detail ? <span className="block text-muted-foreground">{c.detail}</span> : null}
+                    <span className="font-medium">{c.title}</span>
+                    {c.detail ? <span className="text-muted-foreground"> {c.detail}</span> : null}
                   </span>
                 </li>
               ))}
@@ -93,47 +93,68 @@ export function FinanceOverview() {
             </p>
           )}
           {changes.length ? (
-            <ul className="grid grid-cols-2 gap-x-6 gap-y-1 border-t pt-3 text-sm sm:grid-cols-3">
-              {changes.toReversed().map((c) => (
-                <li key={c.date} className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">{format(parseISO(c.date), 'd MMM')}</span>
-                  <span className={cn('tabular', c.change < 0 && 'text-destructive')}>{signed(c.change)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="border-t pt-2">
+              <ul className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
+                {changes.toReversed().slice(0, 6).map((c) => (
+                  <li key={c.date} className="flex justify-between gap-1.5">
+                    <span className="text-muted-foreground">{format(parseISO(c.date), 'd MMM')}</span>
+                    <span className={cn('tabular', c.change < 0 && 'text-destructive')}>{signed(c.change)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-muted-foreground">Net worth change per balance update, calculated.</p>
+            </div>
           ) : null}
-          {changes.length ? <p className="text-xs text-muted-foreground">Net worth change at each balance update, worked out from the recorded balances.</p> : null}
         </CardContent>
       </Card>
     </>
   )
 }
 
+/** £6,100 as "£6.1k", £20,000 as "£20k"; under £1,000 as it is. For the short line under each goal. */
+function short(minor: number): string {
+  const pounds = minor / 100
+  if (Math.abs(pounds) < 1000) return money(minor)
+  const k = Math.round(pounds / 100) / 10
+  return `£${Number.isInteger(k) ? k : k.toFixed(1)}k`
+}
+
+/**
+ * A goal on one line: name (and whose), when it's for and what it needs a month (or what's left), over a thin bar
+ * of how much is saved. Amber when behind a steady pace or past its date.
+ */
 function GoalRow({ plan: p, owner }: { plan: GoalPlan; owner?: string }) {
-  const by = p.date ? format(parseISO(p.date), 'MMM yyyy') : null
+  const by = p.date ? format(parseISO(p.date), 'MMM yy') : null
+  const behind = p.status === 'behind'
+  const late = p.status === 'past_date'
+  const pct = p.target > 0 ? Math.round((p.saved / p.target) * 100) : 0
+  const saved = `${short(p.saved)} of ${short(p.target)}`
   return (
-    <li className="flex items-start gap-3 py-2.5 text-sm">
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate font-medium">{p.name}</span>
-          {p.status === 'behind' ? <Badge tone="warning">Behind</Badge> : null}
+    <li
+      className="grid grid-cols-[minmax(0,1fr)] gap-1 py-1.5 text-sm"
+      title={behind && p.expected !== null ? `${saved}. Behind: a steady pace would have ${money(p.expected)} by now` : saved}
+    >
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-medium">{p.name}</span>
+          {owner ? <span className="text-xs text-muted-foreground"> · {owner}</span> : null}
         </span>
-        <span className="block text-xs text-muted-foreground tabular">
-          {[`${money(p.saved)} of ${money(p.target)}`, by ? `by ${by}` : null, owner, p.pot].filter(Boolean).join(' · ')}
+        {by ? <span className={cn('shrink-0 text-xs text-muted-foreground', late && 'text-warning')}>{by}</span> : null}
+        <span className="min-w-14 shrink-0 text-right tabular">
+          {p.status === 'reached' ? (
+            <span className="text-success">Done</span>
+          ) : p.perMonth !== null ? (
+            <span className={cn('font-semibold', behind && 'text-warning')}>{money(p.perMonth)}</span>
+          ) : (
+            <span className={cn('text-xs text-muted-foreground', late && 'text-warning')}>{short(p.left)} left</span>
+          )}
         </span>
-        {p.status === 'behind' && p.expected !== null ? (
-          <span className="block text-xs text-warning">A steady pace would have {money(p.expected)} by now.</span>
-        ) : null}
       </span>
-      <span className="shrink-0 text-right tabular">
-        {p.status === 'reached' ? (
-          <span className="text-success">Done</span>
-        ) : p.perMonth !== null ? (
-          <span className="font-semibold">{money(p.perMonth)}<span className="font-normal text-muted-foreground">/mo</span></span>
-        ) : (
-          <span className="text-muted-foreground">{money(p.left)} to go{p.status === 'past_date' ? ', date passed' : ''}</span>
-        )}
-      </span>
+      <Progress
+        value={pct}
+        className="h-1"
+        indicatorClassName={p.status === 'reached' ? 'bg-success' : behind || late ? 'bg-warning' : undefined}
+      />
     </li>
   )
 }

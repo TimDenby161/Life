@@ -46,7 +46,7 @@ describe('AgentShell', () => {
     )
     expect(await screen.findByText('agent suggestions')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Home' })).toHaveClass('sr-only')
-    expect(screen.queryByText(PAGE_AGENTS.home.description)).not.toBeInTheDocument()
+    expect(screen.queryByText(PAGE_AGENTS.home.description!)).not.toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: 'Details' })).not.toBeInTheDocument()
   })
 
