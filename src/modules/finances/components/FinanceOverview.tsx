@@ -73,7 +73,10 @@ export function FinanceOverview() {
       </Card>
 
       <Card>
-        <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1"><CardTitle>Month to month</CardTitle></CardHeader>
+        <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1">
+          <CardTitle>Month to month</CardTitle>
+          {changes.length ? <span className="shrink-0 text-[11px] text-muted-foreground">Net worth, calculated</span> : null}
+        </CardHeader>
         <CardContent className="grid gap-2 px-3 pb-3 pt-0 sm:px-3">
           {concerns.length ? (
             <ul className="grid gap-1.5">
@@ -95,14 +98,13 @@ export function FinanceOverview() {
           {changes.length ? (
             <div className="border-t pt-2">
               <ul className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
-                {changes.toReversed().slice(0, 6).map((c) => (
+                {changes.toReversed().slice(0, 3).map((c) => (
                   <li key={c.date} className="flex justify-between gap-1.5">
                     <span className="text-muted-foreground">{format(parseISO(c.date), 'd MMM')}</span>
                     <span className={cn('tabular', c.change < 0 && 'text-destructive')}>{signed(c.change)}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-[11px] text-muted-foreground">Net worth change per balance update, calculated.</p>
             </div>
           ) : null}
         </CardContent>
@@ -120,18 +122,18 @@ function short(minor: number): string {
 }
 
 /**
- * A goal on one line: name (and whose), when it's for and what it needs a month (or what's left), over a thin bar
- * of how much is saved. Amber when behind a steady pace or past its date.
+ * A goal on one line: name (and whose), when it's for and what it needs a month (or what's left); under it a thin
+ * bar of how much is saved, with what's in the pot now and the total needed. Amber when behind a steady pace or past its date.
  */
 function GoalRow({ plan: p, owner }: { plan: GoalPlan; owner?: string }) {
   const by = p.date ? format(parseISO(p.date), 'MMM yy') : null
   const behind = p.status === 'behind'
   const late = p.status === 'past_date'
   const pct = p.target > 0 ? Math.round((p.saved / p.target) * 100) : 0
-  const saved = `${short(p.saved)} of ${short(p.target)}`
+  const saved = `${money(p.saved)} of ${money(p.target)}`
   return (
     <li
-      className="grid grid-cols-[minmax(0,1fr)] gap-1 py-1.5 text-sm"
+      className="grid grid-cols-[minmax(0,1fr)] gap-0.5 py-1 text-sm"
       title={behind && p.expected !== null ? `${saved}. Behind: a steady pace would have ${money(p.expected)} by now` : saved}
     >
       <span className="flex min-w-0 items-baseline gap-2">
@@ -150,11 +152,16 @@ function GoalRow({ plan: p, owner }: { plan: GoalPlan; owner?: string }) {
           )}
         </span>
       </span>
-      <Progress
-        value={pct}
-        className="h-1"
-        indicatorClassName={p.status === 'reached' ? 'bg-success' : behind || late ? 'bg-warning' : undefined}
-      />
+      <span className="flex items-center gap-2">
+        <Progress
+          value={pct}
+          className="h-1 flex-1"
+          indicatorClassName={p.status === 'reached' ? 'bg-success' : behind || late ? 'bg-warning' : undefined}
+        />
+        <span className="shrink-0 text-xs text-muted-foreground tabular">
+          <span className="text-foreground">{money(p.saved)}</span> / {money(p.target)}
+        </span>
+      </span>
     </li>
   )
 }
