@@ -21,7 +21,7 @@ export function PlayerSearch({ placeholder, action, onPick, busy }: { placeholde
   const search = useSearchPlayers()
   const found = search.data?.status === 'ok' ? search.data.players : []
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <form
         className="flex gap-1.5"
         onSubmit={(e) => {
@@ -42,10 +42,14 @@ export function PlayerSearch({ placeholder, action, onPick, busy }: { placeholde
           {found.map((p) => (
             <li key={p.ttUserId} className="flex items-center gap-2 px-3 py-2 text-sm">
               <span className="min-w-0 flex-1">
-                <span className="block font-medium">{p.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{p.where.join(' · ')}</span>
+                <span className="block truncate font-medium">{p.name}</span>
+                {/* One league is enough to tell players apart; the rest follow once added. */}
+                <span className="block truncate text-xs text-muted-foreground">
+                  {p.where[0]}
+                  {p.where.length > 1 ? ` +${p.where.length - 1}` : ''}
+                </span>
               </span>
-              <Button size="sm" variant="secondary" disabled={busy} onClick={() => onPick(p)}>
+              <Button size="sm" variant="secondary" className="shrink-0" disabled={busy} onClick={() => onPick(p)}>
                 {action}
               </Button>
             </li>
@@ -115,7 +119,7 @@ function Leagues({ ttUserId }: { ttUserId: string }) {
   if (!mine.length) return <Card className="p-3 text-sm text-muted-foreground">No league games found for you this season yet.</Card>
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       {mine.map(({ league, r }) => {
         const rate = winRate(r.won, r.played)
         const moved = progressSince(snapshots.data ?? [], ttUserId, r.league, r, today)
@@ -206,7 +210,7 @@ export function Playing({ profiles }: { profiles: TtProfile[] }) {
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <Ranking profile={profile} mine={profile.user_id === me.id} />
       <Leagues ttUserId={profile.tt_user_id} />
     </div>

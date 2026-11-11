@@ -75,7 +75,7 @@ export function Work() {
   for (const s of theirs) months.set(s.day.slice(0, 7), [...(months.get(s.day.slice(0, 7)) ?? []), s])
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <Card className="p-3">
         <h2 className="mb-1.5 text-sm font-semibold">Owed</h2>
         <ul className="grid gap-1.5">

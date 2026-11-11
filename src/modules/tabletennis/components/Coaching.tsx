@@ -84,7 +84,7 @@ export function Coaching() {
   const following = new Set((players.data ?? []).map((p) => p.tt_user_id))
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <Card className="p-3">
         {adding ? (
           <PlayerSearch
