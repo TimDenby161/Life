@@ -1,4 +1,4 @@
-import { Plus, ShoppingBasket, Sparkles, X } from 'lucide-react'
+import { Plus, ShoppingBasket, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { SectionTitle } from '@/components/PageHeader'
@@ -10,11 +10,11 @@ import { Checkbox } from '@/components/ui/misc'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { AISLES } from '../../../../supabase/functions/_shared/meals.ts'
-import { type MakeListResult, type ShoppingItemRow, useAddItem, useDeleteItem, useToggleItem } from '../api'
+import { type ShoppingItemRow, useAddItem, useDeleteItem, useToggleItem } from '../api'
 
 /**
- * The week's shopping list by aisle. Claude writes it from the meal names
- * (`onMake`); you can tick things off, add your own and remove what you don't need.
+ * The week's shopping list by aisle. Plan meals has Claude write it from the
+ * week's recipes; you can tick things off, add your own and remove what you don't need.
  */
 export function ShoppingList({
   weekStart,
@@ -22,46 +22,32 @@ export function ShoppingList({
   hasMeals,
   stale,
   making,
-  notice,
-  onMake,
 }: {
   weekStart: string
   items: ShoppingItemRow[]
   hasMeals: boolean
   /** The meals have changed since the list was written. */
   stale: boolean
+  /** Plan meals is writing it now. */
   making: boolean
-  /** Why the last attempt made no list. */
-  notice: Exclude<MakeListResult, { status: 'ok' }> | null
-  onMake: () => void
 }) {
   const toggle = useToggleItem(weekStart)
   const add = useAddItem()
   const del = useDeleteItem()
   const [text, setText] = useState('')
   const onError = (e: unknown) => toast.error(getErrorMessage(e))
-  const fromClaude = items.some((i) => i.source === 'ai')
+  const note = making ? 'Claude is writing your list.' : stale ? 'Meals changed since this list: Plan meals updates it.' : null
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Button onClick={onMake} disabled={making || !hasMeals} variant={fromClaude && !stale ? 'outline' : 'default'}>
-          <Sparkles /> {making ? 'Writing…' : fromClaude ? 'Rebuild' : 'Make list'}
-        </Button>
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground" aria-live="polite">
-          {making ? 'Claude is writing your list. This takes a few seconds.' : !hasMeals ? 'Add a meal first.' : stale ? 'Meals changed since this list.' : null}
+      {note ? (
+        <p className="mb-3 text-sm text-muted-foreground" aria-live="polite">
+          {note}
         </p>
-      </div>
-
-      {notice && !making ? (
-        <Card role="status" className="mt-3 border-warning/40 bg-warning/10 p-3 text-sm">
-          {notice.message}
-          {notice.status === 'not_configured' ? ' Until it has one you can still plan meals and add items yourself.' : null}
-        </Card>
       ) : null}
 
       <form
-        className="mt-3 flex gap-2"
+        className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault()
           if (!text.trim()) return
@@ -76,7 +62,7 @@ export function ShoppingList({
 
       {!items.length ? (
         <Card className="mt-3">
-          <EmptyState icon={ShoppingBasket} title="No list yet" description={hasMeals ? 'Make the list from this week’s meals, or add items yourself.' : 'Plan some meals, then make the list.'} />
+          <EmptyState icon={ShoppingBasket} title="No list yet" description={hasMeals ? 'Plan meals writes it, or add items yourself.' : 'Plan meals writes it from the week’s meals.'} />
         </Card>
       ) : (
         AISLES.map((aisle) => {
@@ -107,7 +93,7 @@ export function ShoppingList({
         })
       )}
 
-      {fromClaude ? <p className="mt-4 text-xs text-muted-foreground">Claude worked this out from the meal names. Check the quantities before you shop.</p> : null}
+      {items.some((i) => i.source === 'ai') ? <p className="mt-4 text-xs text-muted-foreground">Claude worked this out from the meal names. Check the quantities before you shop.</p> : null}
     </>
   )
 }

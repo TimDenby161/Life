@@ -128,9 +128,6 @@ export const useAddItem = () =>
 
 export const useDeleteItem = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('shopping_items').delete().eq('id', id)))
 
-/** Removes a recipe, so it is written afresh next time. */
-export const useDeleteRecipe = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('recipes').delete().eq('id', id)))
-
 export type MakeListResult =
   | { status: 'ok'; count: number }
   | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
@@ -159,17 +156,18 @@ export type WriteRecipesResult =
   | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
 
 /**
- * Asks the same function for recipes for the week's meals that have none. It
+ * Asks the same function for recipes for the week's meals that have none, and
+ * with `fresh` (from Plan meals) rewrites those on the planned days too. It
  * writes a few per call, so this keeps asking until none are left or a call
  * makes no progress; recipes appear on the page as each batch lands.
  */
 export function useWriteRecipes() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (weekStart: string): Promise<WriteRecipesResult> => {
+    mutationFn: async ({ weekStart, fresh }: { weekStart: string; fresh?: { from: string; days: number; since: string } }): Promise<WriteRecipesResult> => {
       let written = 0
       for (let call = 0; call < 8; call++) {
-        const { data, error } = await supabase.functions.invoke<WriteRecipesResult>('shopping-list', { body: { weekStart, mode: 'recipes' } })
+        const { data, error } = await supabase.functions.invoke<WriteRecipesResult>('shopping-list', { body: { weekStart, mode: 'recipes', fresh } })
         let result: WriteRecipesResult = data ?? { status: 'error', message: 'Empty response' }
         if (error) {
           const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
@@ -250,7 +248,7 @@ export const useSaveSlotNote = () =>
   })
 
 export type PlanMealsResult =
-  | { status: 'ok'; placed: number; weeks: string[] }
+  | { status: 'ok'; placed: number; weeks: string[]; at: string }
   | { status: 'not_configured' | 'over_budget' | 'error'; message: string }
 
 /** Asks Claude to fill the empty lunches and dinners over `days` days from the plan; `from` is today. */

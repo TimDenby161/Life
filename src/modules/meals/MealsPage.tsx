@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -13,7 +13,6 @@ import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { isMonday, isPlanDays, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
 import {
-  useDeleteRecipe,
   useListMealsKey,
   useMakeShoppingList,
   useMealNames,
@@ -73,7 +72,6 @@ export default function MealsPage() {
   const make = useMakeShoppingList()
   const recipes = useRecipes()
   const write = useWriteRecipes()
-  const delRecipe = useDeleteRecipe()
   const today = todayISO()
   const planTo = addDaysISO(today, planDayCount - 1)
   const pantry = usePantry()
@@ -81,7 +79,10 @@ export default function MealsPage() {
   const planMeals = usePlanMeals()
   const [busy, setBusy] = useState<string | null>(null)
 
-  /** Claude fills the empty slots, then you see the meals while it writes the shopping list and the recipes. */
+  /**
+   * The one thing that uses Claude: it fills the empty slots, rewrites the recipes for the planned days (with what
+   * you have in), then writes the shopping list from those recipes. You see the meals while it works.
+   */
   const runPlan = async () => {
     const id = 'meal-plan'
     try {
@@ -89,8 +90,15 @@ export default function MealsPage() {
       const planned = await planMeals.mutateAsync({ from: today, days: planDayCount })
       if (planned.status !== 'ok') return void toast.error(planned.message, { id })
       change({ view: 'meals', week: weekDays(today)[0] })
+      setBusy('Writing recipes…')
+      toast.loading(planned.placed ? `${planned.placed} meals planned. Writing recipes…` : 'Writing recipes…', { id })
+      const fresh = { from: today, days: planDayCount, since: planned.at }
+      for (const w of planned.weeks) {
+        const written = await write.mutateAsync({ weekStart: w, fresh })
+        if (written.status !== 'ok' && written.status !== 'no_meals') return void toast.error(written.message, { id })
+      }
       setBusy('Writing the shopping list…')
-      toast.loading(planned.placed ? `${planned.placed} meals planned. Writing the shopping list…` : 'Writing the shopping list…', { id })
+      toast.loading('Writing the shopping list…', { id })
       let lists = 0
       for (const w of planned.weeks) {
         const list = await make.mutateAsync(w)
@@ -98,12 +106,6 @@ export default function MealsPage() {
         else if (list.status !== 'no_meals') return void toast.error(list.message, { id })
       }
       if (!lists) return void toast.info('Nobody is in for any of these meals', { id })
-      setBusy('Writing recipes…')
-      toast.loading('Writing recipes…', { id })
-      for (const w of planned.weeks) {
-        const written = await write.mutateAsync(w)
-        if (written.status !== 'ok' && written.status !== 'no_meals') return void toast.error(written.message, { id })
-      }
       toast.success('Meals, shopping list and recipes are ready', { id })
     } catch (e) {
       toast.error(getErrorMessage(e), { id })
@@ -116,18 +118,10 @@ export default function MealsPage() {
   const hasMeals = plannedMeals(week, rows, members.length).length > 0
   const stale = Boolean(listKey.data) && listKey.data !== mealsKey(week, rows, members.length)
   const left = (items.data ?? []).filter((i) => !i.checked).length
-  // Only for the week it was asked for.
-  const forThisWeek = make.variables === week
-  const notice = forThisWeek && make.data && make.data.status !== 'ok' ? make.data : null
-  const makeList = () => {
-    change({ view: 'list' })
-    make.mutate(week)
-  }
 
   const days = weekDays(week)
   const title = week === thisWeek ? 'Meals this week' : week === addDaysISO(thisWeek, 7) ? 'Meals next week' : week === addDaysISO(thisWeek, -7) ? 'Meals last week' : 'Meals'
   const range = `${format(parseISODate(days[0]), 'd MMM')} – ${format(parseISODate(days[6]), 'd MMM')}`
-  const recipeNotice = write.variables === week && write.data && write.data.status !== 'ok' ? write.data : null
   const shown = view === 'list' ? items : view === 'recipes' ? recipes : view === 'plan' ? planDays : meals
   const error = view === 'plan' ? (pantry.error ?? planDays.error) : (meals.error ?? shown.error)
   const pending = view === 'plan' ? pantry.isPending || planDays.isPending : meals.isPending || shown.isPending
@@ -207,22 +201,14 @@ export default function MealsPage() {
       ) : view === 'meals' ? (
         <>
           <WeekMeals key={week} plans={weekPlan(week, rows)} />
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button onClick={makeList} disabled={!hasMeals || make.isPending}>
-              <Sparkles /> Make shopping list
-            </Button>
-            {stale ? <span className="text-sm text-muted-foreground">Meals changed since the last list.</span> : null}
-          </div>
+          {stale ? <p className="mt-3 text-sm text-muted-foreground">Meals changed since the shopping list: Plan meals updates it.</p> : null}
         </>
       ) : view === 'recipes' ? (
         <Recipes
           meals={weekMeals(week, rows)}
           recipes={recipes.data ?? []}
           openDay={week === thisWeek ? format(new Date(), 'EEE') : null}
-          writing={write.isPending && write.variables === week}
-          notice={recipeNotice}
-          onWrite={() => write.mutate(week)}
-          onRewrite={(r) => delRecipe.mutate(r.id, { onSuccess: () => write.mutate(week), onError: (e) => toast.error(getErrorMessage(e)) })}
+          writing={write.isPending && write.variables?.weekStart === week}
         />
       ) : (
         <ShoppingList
@@ -230,9 +216,7 @@ export default function MealsPage() {
           items={items.data ?? []}
           hasMeals={hasMeals}
           stale={stale}
-          making={make.isPending && forThisWeek}
-          notice={notice}
-          onMake={makeList}
+          making={make.isPending && make.variables === week}
         />
       )}
     </>

@@ -80,10 +80,10 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
   const what = `${dayName} ${label.toLowerCase()}`
 
   return (
-    <li className="flex items-start gap-2">
-      <Icon className="mt-2.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+    <li className="flex items-start gap-1.5">
+      <Icon className="mt-2 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {split ? (
-        <div className="grid min-w-0 flex-1 gap-1.5">
+        <div className="grid min-w-0 flex-1 gap-1">
           {people.map((p) => {
             const row = plan.personal.find((r) => r.person_id === p.id)
             return (
@@ -93,6 +93,7 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
                   value={row?.name ?? ''}
                   label={`${what}, ${p.display_name}`}
                   placeholder={label}
+                  className="h-8 px-2 text-sm"
                   onSave={(name) => save.mutate({ id: row?.id, day: plan.day, slot: plan.slot, person_id: p.id, name }, { onError })}
                 />
               </div>
@@ -105,6 +106,7 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
             value={plan.shared?.name ?? ''}
             label={what}
             placeholder={label}
+            className="h-8 px-2 text-sm"
             onSave={(name) => save.mutate({ id: plan.shared?.id, day: plan.day, slot: plan.slot, person_id: null, name }, { onError })}
           />
         </div>
@@ -113,7 +115,7 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
         <Button
           size="icon-sm"
           variant="ghost"
-          className="mt-0.5 text-muted-foreground"
+          className="size-8 text-muted-foreground"
           disabled={splitSlot.isPending || merge.isPending}
           aria-label={split ? `One meal for both, ${what}` : `A meal each, ${what}`}
           title={split ? 'One meal for both' : 'A meal each'}
@@ -130,7 +132,7 @@ function SlotRow({ plan, dayName, people, split, onSplit }: { plan: SlotPlan; da
   )
 }
 
-/** The week's 21 slots, a card per day. Any slot can be split into a meal each. */
+/** The week's 21 slots, a line per day in one card, kept tight so more of the week fits on a phone. Any slot can be split into a meal each. */
 export function WeekMeals({ plans }: { plans: SlotPlan[] }) {
   const { me, partner } = useHousehold()
   const people = partner ? [me, partner] : [me]
@@ -140,16 +142,17 @@ export function WeekMeals({ plans }: { plans: SlotPlan[] }) {
   const days = Array.from({ length: plans.length / SLOTS.length }, (_, i) => plans.slice(i * SLOTS.length, (i + 1) * SLOTS.length))
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <Card className="p-2 md:max-w-xl">
       {days.map((slots) => {
         const day = slots[0].day
         const date = parseISODate(day)
         return (
-          <Card key={day} className={cn('p-3', day === today && 'border-primary/50')}>
-            <h2 className={cn('mb-2 px-0.5 text-sm font-semibold', day === today ? 'text-primary' : 'text-foreground')}>
-              {format(date, 'EEEE')} <span className="font-normal text-muted-foreground">{format(date, 'd MMM')}</span>
+          <section key={day} className="flex gap-2 border-t py-1.5 first:border-t-0 first:pt-0 last:pb-0">
+            <h2 className={cn('grid w-9 shrink-0 content-start pt-1 text-center leading-tight', day === today && 'text-primary')}>
+              <span className="text-xs font-semibold">{format(date, 'EEE')}</span>
+              <span className="text-[11px] font-normal text-muted-foreground tabular-nums">{format(date, 'd')}</span>
             </h2>
-            <ul className="grid gap-1.5">
+            <ul className="grid min-w-0 flex-1 gap-1">
               {slots.map((plan) => {
                 const key = `${plan.day}|${plan.slot}`
                 return (
@@ -171,9 +174,9 @@ export function WeekMeals({ plans }: { plans: SlotPlan[] }) {
                 )
               })}
             </ul>
-          </Card>
+          </section>
         )
       })}
-    </div>
+    </Card>
   )
 }

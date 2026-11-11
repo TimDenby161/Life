@@ -1,35 +1,28 @@
-import { ChefHat, ChevronDown, RotateCw, Sparkles } from 'lucide-react'
+import { ChefHat, ChevronDown } from 'lucide-react'
 import { EmptyState } from '@/components/states'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { asIngredients, asSteps, type WeekMeal } from '../../../../supabase/functions/_shared/meals.ts'
-import type { RecipeRow, WriteRecipesResult } from '../api'
+import type { RecipeRow } from '../api'
 
 /**
- * A recipe for each different meal of the week, written by Claude from the
- * meal's name (`onWrite`) and kept, so a meal planned again already has one.
+ * A recipe for each different meal of the week, written by Claude when you
+ * Plan meals (the planned days' recipes are rewritten each time, with what you
+ * have in) and kept, so a meal planned again already has one.
  */
 export function Recipes({
   meals,
   recipes,
   openDay,
   writing,
-  notice,
-  onWrite,
-  onRewrite,
 }: {
   meals: WeekMeal[]
   recipes: RecipeRow[]
   /** "Mon"…"Sun": that day's recipes start open (today, when looking at this week). */
   openDay: string | null
+  /** Plan meals is writing them now. */
   writing: boolean
-  /** Why the last attempt wrote nothing. */
-  notice: Exclude<WriteRecipesResult, { status: 'ok' }> | null
-  onWrite: () => void
-  onRewrite: (recipe: RecipeRow) => void
 }) {
   const byKey = new Map(recipes.map((r) => [r.meal_key, r]))
-  const missing = meals.filter((m) => !byKey.has(m.key)).length
 
   if (!meals.length) {
     return (
@@ -41,23 +34,10 @@ export function Recipes({
 
   return (
     <>
-      {missing || writing ? (
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Button onClick={onWrite} disabled={writing}>
-            <Sparkles /> {writing ? 'Writing…' : missing === 1 ? 'Write 1 recipe' : `Write ${missing} recipes`}
-          </Button>
-          {writing ? (
-            <p className="min-w-0 flex-1 text-sm text-muted-foreground" aria-live="polite">
-              Claude is writing them. They appear a few at a time.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {notice && !writing ? (
-        <Card role="status" className="mb-3 border-warning/40 bg-warning/10 p-3 text-sm">
-          {notice.message}
-        </Card>
+      {writing ? (
+        <p className="mb-3 text-sm text-muted-foreground" aria-live="polite">
+          Claude is writing them. They appear a few at a time.
+        </p>
       ) : null}
 
       <div className="grid gap-2">
@@ -76,7 +56,7 @@ export function Recipes({
             return (
               <Card key={meal.key} className="flex items-center gap-3 p-3">
                 {heading}
-                <span className="shrink-0 text-sm text-muted-foreground">{recipe ? 'Nothing to cook' : writing ? 'Writing…' : 'No recipe yet'}</span>
+                <span className="shrink-0 text-sm text-muted-foreground">{recipe ? 'Nothing to cook' : writing ? 'Writing…' : 'Plan meals writes it'}</span>
               </Card>
             )
           }
@@ -103,9 +83,6 @@ export function Recipes({
                       <li key={i}>{s}</li>
                     ))}
                   </ol>
-                  <Button variant="ghost" size="sm" className="mt-3 -ml-2 text-muted-foreground" disabled={writing} onClick={() => onRewrite(recipe)}>
-                    <RotateCw /> Write again
-                  </Button>
                 </div>
               </details>
             </Card>

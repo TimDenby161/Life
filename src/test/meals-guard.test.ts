@@ -35,7 +35,7 @@ describe('shopping-list Edge Function', () => {
 
   it('selects only what Claude needs from a meal and a recipe', () => {
     expect(fn).toContain(".select('id, day, slot, person_id, name')")
-    expect(fn).toContain(".select('meal_key, serves, ingredients')")
+    expect(fn).toContain(".select('meal_key, serves, ingredients, created_at')")
     expect(fn).toContain(".from('meal_availability').select('day, slot, person_id, available')")
     expect(fn).toContain(".from('meal_slot_notes').select('day, slot, note')")
     expect(fn).toContain(".from('meal_pantry').select('name')")

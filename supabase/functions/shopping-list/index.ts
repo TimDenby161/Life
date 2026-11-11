@@ -4,13 +4,17 @@
 // POST { weekStart: 'YYYY-MM-DD', mode?: 'list' | 'recipes' }
 //   (weekStart is a Monday; Authorization: Bearer <user JWT>)
 // POST { mode: 'plan', from: 'YYYY-MM-DD', days?: 1-MAX_PLAN_DAYS } (from = the person's today; days defaults to PLAN_DAYS)
-// plan                -> { status: 'ok', placed, weeks }
+// plan                -> { status: 'ok', placed, weeks, at }   (at = the server's time, for `fresh` below)
 //                        Fills the empty lunches and dinners over those days
 //                        that someone is in for; weeks = the Mondays touched.
 // list (the default)  -> { status: 'ok', count }
 // recipes             -> { status: 'ok', written, remaining }
 //                        Writes up to RECIPES_PER_CALL of the week's meals that
 //                        have no recipe yet; call again while `remaining` > 0.
+//                        With fresh: { from, days, since }, the meals on those
+//                        days are rewritten too (once: a recipe saved after
+//                        `since` counts as fresh), so Plan meals rebuilds the
+//                        recipes it uses with what you have in.
 // either              -> { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error', message }
 //
 // Everything is read as the calling user, under RLS. Claude is sent the day,
@@ -40,6 +44,7 @@ import {
   isPlanDays,
   isMonday,
   type MealRow,
+  mealKey,
   mealsKey,
   openSlots,
   PLAN_DAYS,
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
   const supabase = await userClient(req)
   if (!supabase) return json(req, { status: 'error', message: 'Sign in again.' }, 401)
 
-  let body: { weekStart?: string; mode?: string; from?: string; days?: number }
+  let body: { weekStart?: string; mode?: string; from?: string; days?: number; fresh?: { from?: string; days?: number; since?: string } }
   try {
     body = await req.json()
   } catch {
@@ -125,6 +130,17 @@ Deno.serve(async (req) => {
   const planDays = body.days ?? PLAN_DAYS
   if (mode === 'plan' && !isPlanDays(planDays)) return json(req, { status: 'error', message: 'Invalid number of days' }, 400)
   const weekStart = mode === 'plan' ? weekStartOf(from) : (body.weekStart ?? '')
+  // Recipes to rewrite: the plan's days, unless written since the plan started (within the last hour).
+  const fresh = body.fresh
+  const since = fresh ? Date.parse(fresh.since ?? '') : NaN
+  const rewrite =
+    mode === 'recipes' &&
+    fresh !== undefined &&
+    isISODate(fresh.from ?? '') &&
+    isPlanDays(fresh.days) &&
+    Number.isFinite(since) &&
+    Math.abs(Date.now() - since) < 3_600_000
+  if (mode === 'recipes' && fresh !== undefined && !rewrite) return json(req, { status: 'error', message: 'Invalid request' }, 400)
   if (!isMonday(weekStart)) return json(req, { status: 'error', message: 'Invalid week' }, 400)
 
   // RLS: these only return the caller's own household.
@@ -182,7 +198,8 @@ Deno.serve(async (req) => {
     const weeks = [...new Set(dates.map(weekStartOf))]
     const open = openSlots(from, memberIds, availability.data, notes.data, planned.data as MealRow[], planDays)
     // Nothing to fill: straight on to the list and recipes.
-    if (!open.length) return json(req, { status: 'ok', placed: 0, weeks })
+    const at = new Date().toISOString()
+    if (!open.length) return json(req, { status: 'ok', placed: 0, weeks, at })
     if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
 
     const input = planInput(
@@ -205,7 +222,7 @@ Deno.serve(async (req) => {
     })
     if (saveError) return json(req, { status: 'error', message: 'Could not save the plan.' }, 500)
     if (!placed?.length) return json(req, { status: 'error', message: 'Claude did not come back with a plan. Try again.' }, 502)
-    return json(req, { status: 'ok', placed: count ?? 0, weeks })
+    return json(req, { status: 'ok', placed: count ?? 0, weeks, at })
   }
 
   const days = weekDates(weekStart)
@@ -223,11 +240,16 @@ Deno.serve(async (req) => {
   // The household's saved recipes: the list buys what they use, and recipes are only written once.
   const { data: recipes, error: recipesError } = await supabase
     .from('recipes')
-    .select('meal_key, serves, ingredients')
+    .select('meal_key, serves, ingredients, created_at')
     .eq('household_id', householdId)
   if (recipesError) return json(req, { status: 'error', message: 'Could not load the recipes.' }, 500)
 
-  const missing = weekMeals(weekStart, rows as MealRow[]).filter((m) => !recipes!.some((r) => r.meal_key === m.key))
+  const rewriteDays = new Set(rewrite ? planDates(fresh!.from!, fresh!.days) : [])
+  const redo = new Set((rows as MealRow[]).filter((r) => rewriteDays.has(r.day)).map((r) => mealKey(r.name)))
+  const missing = weekMeals(weekStart, rows as MealRow[]).filter((m) => {
+    const saved = recipes!.find((r) => r.meal_key === m.key)
+    return !saved || (redo.has(m.key) && Date.parse(saved.created_at) < since)
+  })
   if (mode === 'recipes' && !missing.length) return json(req, { status: 'ok', written: 0, remaining: 0 })
   const asked = missing.slice(0, RECIPES_PER_CALL).map((m) => m.name)
 
