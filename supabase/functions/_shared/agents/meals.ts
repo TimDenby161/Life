@@ -9,7 +9,8 @@
 import { type CalEvent, isAway, travelFor, type TravelRule, WORK_EVENT } from './calendar.ts'
 import { addDays, type ISODate, localNow } from './dates.ts'
 
-export const MEAL_DAYS = 4
+/** As far ahead as the Plan view on /meals can go (MAX_PLAN_DAYS). */
+export const MEAL_DAYS = 7
 export const MEAL_SLOTS = ['lunch', 'dinner'] as const
 export type MealSlot = (typeof MEAL_SLOTS)[number]
 

@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { CalendarDays, Plus, Sparkles, X } from 'lucide-react'
+import { CalendarDays, Minus, Plus, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -12,15 +12,15 @@ import { cn } from '@/lib/utils'
 import { type Member, useHousehold } from '@/modules/household/HouseholdProvider'
 import {
   type AvailabilityRow,
-  type MealWishRow,
+  type PantryRow,
   type PlanSlot,
   type SlotNoteRow,
-  useAddWish,
-  useDeleteWish,
+  useAddPantry,
+  useDeletePantry,
   useSaveSlotNote,
   useSetAvailable,
 } from '../api'
-import { PLAN_DAYS } from '../../../../supabase/functions/_shared/meals.ts'
+import { MAX_PLAN_DAYS, PLAN_DAYS } from '../../../../supabase/functions/_shared/meals.ts'
 import { MealInput } from './WeekMeals'
 
 export { PLAN_DAYS }
@@ -31,21 +31,21 @@ const SLOTS: { slot: PlanSlot; label: string }[] = [
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 
-/** Meals either of you wants soon: typed fresh, or picked from ones you've had (the suggestions). */
-function Wishes({ wishes }: { wishes: MealWishRow[] }) {
+/** Ingredients you already have: Claude plans meals that use them, puts them in new recipes and leaves them off the shopping list. */
+function Have({ pantry }: { pantry: PantryRow[] }) {
   const [text, setText] = useState('')
-  const add = useAddWish()
-  const del = useDeleteWish()
+  const add = useAddPantry()
+  const del = useDeletePantry()
   const submit = () => {
     const name = text.replace(/\s+/g, ' ').trim()
     if (!name) return
-    if (wishes.some((w) => w.name.toLowerCase() === name.toLowerCase())) return setText('')
+    if (pantry.some((p) => p.name.toLowerCase() === name.toLowerCase())) return setText('')
     add.mutate(name, { onSuccess: () => setText(''), onError })
   }
 
   return (
     <Card className="p-3">
-      <h2 className="mb-2 px-0.5 text-sm font-semibold">Want</h2>
+      <h2 className="mb-2 px-0.5 text-sm font-semibold">Have</h2>
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -54,10 +54,9 @@ function Wishes({ wishes }: { wishes: MealWishRow[] }) {
         }}
       >
         <Input
-          aria-label="A meal you want"
-          placeholder="Fish pie"
-          list="meal-names"
-          maxLength={80}
+          aria-label="An ingredient you have"
+          placeholder="Chicken thighs"
+          maxLength={60}
           autoComplete="off"
           enterKeyHint="done"
           className="h-9"
@@ -68,17 +67,17 @@ function Wishes({ wishes }: { wishes: MealWishRow[] }) {
           <Plus />
         </Button>
       </form>
-      {wishes.length ? (
+      {pantry.length ? (
         <ul className="mt-2.5 flex flex-wrap gap-1.5">
-          {wishes.map((w) => (
-            <li key={w.id} className="flex max-w-full items-center gap-0.5 rounded-full border bg-muted/40 py-0.5 pl-3 pr-0.5 text-sm">
-              <span className="truncate">{w.name}</span>
+          {pantry.map((p) => (
+            <li key={p.id} className="flex max-w-full items-center gap-0.5 rounded-full border bg-muted/40 py-0.5 pl-3 pr-0.5 text-sm">
+              <span className="truncate">{p.name}</span>
               <Button
                 size="icon-sm"
                 variant="ghost"
                 className="size-6 rounded-full text-muted-foreground"
-                aria-label={`Remove ${w.name}`}
-                onClick={() => del.mutate(w.id, { onError })}
+                aria-label={`Remove ${p.name}`}
+                onClick={() => del.mutate(p.id, { onError })}
               >
                 <X className="size-3.5" />
               </Button>
@@ -113,10 +112,24 @@ function PersonToggle({ person, row, day, slot, what }: { person: Member; row: A
   )
 }
 
-/** The next few days: who is in for lunch and dinner, and anything you want for that meal. */
-function Grid({ from, people, availability, notes }: { from: string; people: Member[]; availability: AvailabilityRow[]; notes: SlotNoteRow[] }) {
+/** The next few days: who is in for lunch and dinner, and anything you want for that meal. A day can be added at the foot, or an added one taken off. */
+function Grid({
+  from,
+  count,
+  onCount,
+  people,
+  availability,
+  notes,
+}: {
+  from: string
+  count: number
+  onCount: (days: number) => void
+  people: Member[]
+  availability: AvailabilityRow[]
+  notes: SlotNoteRow[]
+}) {
   const save = useSaveSlotNote()
-  const days = Array.from({ length: PLAN_DAYS }, (_, i) => addDaysISO(from, i))
+  const days = Array.from({ length: count }, (_, i) => addDaysISO(from, i))
   const dayLabel = (day: string, i: number) => (i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : format(parseISODate(day), 'EEEE'))
 
   return (
@@ -163,25 +176,43 @@ function Grid({ from, people, availability, notes }: { from: string; people: Mem
           </div>
         ))}
       </div>
+      <div className="mt-2 flex gap-2 border-t pt-2">
+        {count < MAX_PLAN_DAYS ? (
+          <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground" onClick={() => onCount(count + 1)}>
+            <Plus /> Add a day
+          </Button>
+        ) : null}
+        {count > PLAN_DAYS ? (
+          <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground" onClick={() => onCount(count - 1)}>
+            <Minus /> Remove a day
+          </Button>
+        ) : null}
+      </div>
     </Card>
   )
 }
 
 /**
- * Plan: meals you want, then who is in for the next four days' lunches and
- * dinners (filled overnight from the calendars). The button has Claude put
- * meals in the empty slots, then write the shopping list and recipes.
+ * Plan: what you have in, then who is in for the next four days' lunches and
+ * dinners (filled overnight from the calendars; days can be added, up to a
+ * week) and what you want for each. The button has Claude put meals in the
+ * empty slots, then write the shopping list and recipes.
  */
 export function Plan({
   from,
-  wishes,
+  days,
+  onDays,
+  pantry,
   availability,
   notes,
   busy,
   onPlan,
 }: {
   from: string
-  wishes: MealWishRow[]
+  /** How many days to plan (PLAN_DAYS unless some were added). */
+  days: number
+  onDays: (days: number) => void
+  pantry: PantryRow[]
   availability: AvailabilityRow[]
   notes: SlotNoteRow[]
   /** What is happening now ("Planning meals…"), or null. */
@@ -193,8 +224,8 @@ export function Plan({
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2 md:items-start">
-        <Wishes wishes={wishes} />
-        <Grid from={from} people={people} availability={availability} notes={notes} />
+        <Have pantry={pantry} />
+        <Grid from={from} count={days} onCount={onDays} people={people} availability={availability} notes={notes} />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button onClick={onPlan} disabled={Boolean(busy)} className="w-full sm:w-auto">

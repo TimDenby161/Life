@@ -1,4 +1,6 @@
 import {
+  isPlanDays,
+  PLAN_DAYS,
   AISLES,
   cleanItems,
   cleanPlan,
@@ -173,6 +175,9 @@ describe('recipes', () => {
 
   it('sends Claude only the meal names and how many to cook for', () => {
     expect(JSON.parse(recipesInput(['Chicken curry', 'Soup'], 2))).toEqual({ serves: 2, meals: ['Chicken curry', 'Soup'] })
+    expect(JSON.parse(recipesInput(['Soup'], 2, ['Squash', 'squash', '  ']))).toEqual({ serves: 2, meals: ['Soup'], have: ['Squash'] })
+    expect(JSON.parse(shoppingInput([], ['Rice']))).toEqual({ meals: [], have: ['Rice'] })
+    expect(JSON.parse(shoppingInput([]))).toEqual({ meals: [] })
     expect(RECIPES_PER_CALL).toBeLessThanOrEqual(6)
   })
 
@@ -258,18 +263,25 @@ describe('planning the next few days', () => {
     expect([...new Set(planDates(FROM).map(weekStartOf))]).toEqual(['2026-11-09', '2026-11-16'])
   })
 
+  it('plans four days unless more are added, up to a week', () => {
+    expect(planDates(FROM)).toHaveLength(PLAN_DAYS)
+    expect(openSlots(FROM, [TIM], [], [], [], 6).map((o) => o.day).at(-1)).toBe('2026-11-18')
+    expect([0, 1, 7, 8, 2.5, '5'].map(isPlanDays)).toEqual([false, true, true, false, false, false])
+  })
+
   it('sends Claude how many are eating, never who', () => {
     const open = openSlots(FROM, [TIM, SOPHIE], [{ day: FROM, slot: 'dinner', person_id: SOPHIE, available: false }], [], [])
-    const input = planInput(open.slice(0, 2), [], ['Fish pie', 'fish pie ', 'Ramen'], ['Chilli'])
+    const input = planInput(open.slice(0, 2), [], ['Chilli', 'chilli '], ['Chicken thighs', 'chicken thighs', ' Squash '])
     expect(input).not.toMatch(/tim|sophie/)
     expect(JSON.parse(input)).toMatchObject({
       slots: [
         { date: FROM, weekday: 'Fri', slot: 'lunch', people: 2 },
         { date: FROM, weekday: 'Fri', slot: 'dinner', people: 1 },
       ],
-      wanted: ['Fish pie', 'Ramen'],
       recently_eaten: ['Chilli'],
+      have: ['Chicken thighs', 'Squash'],
     })
+    expect(JSON.parse(planInput(open, [], [], []))).not.toHaveProperty('have')
   })
 
   it('keeps only open slots, one meal each, as a meal for both or one each for whoever is in', () => {

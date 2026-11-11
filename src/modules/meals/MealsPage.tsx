@@ -11,13 +11,13 @@ import { addDaysISO, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { isMonday, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
+import { isMonday, isPlanDays, mealsKey, plannedMeals, weekMeals, weekPlan } from '../../../supabase/functions/_shared/meals.ts'
 import {
   useDeleteRecipe,
   useListMealsKey,
   useMakeShoppingList,
   useMealNames,
-  useMealWishes,
+  usePantry,
   usePlanDays,
   usePlanMeals,
   useRecipes,
@@ -33,10 +33,10 @@ import { WeekMeals } from './components/WeekMeals'
 type View = 'plan' | 'meals' | 'list' | 'recipes'
 
 /**
- * Planning (meals you want, who is in over the next four days), the week's
- * meals, the shopping list made from them and their recipes, one at a time
- * behind a switch. The week and the view live in the address (?week=…&view=list), so
- * a reload keeps you where you were.
+ * Planning (who is in over the next four days, or more when days are added,
+ * and what you have in), the week's meals, the shopping list made from them and
+ * their recipes, one at a time behind a switch. The week, the view and any added
+ * days live in the address (?week=…&view=list&days=5), so a reload keeps you where you were.
  */
 export default function MealsPage() {
   const { members } = useHousehold()
@@ -46,12 +46,17 @@ export default function MealsPage() {
   const week = isMonday(asked) ? asked : thisWeek
   const askedView = params.get('view')
   const view: View = askedView === 'meals' || askedView === 'list' || askedView === 'recipes' ? askedView : 'plan'
+  const askedDays = Number(params.get('days'))
+  const planDayCount = isPlanDays(askedDays) ? askedDays : PLAN_DAYS
 
-  const change = (patch: { week?: string; view?: View }) =>
+  const change = (patch: { week?: string; view?: View; days?: number }) =>
     setParams(
       (p) => {
         const w = patch.week ?? week
         const v = patch.view ?? view
+        const d = patch.days ?? planDayCount
+        if (d === PLAN_DAYS) p.delete('days')
+        else p.set('days', String(d))
         if (w === thisWeek) p.delete('week')
         else p.set('week', w)
         if (v === 'plan') p.delete('view')
@@ -70,8 +75,8 @@ export default function MealsPage() {
   const write = useWriteRecipes()
   const delRecipe = useDeleteRecipe()
   const today = todayISO()
-  const planTo = addDaysISO(today, PLAN_DAYS - 1)
-  const wishes = useMealWishes()
+  const planTo = addDaysISO(today, planDayCount - 1)
+  const pantry = usePantry()
   const planDays = usePlanDays(today, planTo)
   const planMeals = usePlanMeals()
   const [busy, setBusy] = useState<string | null>(null)
@@ -81,7 +86,7 @@ export default function MealsPage() {
     const id = 'meal-plan'
     try {
       setBusy('Planning meals…')
-      const planned = await planMeals.mutateAsync(today)
+      const planned = await planMeals.mutateAsync({ from: today, days: planDayCount })
       if (planned.status !== 'ok') return void toast.error(planned.message, { id })
       change({ view: 'meals', week: weekDays(today)[0] })
       setBusy('Writing the shopping list…')
@@ -124,11 +129,11 @@ export default function MealsPage() {
   const range = `${format(parseISODate(days[0]), 'd MMM')} – ${format(parseISODate(days[6]), 'd MMM')}`
   const recipeNotice = write.variables === week && write.data && write.data.status !== 'ok' ? write.data : null
   const shown = view === 'list' ? items : view === 'recipes' ? recipes : view === 'plan' ? planDays : meals
-  const error = view === 'plan' ? (wishes.error ?? planDays.error) : (meals.error ?? shown.error)
-  const pending = view === 'plan' ? wishes.isPending || planDays.isPending : meals.isPending || shown.isPending
+  const error = view === 'plan' ? (pantry.error ?? planDays.error) : (meals.error ?? shown.error)
+  const pending = view === 'plan' ? pantry.isPending || planDays.isPending : meals.isPending || shown.isPending
   const retry = () => {
     if (view !== 'plan') return meals.error ? meals.refetch() : shown.refetch()
-    void wishes.refetch()
+    void pantry.refetch()
     return planDays.refetch()
   }
 
@@ -191,7 +196,9 @@ export default function MealsPage() {
       ) : view === 'plan' ? (
         <Plan
           from={today}
-          wishes={wishes.data ?? []}
+          days={planDayCount}
+          onDays={(days) => change({ days })}
+          pantry={pantry.data ?? []}
           availability={planDays.data?.availability ?? []}
           notes={planDays.data?.notes ?? []}
           busy={busy}

@@ -24,10 +24,10 @@ function day(events: CalEvent[], person: string, date = TODAY, travel = () => []
 }
 
 describe('meal availability from the calendar', () => {
-  it('covers lunch and dinner for each person over the next four days', () => {
+  it('covers lunch and dinner for each person over the next seven days', () => {
     const rows = mealAvailability([], [TIM, SOPHIE], TODAY, TZ)
-    expect(rows).toHaveLength(4 * 2 * 2)
-    expect(new Set(rows.map((r) => r.day))).toEqual(new Set(['2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14']))
+    expect(rows).toHaveLength(7 * 2 * 2)
+    expect(new Set(rows.map((r) => r.day))).toEqual(new Set(['2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17']))
     expect(rows.every((r) => r.available)).toBe(true)
   })
 

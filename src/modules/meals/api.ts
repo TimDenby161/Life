@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, type Tables } from '@/lib/supabase'
 import { unwrap } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -186,20 +186,21 @@ export function useWriteRecipes() {
   })
 }
 
-// Planning: meals you want, who is in for each meal, and what you want for it ----------
+// Planning: who is in for each meal, what you want for it, and what you have in ---------
 
-export type MealWishRow = Tables<'meal_wishes'>
+export type PantryRow = Tables<'meal_pantry'>
 export type AvailabilityRow = Tables<'meal_availability'>
 export type SlotNoteRow = Tables<'meal_slot_notes'>
 export type PlanSlot = 'lunch' | 'dinner'
 
 const planKeys = {
-  wishes: ['meals', 'wishes'] as const,
+  pantry: ['meals', 'pantry'] as const,
   days: (from: string, to: string) => ['meals', 'plan', from, to] as const,
 }
 
-export const useMealWishes = () =>
-  useQuery({ queryKey: planKeys.wishes, queryFn: async () => unwrap(await supabase.from('meal_wishes').select('*').order('created_at')) })
+/** Ingredients you already have, shared: the plan, new recipes and the shopping list use them. */
+export const usePantry = () =>
+  useQuery({ queryKey: planKeys.pantry, queryFn: async () => unwrap(await supabase.from('meal_pantry').select('*').order('created_at')) })
 
 /** Availability and notes for the days from `from` to `to`. No availability row = in. */
 export const usePlanDays = (from: string, to: string) =>
@@ -212,12 +213,14 @@ export const usePlanDays = (from: string, to: string) =>
       ])
       return { availability: unwrap(availability), notes: unwrap(notes) }
     },
+    // Adding a day keeps the days already shown on screen while the new one loads.
+    placeholderData: keepPreviousData,
   })
 
-export const useAddWish = () =>
-  useMealsMutation(async (h, name: string) => unwrap(await supabase.from('meal_wishes').insert({ household_id: h, name: name.replace(/\s+/g, ' ').trim() })))
+export const useAddPantry = () =>
+  useMealsMutation(async (h, name: string) => unwrap(await supabase.from('meal_pantry').insert({ household_id: h, name: name.replace(/\s+/g, ' ').trim() })))
 
-export const useDeleteWish = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('meal_wishes').delete().eq('id', id)))
+export const useDeletePantry = () => useMealsMutation(async (_h, id: string) => unwrap(await supabase.from('meal_pantry').delete().eq('id', id)))
 
 /** In or out for a meal. `exists` = there is a row already (from the calendar or set before). */
 export const useSetAvailable = () =>
@@ -250,12 +253,12 @@ export type PlanMealsResult =
   | { status: 'ok'; placed: number; weeks: string[] }
   | { status: 'not_configured' | 'over_budget' | 'error'; message: string }
 
-/** Asks Claude to fill the next few days' empty lunches and dinners from the plan; `from` is today. */
+/** Asks Claude to fill the empty lunches and dinners over `days` days from the plan; `from` is today. */
 export function usePlanMeals() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (from: string): Promise<PlanMealsResult> => {
-      const { data, error } = await supabase.functions.invoke<PlanMealsResult>('shopping-list', { body: { mode: 'plan', from } })
+    mutationFn: async ({ from, days }: { from: string; days: number }): Promise<PlanMealsResult> => {
+      const { data, error } = await supabase.functions.invoke<PlanMealsResult>('shopping-list', { body: { mode: 'plan', from, days } })
       if (error) {
         const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
         if (body?.status) return body as PlanMealsResult

@@ -1824,6 +1824,38 @@ export type Database = {
           },
         ]
       }
+      meal_pantry: {
+        Row: {
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_pantry_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meal_slot_notes: {
         Row: {
           day: string
@@ -3559,6 +3591,16 @@ export type Database = {
           p_summary: string
         }
         Returns: undefined
+      }
+      meals_save_plan: {
+        Args: {
+          p_household_id: string
+          p_meals: Json
+          p_usage: Json
+          p_user_id: string
+          p_week_start: string
+        }
+        Returns: number
       }
       push_subscriptions_gone: {
         Args: { p_household_id: string; p_ids: string[] }

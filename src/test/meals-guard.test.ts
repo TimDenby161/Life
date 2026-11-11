@@ -9,13 +9,13 @@ const shared = readFileSync(join(__dirname, '../../supabase/functions/_shared/me
 const agents = readFileSync(join(__dirname, '../../supabase/functions/agents/index.ts'), 'utf8')
 
 describe('shopping-list Edge Function', () => {
-  it('reads only the household, its meals and plan, its recipes and what has been spent', () => {
+  it('reads only the household, its meals and plan, what it has in, its recipes and what has been spent', () => {
     const tables = new Set([...fn.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]))
     expect([...tables].sort()).toEqual([
       'household_members',
       'meal_availability',
+      'meal_pantry',
       'meal_slot_notes',
-      'meal_wishes',
       'meals',
       'recipes',
       'shopping_list_runs',
@@ -38,7 +38,7 @@ describe('shopping-list Edge Function', () => {
     expect(fn).toContain(".select('meal_key, serves, ingredients')")
     expect(fn).toContain(".from('meal_availability').select('day, slot, person_id, available')")
     expect(fn).toContain(".from('meal_slot_notes').select('day, slot, note')")
-    expect(fn).toContain(".from('meal_wishes').select('name')")
+    expect(fn).toContain(".from('meal_pantry').select('name')")
   })
 
   it('never sends Claude who is eating, only how many', () => {

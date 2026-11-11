@@ -3,9 +3,9 @@
 //
 // POST { weekStart: 'YYYY-MM-DD', mode?: 'list' | 'recipes' }
 //   (weekStart is a Monday; Authorization: Bearer <user JWT>)
-// POST { mode: 'plan', from: 'YYYY-MM-DD' } (from = the person's today)
+// POST { mode: 'plan', from: 'YYYY-MM-DD', days?: 1-MAX_PLAN_DAYS } (from = the person's today; days defaults to PLAN_DAYS)
 // plan                -> { status: 'ok', placed, weeks }
-//                        Fills the empty lunches and dinners over PLAN_DAYS
+//                        Fills the empty lunches and dinners over those days
 //                        that someone is in for; weeks = the Mondays touched.
 // list (the default)  -> { status: 'ok', count }
 // recipes             -> { status: 'ok', written, remaining }
@@ -16,7 +16,8 @@
 // Everything is read as the calling user, under RLS. Claude is sent the day,
 // slot, meal name and number of people (for recipes: just the meal names and
 // how many to cook for; for a plan: the open slots with how many are eating
-// and your note, the meals you want and recent meal names), never who.
+// and your note and recent meal names; and for all three,
+// the names of the ingredients you already have), never who.
 // Results are saved through shopping_save_list, recipes_save and
 // meals_save_plan, the only things here that use the service role.
 //
@@ -36,10 +37,12 @@ import {
   cleanPlan,
   cleanRecipes,
   isISODate,
+  isPlanDays,
   isMonday,
   type MealRow,
   mealsKey,
   openSlots,
+  PLAN_DAYS,
   PLAN_PROMPT,
   PLAN_SCHEMA,
   planDates,
@@ -107,7 +110,7 @@ Deno.serve(async (req) => {
   const supabase = await userClient(req)
   if (!supabase) return json(req, { status: 'error', message: 'Sign in again.' }, 401)
 
-  let body: { weekStart?: string; mode?: string; from?: string }
+  let body: { weekStart?: string; mode?: string; from?: string; days?: number }
   try {
     body = await req.json()
   } catch {
@@ -119,6 +122,8 @@ Deno.serve(async (req) => {
   // Within a day of the server's date, whatever the person's time zone.
   const near = isISODate(from) && Math.abs(Date.parse(`${from}T12:00:00Z`) - Date.now()) < 2 * 86_400_000
   if (mode === 'plan' && !near) return json(req, { status: 'error', message: 'Invalid day' }, 400)
+  const planDays = body.days ?? PLAN_DAYS
+  if (mode === 'plan' && !isPlanDays(planDays)) return json(req, { status: 'error', message: 'Invalid number of days' }, 400)
   const weekStart = mode === 'plan' ? weekStartOf(from) : (body.weekStart ?? '')
   if (!isMonday(weekStart)) return json(req, { status: 'error', message: 'Invalid week' }, 400)
 
@@ -152,10 +157,13 @@ Deno.serve(async (req) => {
     return null
   }
 
+  /** The ingredients you already have, newest first (the list sent is capped). */
+  const haveNames = () => supabase.from('meal_pantry').select('name').eq('household_id', householdId).order('created_at', { ascending: false })
+
   if (mode === 'plan') {
-    const dates = planDates(from)
+    const dates = planDates(from, planDays)
     const last = dates[dates.length - 1]
-    const [planned, recentRows, availability, notes, wishes] = await Promise.all([
+    const [planned, recentRows, availability, notes, pantry] = await Promise.all([
       supabase.from('meals').select('id, day, slot, person_id, name').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
       supabase
         .from('meals')
@@ -166,18 +174,23 @@ Deno.serve(async (req) => {
         .order('day', { ascending: false }),
       supabase.from('meal_availability').select('day, slot, person_id, available').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
       supabase.from('meal_slot_notes').select('day, slot, note').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
-      supabase.from('meal_wishes').select('name').eq('household_id', householdId).order('created_at'),
+      haveNames(),
     ])
-    if (planned.error || recentRows.error || availability.error || notes.error || wishes.error) {
+    if (planned.error || recentRows.error || availability.error || notes.error || pantry.error) {
       return json(req, { status: 'error', message: 'Could not load the plan.' }, 500)
     }
     const weeks = [...new Set(dates.map(weekStartOf))]
-    const open = openSlots(from, memberIds, availability.data, notes.data, planned.data as MealRow[])
+    const open = openSlots(from, memberIds, availability.data, notes.data, planned.data as MealRow[], planDays)
     // Nothing to fill: straight on to the list and recipes.
     if (!open.length) return json(req, { status: 'ok', placed: 0, weeks })
     if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
 
-    const input = planInput(open, planned.data as MealRow[], wishes.data.map((w) => w.name), (recentRows.data as MealRow[]).map((m) => m.name))
+    const input = planInput(
+      open,
+      planned.data as MealRow[],
+      (recentRows.data as MealRow[]).map((m) => m.name),
+      pantry.data.map((p) => p.name),
+    )
     const refused = await overBudget(PLAN_PROMPT, input)
     if (refused) return refused
     const { raw, usage } = await askClaude(apiKey, model, { system: PLAN_PROMPT, schema: PLAN_SCHEMA, input, timeoutMs: 60_000 })
@@ -220,10 +233,14 @@ Deno.serve(async (req) => {
 
   if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
 
+  const pantry = await haveNames()
+  if (pantry.error) return json(req, { status: 'error', message: 'Could not load what you have.' }, 500)
+  const have = pantry.data.map((p) => p.name)
+
   const ask =
     mode === 'recipes'
-      ? { system: RECIPE_PROMPT, schema: RECIPE_SCHEMA, input: recipesInput(asked, householdSize), timeoutMs: 70_000 }
-      : { system: SHOPPING_PROMPT, schema: SHOPPING_SCHEMA, input: shoppingInput(withRecipes(meals, recipes!)), timeoutMs: 60_000 }
+      ? { system: RECIPE_PROMPT, schema: RECIPE_SCHEMA, input: recipesInput(asked, householdSize, have), timeoutMs: 70_000 }
+      : { system: SHOPPING_PROMPT, schema: SHOPPING_SCHEMA, input: shoppingInput(withRecipes(meals, recipes!), have), timeoutMs: 60_000 }
 
   const refused = await overBudget(ask.system, ask.input)
   if (refused) return refused

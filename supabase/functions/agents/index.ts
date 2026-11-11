@@ -311,11 +311,11 @@ async function runAgent(
   return true
 }
 
-/** Overnight hours: who is in for lunch and dinner over the next four days goes into meal_availability. */
+/** Overnight hours: who is in for lunch and dinner over the next seven days goes into meal_availability. */
 const MEALS_FROM_HOUR = 2
 
 /**
- * Who is in for each lunch and dinner over the next four days, from the
+ * Who is in for each lunch and dinner over the next seven days, from the
  * calendars, for the Plan view on /meals. Rows someone set by hand are left
  * alone by agent_save_meal_availability. A failure here never stops the agents.
  */
