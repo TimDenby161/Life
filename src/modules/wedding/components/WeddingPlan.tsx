@@ -210,12 +210,12 @@ function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: str
   )
 }
 
-/** The Wedding page's first view: the jobs to do, then the venues you're looking at. Budget, guests and the rest are under Details. */
+/** The Wedding page's first view: the venues you're looking at, then the jobs to do. Budget, guests and the rest are under Details. */
 export function WeddingPlan() {
   return (
     <div className="grid grid-cols-1 gap-3 md:max-w-2xl">
-      <Jobs />
       <Venues />
+      <Jobs />
     </div>
   )
 }

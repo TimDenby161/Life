@@ -26,7 +26,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
   calendar: { label: 'This week', description: 'Today’s calendar, packed days ahead, and jobs worth moving off them.', agents: ['chief_of_staff', 'task_manager'], kinds: ['packed_day'], extra: 'calendar' },
   finances: { label: 'Finance', agents: ['finance'], extra: 'finance' },
   investments: { label: 'Finance', description: 'Your overall position: net worth, what moved it, and anything going the wrong way.', agents: ['finance'] },
-  wedding: { label: 'Plan', description: 'The jobs to do and the venues you’re looking at.', agents: ['wedding'], extra: 'wedding' },
+  wedding: { label: 'Plan', description: 'The venues you’re looking at and the jobs to do.', agents: ['wedding'], extra: 'wedding' },
   languages: { label: 'Coach', description: 'Reviews piling up, words that keep slipping, and languages left alone.', agents: ['language_coach'] },
   health: { label: 'Coach', description: 'Your weekly goals, recovery and balance.', agents: ['health_coach'] },
   stats: { label: 'Workload', description: 'How the joint jobs are shared.', agents: ['task_manager'], kinds: ['workload'] },
