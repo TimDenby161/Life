@@ -1,5 +1,6 @@
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
@@ -18,6 +19,7 @@ import {
   useMealNames,
   useMealWishes,
   usePlanDays,
+  usePlanMeals,
   useRecipes,
   useShoppingItems,
   useWeekMeals,
@@ -43,7 +45,7 @@ export default function MealsPage() {
   const asked = params.get('week') ?? ''
   const week = isMonday(asked) ? asked : thisWeek
   const askedView = params.get('view')
-  const view: View = askedView === 'plan' || askedView === 'list' || askedView === 'recipes' ? askedView : 'meals'
+  const view: View = askedView === 'meals' || askedView === 'list' || askedView === 'recipes' ? askedView : 'plan'
 
   const change = (patch: { week?: string; view?: View }) =>
     setParams(
@@ -52,7 +54,7 @@ export default function MealsPage() {
         const v = patch.view ?? view
         if (w === thisWeek) p.delete('week')
         else p.set('week', w)
-        if (v === 'meals') p.delete('view')
+        if (v === 'plan') p.delete('view')
         else p.set('view', v)
         return p
       },
@@ -71,6 +73,39 @@ export default function MealsPage() {
   const planTo = addDaysISO(today, PLAN_DAYS - 1)
   const wishes = useMealWishes()
   const planDays = usePlanDays(today, planTo)
+  const planMeals = usePlanMeals()
+  const [busy, setBusy] = useState<string | null>(null)
+
+  /** Claude fills the empty slots, then you see the meals while it writes the shopping list and the recipes. */
+  const runPlan = async () => {
+    const id = 'meal-plan'
+    try {
+      setBusy('Planning meals…')
+      const planned = await planMeals.mutateAsync(today)
+      if (planned.status !== 'ok') return void toast.error(planned.message, { id })
+      change({ view: 'meals', week: weekDays(today)[0] })
+      setBusy('Writing the shopping list…')
+      toast.loading(planned.placed ? `${planned.placed} meals planned. Writing the shopping list…` : 'Writing the shopping list…', { id })
+      let lists = 0
+      for (const w of planned.weeks) {
+        const list = await make.mutateAsync(w)
+        if (list.status === 'ok') lists++
+        else if (list.status !== 'no_meals') return void toast.error(list.message, { id })
+      }
+      if (!lists) return void toast.info('Nobody is in for any of these meals', { id })
+      setBusy('Writing recipes…')
+      toast.loading('Writing recipes…', { id })
+      for (const w of planned.weeks) {
+        const written = await write.mutateAsync(w)
+        if (written.status !== 'ok' && written.status !== 'no_meals') return void toast.error(written.message, { id })
+      }
+      toast.success('Meals, shopping list and recipes are ready', { id })
+    } catch (e) {
+      toast.error(getErrorMessage(e), { id })
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const rows = meals.data ?? []
   const hasMeals = plannedMeals(week, rows, members.length).length > 0
@@ -154,7 +189,14 @@ export default function MealsPage() {
       ) : pending ? (
         <ListSkeleton rows={5} />
       ) : view === 'plan' ? (
-        <Plan from={today} wishes={wishes.data ?? []} availability={planDays.data?.availability ?? []} notes={planDays.data?.notes ?? []} />
+        <Plan
+          from={today}
+          wishes={wishes.data ?? []}
+          availability={planDays.data?.availability ?? []}
+          notes={planDays.data?.notes ?? []}
+          busy={busy}
+          onPlan={() => void runPlan()}
+        />
       ) : view === 'meals' ? (
         <>
           <WeekMeals key={week} plans={weekPlan(week, rows)} />

@@ -129,3 +129,68 @@ grant execute on function public.agent_save_meal_availability(uuid, date, jsonb)
 alter publication supabase_realtime add table public.meal_wishes;
 alter publication supabase_realtime add table public.meal_availability;
 alter publication supabase_realtime add table public.meal_slot_notes;
+
+-- Planning with Claude is costed with the lists and recipes.
+alter table public.shopping_list_runs drop constraint shopping_list_runs_kind_check;
+alter table public.shopping_list_runs add constraint shopping_list_runs_kind_check check (kind in ('list', 'recipes', 'plan'));
+
+-- Called by the shopping-list function (service role) once it has checked the
+-- caller belongs to the household. Puts Claude's plan into empty slots
+-- ([{"day","slot","person_id","name"}], person_id null = for both), never over
+-- a meal already there; crosses the wanted meals it used off the list; and
+-- records what the call cost.
+create or replace function public.meals_save_plan(
+  p_household_id uuid,
+  p_week_start date,
+  p_user_id uuid,
+  p_meals jsonb,
+  p_usage jsonb
+)
+returns integer
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_plan boolean := p_meals is not null and jsonb_typeof(p_meals) = 'array';
+  v_count integer := 0;
+begin
+  if v_plan then
+    with incoming as (
+      select (m ->> 'day')::date as day, m ->> 'slot' as slot, nullif(m ->> 'person_id', '')::uuid as person_id, trim(m ->> 'name') as name
+      from jsonb_array_elements(p_meals) as m
+    ),
+    added as (
+      insert into public.meals (household_id, day, slot, person_id, name, created_by)
+      select p_household_id, i.day, i.slot, i.person_id, i.name, p_user_id
+      from incoming i
+      where i.slot in ('lunch', 'dinner')
+        and not exists (select 1 from public.meals x where x.household_id = p_household_id and x.day = i.day and x.slot = i.slot)
+      on conflict do nothing
+      returning name
+    ),
+    used as (
+      delete from public.meal_wishes w
+      where w.household_id = p_household_id and lower(w.name) in (select lower(a.name) from added a)
+    )
+    select count(*) into v_count from added;
+  end if;
+
+  insert into public.shopping_list_runs
+    (household_id, week_start, kind, ok, item_count, created_by, llm_input_tokens, llm_output_tokens, llm_cost_micro_usd)
+  values (
+    p_household_id,
+    p_week_start,
+    'plan',
+    v_plan,
+    v_count,
+    p_user_id,
+    coalesce((p_usage ->> 'input_tokens')::integer, 0),
+    coalesce((p_usage ->> 'output_tokens')::integer, 0),
+    coalesce((p_usage ->> 'cost_micro_usd')::bigint, 0)
+  );
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.meals_save_plan(uuid, date, uuid, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.meals_save_plan(uuid, date, uuid, jsonb, jsonb) to service_role;

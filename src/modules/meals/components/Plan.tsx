@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { CalendarDays, Plus, X } from 'lucide-react'
+import { CalendarDays, Plus, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -20,9 +20,10 @@ import {
   useSaveSlotNote,
   useSetAvailable,
 } from '../api'
+import { PLAN_DAYS } from '../../../../supabase/functions/_shared/meals.ts'
 import { MealInput } from './WeekMeals'
 
-export const PLAN_DAYS = 4
+export { PLAN_DAYS }
 const SLOTS: { slot: PlanSlot; label: string }[] = [
   { slot: 'lunch', label: 'Lunch' },
   { slot: 'dinner', label: 'Dinner' },
@@ -166,14 +167,40 @@ function Grid({ from, people, availability, notes }: { from: string; people: Mem
   )
 }
 
-/** Plan: meals you want, then who is in for the next four days' lunches and dinners (filled overnight from the calendars). */
-export function Plan({ from, wishes, availability, notes }: { from: string; wishes: MealWishRow[]; availability: AvailabilityRow[]; notes: SlotNoteRow[] }) {
+/**
+ * Plan: meals you want, then who is in for the next four days' lunches and
+ * dinners (filled overnight from the calendars). The button has Claude put
+ * meals in the empty slots, then write the shopping list and recipes.
+ */
+export function Plan({
+  from,
+  wishes,
+  availability,
+  notes,
+  busy,
+  onPlan,
+}: {
+  from: string
+  wishes: MealWishRow[]
+  availability: AvailabilityRow[]
+  notes: SlotNoteRow[]
+  /** What is happening now ("Planning meals…"), or null. */
+  busy: string | null
+  onPlan: () => void
+}) {
   const { me, partner } = useHousehold()
   const people = partner ? [me, partner] : [me]
   return (
-    <div className="grid gap-3 md:grid-cols-2 md:items-start">
-      <Wishes wishes={wishes} />
-      <Grid from={from} people={people} availability={availability} notes={notes} />
-    </div>
+    <>
+      <div className="grid gap-3 md:grid-cols-2 md:items-start">
+        <Wishes wishes={wishes} />
+        <Grid from={from} people={people} availability={availability} notes={notes} />
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button onClick={onPlan} disabled={Boolean(busy)} className="w-full sm:w-auto">
+          <Sparkles /> {busy ?? 'Plan meals'}
+        </Button>
+      </div>
+    </>
   )
 }

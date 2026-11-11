@@ -1,18 +1,24 @@
-// Writes the week's shopping list, or recipes for its meals, with Claude.
+// Plans the next few days' meals, and writes the week's shopping list or
+// recipes for its meals, with Claude.
 //
 // POST { weekStart: 'YYYY-MM-DD', mode?: 'list' | 'recipes' }
 //   (weekStart is a Monday; Authorization: Bearer <user JWT>)
+// POST { mode: 'plan', from: 'YYYY-MM-DD' } (from = the person's today)
+// plan                -> { status: 'ok', placed, weeks }
+//                        Fills the empty lunches and dinners over PLAN_DAYS
+//                        that someone is in for; weeks = the Mondays touched.
 // list (the default)  -> { status: 'ok', count }
 // recipes             -> { status: 'ok', written, remaining }
 //                        Writes up to RECIPES_PER_CALL of the week's meals that
 //                        have no recipe yet; call again while `remaining` > 0.
 // either              -> { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error', message }
 //
-// The meals are read as the calling user, under RLS. Claude is sent the day,
+// Everything is read as the calling user, under RLS. Claude is sent the day,
 // slot, meal name and number of people (for recipes: just the meal names and
-// how many to cook for), nothing else. Results are saved through
-// shopping_save_list and recipes_save, the only things here that use the
-// service role.
+// how many to cook for; for a plan: the open slots with how many are eating
+// and your note, the meals you want and recent meal names), never who.
+// Results are saved through shopping_save_list, recipes_save and
+// meals_save_plan, the only things here that use the service role.
 //
 // Secrets (set with `supabase secrets set`, never committed):
 //   MEALS_ANTHROPIC_API_KEY       this function's own key. It has its own name
@@ -27,10 +33,17 @@ import { costMicroUsd, DEFAULT_MODEL, monthlyBudgetMicroUsd, withinBudget } from
 import { corsHeaders, json, userClient } from '../_shared/http.ts'
 import {
   cleanItems,
+  cleanPlan,
   cleanRecipes,
+  isISODate,
   isMonday,
   type MealRow,
   mealsKey,
+  openSlots,
+  PLAN_PROMPT,
+  PLAN_SCHEMA,
+  planDates,
+  planInput,
   plannedMeals,
   RECIPE_PROMPT,
   RECIPE_SCHEMA,
@@ -42,6 +55,7 @@ import {
   shoppingInput,
   weekDates,
   weekMeals,
+  weekStartOf,
   withRecipes,
 } from '../_shared/meals.ts'
 
@@ -93,16 +107,20 @@ Deno.serve(async (req) => {
   const supabase = await userClient(req)
   if (!supabase) return json(req, { status: 'error', message: 'Sign in again.' }, 401)
 
-  let body: { weekStart?: string; mode?: string }
+  let body: { weekStart?: string; mode?: string; from?: string }
   try {
     body = await req.json()
   } catch {
     return json(req, { status: 'error', message: 'Invalid request' }, 400)
   }
-  const weekStart = body.weekStart ?? ''
-  if (!isMonday(weekStart)) return json(req, { status: 'error', message: 'Invalid week' }, 400)
   const mode = body.mode ?? 'list'
-  if (mode !== 'list' && mode !== 'recipes') return json(req, { status: 'error', message: 'Invalid request' }, 400)
+  if (mode !== 'list' && mode !== 'recipes' && mode !== 'plan') return json(req, { status: 'error', message: 'Invalid request' }, 400)
+  const from = body.from ?? ''
+  // Within a day of the server's date, whatever the person's time zone.
+  const near = isISODate(from) && Math.abs(Date.parse(`${from}T12:00:00Z`) - Date.now()) < 2 * 86_400_000
+  if (mode === 'plan' && !near) return json(req, { status: 'error', message: 'Invalid day' }, 400)
+  const weekStart = mode === 'plan' ? weekStartOf(from) : (body.weekStart ?? '')
+  if (!isMonday(weekStart)) return json(req, { status: 'error', message: 'Invalid week' }, 400)
 
   // RLS: these only return the caller's own household.
   const { data: user } = await supabase.auth.getUser()
@@ -111,6 +129,71 @@ Deno.serve(async (req) => {
   const householdId = members?.find((m) => m.user_id === userId)?.household_id as string | undefined
   if (membersError || !householdId) return json(req, { status: 'error', message: 'No household.' }, 403)
   const householdSize = members!.filter((m) => m.household_id === householdId).length
+  const memberIds = members!.filter((m) => m.household_id === householdId).map((m) => m.user_id as string)
+
+  const apiKey = Deno.env.get('MEALS_ANTHROPIC_API_KEY')
+  const model = Deno.env.get('MEALS_LLM_MODEL') || DEFAULT_MODEL
+
+  /** Null when this call fits in the month's budget, else the reply to send. */
+  const overBudget = async (system: string, input: string) => {
+    const monthStart = `${new Date().toISOString().slice(0, 7)}-01T00:00:00Z`
+    const { data: runs, error: runsError } = await supabase
+      .from('shopping_list_runs')
+      .select('llm_cost_micro_usd')
+      .eq('household_id', householdId)
+      .gte('created_at', monthStart)
+    if (runsError) return json(req, { status: 'error', message: 'Could not check this month’s spend.' }, 500)
+    const spent = (runs ?? []).reduce((sum, r) => sum + Number(r.llm_cost_micro_usd), 0)
+    // The most this call could cost: a generous input estimate plus the whole output allowance.
+    const worstCase = costMicroUsd(model, Math.ceil((input.length + system.length) / 3) + 500, SHOPPING_MAX_TOKENS)
+    if (!withinBudget(spent, monthlyBudgetMicroUsd(Deno.env.get('MEALS_LLM_MONTHLY_BUDGET_USD')), worstCase)) {
+      return json(req, { status: 'over_budget', message: 'This month’s Claude budget for meals is used up.' })
+    }
+    return null
+  }
+
+  if (mode === 'plan') {
+    const dates = planDates(from)
+    const last = dates[dates.length - 1]
+    const [planned, recentRows, availability, notes, wishes] = await Promise.all([
+      supabase.from('meals').select('id, day, slot, person_id, name').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
+      supabase
+        .from('meals')
+        .select('id, day, slot, person_id, name')
+        .eq('household_id', householdId)
+        .gte('day', new Date(Date.parse(`${from}T00:00:00Z`) - 21 * 86_400_000).toISOString().slice(0, 10))
+        .lt('day', dates[0])
+        .order('day', { ascending: false }),
+      supabase.from('meal_availability').select('day, slot, person_id, available').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
+      supabase.from('meal_slot_notes').select('day, slot, note').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
+      supabase.from('meal_wishes').select('name').eq('household_id', householdId).order('created_at'),
+    ])
+    if (planned.error || recentRows.error || availability.error || notes.error || wishes.error) {
+      return json(req, { status: 'error', message: 'Could not load the plan.' }, 500)
+    }
+    const weeks = [...new Set(dates.map(weekStartOf))]
+    const open = openSlots(from, memberIds, availability.data, notes.data, planned.data as MealRow[])
+    // Nothing to fill: straight on to the list and recipes.
+    if (!open.length) return json(req, { status: 'ok', placed: 0, weeks })
+    if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
+
+    const input = planInput(open, planned.data as MealRow[], wishes.data.map((w) => w.name), (recentRows.data as MealRow[]).map((m) => m.name))
+    const refused = await overBudget(PLAN_PROMPT, input)
+    if (refused) return refused
+    const { raw, usage } = await askClaude(apiKey, model, { system: PLAN_PROMPT, schema: PLAN_SCHEMA, input, timeoutMs: 60_000 })
+    if (raw === null && !usage) return json(req, { status: 'error', message: 'Claude could not be reached. Try again in a minute.' }, 502)
+    const placed = raw === null ? null : cleanPlan(raw, open, householdSize)
+    const { data: count, error: saveError } = await serviceClient().rpc('meals_save_plan', {
+      p_household_id: householdId,
+      p_week_start: weekStart,
+      p_user_id: userId,
+      p_meals: placed?.length ? placed : null,
+      p_usage: usage ?? {},
+    })
+    if (saveError) return json(req, { status: 'error', message: 'Could not save the plan.' }, 500)
+    if (!placed?.length) return json(req, { status: 'error', message: 'Claude did not come back with a plan. Try again.' }, 502)
+    return json(req, { status: 'ok', placed: count ?? 0, weeks })
+  }
 
   const days = weekDates(weekStart)
   const { data: rows, error: mealsError } = await supabase
@@ -135,28 +218,15 @@ Deno.serve(async (req) => {
   if (mode === 'recipes' && !missing.length) return json(req, { status: 'ok', written: 0, remaining: 0 })
   const asked = missing.slice(0, RECIPES_PER_CALL).map((m) => m.name)
 
-  const apiKey = Deno.env.get('MEALS_ANTHROPIC_API_KEY')
   if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
 
-  const model = Deno.env.get('MEALS_LLM_MODEL') || DEFAULT_MODEL
   const ask =
     mode === 'recipes'
       ? { system: RECIPE_PROMPT, schema: RECIPE_SCHEMA, input: recipesInput(asked, householdSize), timeoutMs: 70_000 }
       : { system: SHOPPING_PROMPT, schema: SHOPPING_SCHEMA, input: shoppingInput(withRecipes(meals, recipes!)), timeoutMs: 60_000 }
 
-  const monthStart = `${new Date().toISOString().slice(0, 7)}-01T00:00:00Z`
-  const { data: runs, error: runsError } = await supabase
-    .from('shopping_list_runs')
-    .select('llm_cost_micro_usd')
-    .eq('household_id', householdId)
-    .gte('created_at', monthStart)
-  if (runsError) return json(req, { status: 'error', message: 'Could not check this month’s spend.' }, 500)
-  const spent = (runs ?? []).reduce((sum, r) => sum + Number(r.llm_cost_micro_usd), 0)
-  // The most this call could cost: a generous input estimate plus the whole output allowance.
-  const worstCase = costMicroUsd(model, Math.ceil((ask.input.length + ask.system.length) / 3) + 500, SHOPPING_MAX_TOKENS)
-  if (!withinBudget(spent, monthlyBudgetMicroUsd(Deno.env.get('MEALS_LLM_MONTHLY_BUDGET_USD')), worstCase)) {
-    return json(req, { status: 'over_budget', message: 'This month’s Claude budget for meals is used up.' })
-  }
+  const refused = await overBudget(ask.system, ask.input)
+  if (refused) return refused
 
   const { raw, usage } = await askClaude(apiKey, model, ask)
   // Nothing came back and nothing was billed: no run to record.

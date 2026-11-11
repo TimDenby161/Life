@@ -1,7 +1,12 @@
 import {
   AISLES,
   cleanItems,
+  cleanPlan,
   cleanRecipes,
+  openSlots,
+  planDates,
+  planInput,
+  weekStartOf,
   mealKey,
   RECIPES_PER_CALL,
   recipesInput,
@@ -224,5 +229,64 @@ describe('recipes', () => {
 
   it('does not let a recipe change which meals a list was built from', () => {
     expect(mealsKey(WEEK, rows)).toBe(mealsKey(WEEK, [...rows].reverse()))
+  })
+})
+
+describe('planning the next few days', () => {
+  const FROM = '2026-11-13' // Friday: the four days run into next week
+
+  it('lists the empty lunches and dinners someone is in for, with who and the note', () => {
+    const open = openSlots(
+      FROM,
+      [TIM, SOPHIE],
+      [
+        { day: '2026-11-13', slot: 'dinner', person_id: SOPHIE, available: false },
+        { day: '2026-11-14', slot: 'lunch', person_id: TIM, available: false },
+        { day: '2026-11-14', slot: 'lunch', person_id: SOPHIE, available: false },
+      ],
+      [{ day: '2026-11-15', slot: 'dinner', note: '  something   slow  ' }],
+      [{ id: '1', day: '2026-11-13', slot: 'lunch', person_id: null, name: 'Soup' }],
+    )
+    expect(open.map((s) => `${s.day} ${s.slot} ${s.eaters.join('+')}${s.note ? ` "${s.note}"` : ''}`)).toEqual([
+      '2026-11-13 dinner tim',
+      '2026-11-14 dinner tim+sophie',
+      '2026-11-15 lunch tim+sophie',
+      '2026-11-15 dinner tim+sophie "something slow"',
+      '2026-11-16 lunch tim+sophie',
+      '2026-11-16 dinner tim+sophie',
+    ])
+    expect([...new Set(planDates(FROM).map(weekStartOf))]).toEqual(['2026-11-09', '2026-11-16'])
+  })
+
+  it('sends Claude how many are eating, never who', () => {
+    const open = openSlots(FROM, [TIM, SOPHIE], [{ day: FROM, slot: 'dinner', person_id: SOPHIE, available: false }], [], [])
+    const input = planInput(open.slice(0, 2), [], ['Fish pie', 'fish pie ', 'Ramen'], ['Chilli'])
+    expect(input).not.toMatch(/tim|sophie/)
+    expect(JSON.parse(input)).toMatchObject({
+      slots: [
+        { date: FROM, weekday: 'Fri', slot: 'lunch', people: 2 },
+        { date: FROM, weekday: 'Fri', slot: 'dinner', people: 1 },
+      ],
+      wanted: ['Fish pie', 'Ramen'],
+      recently_eaten: ['Chilli'],
+    })
+  })
+
+  it('keeps only open slots, one meal each, as a meal for both or one each for whoever is in', () => {
+    const open = openSlots(FROM, [TIM, SOPHIE], [{ day: FROM, slot: 'dinner', person_id: SOPHIE, available: false }], [], [])
+    const raw = JSON.stringify({
+      meals: [
+        { date: FROM, slot: 'lunch', meal: ' Leftovers ' },
+        { date: FROM, slot: 'lunch', meal: 'Second go' },
+        { date: FROM, slot: 'dinner', meal: 'Fish pie' },
+        { date: '2026-12-25', slot: 'dinner', meal: 'Turkey' },
+        { date: '2026-11-14', slot: 'dinner', meal: 'See https://example.com' },
+      ],
+    })
+    expect(cleanPlan(raw, open, 2)).toEqual([
+      { day: FROM, slot: 'lunch', person_id: null, name: 'Leftovers' },
+      { day: FROM, slot: 'dinner', person_id: TIM, name: 'Fish pie' },
+    ])
+    expect(cleanPlan('not json', open, 2)).toBeNull()
   })
 })

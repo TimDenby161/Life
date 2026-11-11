@@ -245,3 +245,24 @@ export const useSaveSlotNote = () =>
       ? unwrap(await row().update({ note }).eq('household_id', h).eq('day', n.day).eq('slot', n.slot))
       : unwrap(await row().insert({ household_id: h, day: n.day, slot: n.slot, note }))
   })
+
+export type PlanMealsResult =
+  | { status: 'ok'; placed: number; weeks: string[] }
+  | { status: 'not_configured' | 'over_budget' | 'error'; message: string }
+
+/** Asks Claude to fill the next few days' empty lunches and dinners from the plan; `from` is today. */
+export function usePlanMeals() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (from: string): Promise<PlanMealsResult> => {
+      const { data, error } = await supabase.functions.invoke<PlanMealsResult>('shopping-list', { body: { mode: 'plan', from } })
+      if (error) {
+        const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
+        if (body?.status) return body as PlanMealsResult
+        return { status: 'error', message: 'The meal planner could not be reached.' }
+      }
+      return data ?? { status: 'error', message: 'Empty response' }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: mealsKeys.all }),
+  })
+}

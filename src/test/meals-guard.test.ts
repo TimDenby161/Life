@@ -9,21 +9,42 @@ const shared = readFileSync(join(__dirname, '../../supabase/functions/_shared/me
 const agents = readFileSync(join(__dirname, '../../supabase/functions/agents/index.ts'), 'utf8')
 
 describe('shopping-list Edge Function', () => {
-  it('reads only the household, its meals, its recipes and what has been spent', () => {
-    const tables = [...fn.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1])
-    expect(tables.sort()).toEqual(['household_members', 'meals', 'recipes', 'shopping_list_runs'])
+  it('reads only the household, its meals and plan, its recipes and what has been spent', () => {
+    const tables = new Set([...fn.matchAll(/\.from\('([a-z_]+)'\)/g)].map((m) => m[1]))
+    expect([...tables].sort()).toEqual([
+      'household_members',
+      'meal_availability',
+      'meal_slot_notes',
+      'meal_wishes',
+      'meals',
+      'recipes',
+      'shopping_list_runs',
+    ])
   })
 
-  it('reads as the signed-in person, and uses the service role only to save the list or the recipes', () => {
+  it('reads as the signed-in person, and uses the service role only to save the list, the recipes or the plan', () => {
     expect(fn).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-    expect([...fn.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['recipes_save', 'shopping_save_list'])
-    // Every use of the service-role client is one of those two calls.
-    expect([...fn.matchAll(/serviceClient\(\)(\.rpc\('[a-z_]+')?/g)].map((m) => m[1]).sort()).toEqual([".rpc('recipes_save'", ".rpc('shopping_save_list'"])
+    expect([...fn.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['meals_save_plan', 'recipes_save', 'shopping_save_list'])
+    // Every use of the service-role client is one of those calls.
+    expect([...fn.matchAll(/serviceClient\(\)(\.rpc\('[a-z_]+')?/g)].map((m) => m[1]).sort()).toEqual([
+      ".rpc('meals_save_plan'",
+      ".rpc('recipes_save'",
+      ".rpc('shopping_save_list'",
+    ])
   })
 
   it('selects only what Claude needs from a meal and a recipe', () => {
     expect(fn).toContain(".select('id, day, slot, person_id, name')")
     expect(fn).toContain(".select('meal_key, serves, ingredients')")
+    expect(fn).toContain(".from('meal_availability').select('day, slot, person_id, available')")
+    expect(fn).toContain(".from('meal_slot_notes').select('day, slot, note')")
+    expect(fn).toContain(".from('meal_wishes').select('name')")
+  })
+
+  it('never sends Claude who is eating, only how many', () => {
+    const input = /export function planInput[\s\S]*?\n}\n/.exec(shared)![0]
+    expect(input).toContain('people: s.eaters.length')
+    expect(input).not.toMatch(/eaters(?!\.length)|person_id/)
   })
 
   it('has its own API key, so setting it does not switch on paid calls in the agents function', () => {
