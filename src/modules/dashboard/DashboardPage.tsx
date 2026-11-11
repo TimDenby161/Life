@@ -16,6 +16,7 @@ import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder
 import { awayToday, freeMinutesToday, longestGapToday, workMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
+import { MorningCheckIn } from '@/modules/health/components/MorningCheckIn'
 import { nextTarget } from '@/modules/finances/lib/pots'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
@@ -256,6 +257,7 @@ export function TopJobsCard({
   onMessage,
   limit,
   footer,
+  checkIn = false,
 }: {
   title?: string
   adding?: boolean
@@ -265,6 +267,8 @@ export function TopJobsCard({
   limit?: number
   /** Anything else to show at the foot of the card (Home: what the agents flagged). */
   footer?: React.ReactNode
+  /** Home: the morning check-in leads my own list, as one of today's tasks. */
+  checkIn?: boolean
 }) {
   const { me, partner, members } = useHousehold()
   const views = useViewOptions()
@@ -416,6 +420,11 @@ export function TopJobsCard({
             ]}
           />
         </div>
+        {checkIn && who === me.id ? (
+          <ul>
+            <MorningCheckIn />
+          </ul>
+        ) : null}
         {open.isPending ? (
           <ListSkeleton rows={5} className="px-2" />
         ) : open.error ? (

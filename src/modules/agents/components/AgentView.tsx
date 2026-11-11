@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
-import { MorningCheckIn } from '@/modules/health/components/MorningCheckIn'
 import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
@@ -47,7 +46,7 @@ const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifac
 
 /**
  * Home, sized to fit a phone screen: the news, the rest of today's calendar beside pinned links, the jobs I can
- * do today (AI-picked, home or out) with what the agents have flagged, and the morning check-in until it's done.
+ * do today (AI-picked, home or out), led by the morning check-in until it's done, with what the agents have flagged.
  */
 function HomeToday() {
   return (
@@ -70,8 +69,7 @@ function HomeToday() {
           </a>
         ))}
       </div>
-      <TopJobsCard title="Today’s tasks" limit={4} footer={<AgentFlags max={2} />} />
-      <MorningCheckIn />
+      <TopJobsCard title="Today’s tasks" limit={4} checkIn footer={<AgentFlags max={2} />} />
     </div>
   )
 }

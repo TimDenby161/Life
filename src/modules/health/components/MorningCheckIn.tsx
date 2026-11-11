@@ -1,7 +1,7 @@
+import { ChevronDown, ChevronUp, HeartPulse } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { toISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
@@ -27,10 +27,18 @@ const parse = (text: string, min: number, max: number) => {
   return text.trim() && Number.isFinite(n) && n >= min && n <= max ? n : null
 }
 
+/** Each question as it is asked, shortest first. */
+const QUESTION: Record<Key, string> = {
+  weight: 'Weight?',
+  sleep_duration: 'How long did you sleep?',
+  sleep_score: 'Sleep score?',
+}
+
 /**
- * Home, each morning until done: today's weight, last night's sleep and the
- * watch's sleep score, in one go. Only asks for what hasn't been logged today;
- * Skip hides it until tomorrow.
+ * One of Home's Today's tasks, each morning until done: today's weight, last
+ * night's sleep and the watch's sleep score. Tap it to answer; it only asks
+ * for what hasn't been logged today, and Skip hides it until tomorrow. Renders
+ * an <li>, so it sits in the task list.
  */
 export function MorningCheckIn() {
   const me = useUserId()
@@ -38,6 +46,7 @@ export function MorningCheckIn() {
   const measurements = useMeasurements()
   const add = useAddMeasurement()
   const [skipped, setSkipped] = useState(skippedToday)
+  const [open, setOpen] = useState(false)
   const [weight, setWeight] = useState('')
   const [hours, setHours] = useState('')
   const [minutes, setMinutes] = useState('')
@@ -77,42 +86,59 @@ export function MorningCheckIn() {
     setSkipped(true)
   }
 
+  const row = 'flex items-center justify-between gap-3 text-sm'
   return (
-    <Card className="grid gap-2 p-3">
-      <h2 className="text-sm font-semibold">Morning check-in</h2>
-      <form
-        className="flex flex-wrap items-end gap-2 text-sm"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (ready.length) save()
-        }}
+    <li className="rounded-xl animate-fade-in">
+      <button
+        type="button"
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+        onClick={() => setOpen(!open)}
       >
-        {needs('weight') ? (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Weight
-            <Input aria-label="Weight in kg" inputMode="decimal" placeholder="kg" className="h-9 w-20" value={weight} onChange={(e) => setWeight(e.target.value)} />
-          </label>
-        ) : null}
-        {needs('sleep_duration') ? (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Slept
-            <span className="flex gap-1">
-              <Input aria-label="Hours slept" inputMode="numeric" placeholder="h" className="h-9 w-12" value={hours} onChange={(e) => setHours(e.target.value)} />
-              <Input aria-label="Minutes slept" inputMode="numeric" placeholder="m" className="h-9 w-12" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-            </span>
-          </label>
-        ) : null}
-        {needs('sleep_score') ? (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Sleep score
-            <Input aria-label="Sleep score" inputMode="numeric" placeholder="0-100" className="h-9 w-16" value={score} onChange={(e) => setScore(e.target.value)} />
-          </label>
-        ) : null}
-        <div className="ml-auto flex gap-1">
-          <Button type="button" variant="ghost" size="sm" onClick={skip}>Skip</Button>
-          <Button type="submit" size="sm" disabled={!ready.length || add.isPending}>Save</Button>
-        </div>
-      </form>
-    </Card>
+        <HeartPulse className="size-[22px] shrink-0 text-primary" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] leading-snug">Morning check-in</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{missing.map((k) => LABEL[k]).join(' · ')}</span>
+        </span>
+        {open ? <ChevronUp className="size-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="size-4 shrink-0 text-muted-foreground" />}
+      </button>
+      {open ? (
+        <form
+          className="grid gap-2 px-3 pb-3 pt-1"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (ready.length) void save()
+          }}
+        >
+          {needs('weight') ? (
+            <label className={row}>
+              {QUESTION.weight}
+              <Input aria-label="Weight in kg" inputMode="decimal" placeholder="kg" autoFocus className="h-9 w-20" value={weight} onChange={(e) => setWeight(e.target.value)} />
+            </label>
+          ) : null}
+          {needs('sleep_duration') ? (
+            <div className={row}>
+              <span id="checkin-slept">{QUESTION.sleep_duration}</span>
+              <span className="flex gap-1" role="group" aria-labelledby="checkin-slept">
+                <Input aria-label="Hours slept" inputMode="numeric" placeholder="h" autoFocus={!needs('weight')} className="h-9 w-12" value={hours} onChange={(e) => setHours(e.target.value)} />
+                <Input aria-label="Minutes slept" inputMode="numeric" placeholder="m" className="h-9 w-12" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+              </span>
+            </div>
+          ) : null}
+          {needs('sleep_score') ? (
+            <label className={row}>
+              {QUESTION.sleep_score}
+              <Input aria-label="Sleep score" inputMode="numeric" placeholder="0-100" className="h-9 w-20" value={score} onChange={(e) => setScore(e.target.value)} />
+            </label>
+          ) : null}
+          <div className="flex justify-end gap-1">
+            <Button type="button" variant="ghost" size="sm" onClick={skip}>Skip</Button>
+            <Button type="submit" size="sm" disabled={!ready.length || add.isPending}>Save</Button>
+          </div>
+        </form>
+      ) : null}
+    </li>
   )
 }
+
+const LABEL: Record<Key, string> = { weight: 'Weight', sleep_duration: 'Sleep', sleep_score: 'Sleep score' }
