@@ -23,5 +23,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"],
-  "exclude": ["src/test/security.test.ts", "src/test/agents-guard.test.ts", "src/test/meals-guard.test.ts", "src/test/table-tennis-guard.test.ts"]
+  "exclude": ["src/test/security.test.ts", "src/test/agents-guard.test.ts", "src/test/meals-guard.test.ts", "src/test/table-tennis-guard.test.ts", "src/test/side-hustles-guard.test.ts"]
 }

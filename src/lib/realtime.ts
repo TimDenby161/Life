@@ -58,6 +58,9 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   tt_employers: ['tt'],
   tt_sessions: ['tt'],
   tt_snapshots: ['tt'],
+  hustle_settings: ['hustles'],
+  hustles: ['hustles'],
+  hustle_charges: ['hustles'],
   profiles: ['household'],
 }
 

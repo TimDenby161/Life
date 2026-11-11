@@ -1540,6 +1540,138 @@ export type Database = {
         }
         Relationships: []
       }
+      hustle_charges: {
+        Row: {
+          created_at: string
+          description: string
+          household_id: string
+          hustle_id: string
+          id: string
+          kind: string
+          task_id: string | null
+          user_id: string
+          usual_minor: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          household_id: string
+          hustle_id: string
+          id?: string
+          kind?: string
+          task_id?: string | null
+          user_id?: string
+          usual_minor: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          household_id?: string
+          hustle_id?: string
+          id?: string
+          kind?: string
+          task_id?: string | null
+          user_id?: string
+          usual_minor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hustle_charges_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "hustle_charges_hustle_id_household_id_fkey"
+            columns: ["hustle_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "hustles"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "hustle_charges_task_id_household_id_fkey"
+            columns: ["task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      hustle_settings: {
+        Row: {
+          household_id: string
+          sheet_name: string
+          spreadsheet_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          household_id: string
+          sheet_name?: string
+          spreadsheet_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          household_id?: string
+          sheet_name?: string
+          spreadsheet_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hustle_settings_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      hustles: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          household_id: string
+          id?: string
+          name: string
+          user_id?: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hustles_category_id_household_id_fkey"
+            columns: ["category_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "task_categories"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "hustles_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       investment_holdings: {
         Row: {
           action: string
@@ -1859,6 +1991,7 @@ export type Database = {
       meal_slot_notes: {
         Row: {
           day: string
+          effort: string | null
           household_id: string
           note: string
           slot: string
@@ -1866,13 +1999,15 @@ export type Database = {
         }
         Insert: {
           day: string
+          effort?: string | null
           household_id: string
-          note: string
+          note?: string
           slot: string
           updated_at?: string
         }
         Update: {
           day?: string
+          effort?: string | null
           household_id?: string
           note?: string
           slot?: string
