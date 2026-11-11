@@ -3479,12 +3479,13 @@ export type Database = {
           created_at: string
           day: string
           employer_id: string
-          end_time: string
+          end_time: string | null
+          hours: number
           household_id: string
           id: string
           paid_on: string | null
           rate_minor: number
-          start_time: string
+          start_time: string | null
           user_id: string
         }
         Insert: {
@@ -3492,12 +3493,13 @@ export type Database = {
           created_at?: string
           day: string
           employer_id: string
-          end_time: string
+          end_time?: string | null
+          hours: number
           household_id: string
           id?: string
           paid_on?: string | null
           rate_minor?: number
-          start_time: string
+          start_time?: string | null
           user_id?: string
         }
         Update: {
@@ -3505,12 +3507,13 @@ export type Database = {
           created_at?: string
           day?: string
           employer_id?: string
-          end_time?: string
+          end_time?: string | null
+          hours?: number
           household_id?: string
           id?: string
           paid_on?: string | null
           rate_minor?: number
-          start_time?: string
+          start_time?: string | null
           user_id?: string
         }
         Relationships: [

@@ -20,16 +20,16 @@ select set_config('t.hh', (select household_id::text from household_members wher
 
 select pg_temp.as_user(current_setting('t.tim')::uuid);
 select lives_ok(format($$insert into tt_employers (household_id, name, rate_minor) values (%L, 'Graham Spicer', 2000)$$, current_setting('t.hh')), 'Tim adds who pays him, with a rate');
-select lives_ok(format($$insert into tt_sessions (household_id, employer_id, day, start_time, end_time) select %L, id, '2026-11-10', '17:00', '18:30' from tt_employers$$, current_setting('t.hh')),
-  'and logs a session');
+select lives_ok(format($$insert into tt_sessions (household_id, employer_id, day, hours) select %L, id, '2026-11-10', 1.5 from tt_employers$$, current_setting('t.hh')),
+  'and logs a session by its hours');
 select is((select rate_minor || ':' || amount_minor from tt_sessions), '2000:3000', 'paid at the employer''s rate for the hours (1.5h at £20 = £30)');
 select throws_ok($$update tt_sessions set rate_minor = 9999$$, '42501', null, 'the rate is not client-writable');
 update tt_employers set rate_minor = 2500;
 select is((select amount_minor from tt_sessions), 3000::bigint, 'a later rate change leaves logged sessions alone');
 update tt_sessions set paid_on = '2026-11-11';
 select is((select paid_on from tt_sessions), '2026-11-11'::date, 'a session can be marked paid');
-select throws_ok(format($$insert into tt_sessions (household_id, employer_id, day, start_time, end_time) select %L, id, '2026-11-10', '18:00', '17:00' from tt_employers$$, current_setting('t.hh')),
-  '23514', null, 'it ends after it starts');
+select throws_ok(format($$insert into tt_sessions (household_id, employer_id, day, hours) select %L, id, '2026-11-10', 0 from tt_employers$$, current_setting('t.hh')),
+  '23514', null, 'it lasts some time');
 select lives_ok(format($$insert into tt_players (household_id, tt_user_id, name) values (%L, gen_random_uuid(), 'A Junior')$$, current_setting('t.hh')), 'Tim adds a player he coaches');
 
 select pg_temp.as_user(current_setting('t.sophie')::uuid);

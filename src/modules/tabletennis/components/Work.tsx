@@ -17,7 +17,9 @@ import { owedByEmployer } from '../lib/progress'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 const money = (minor: number) => formatMoney(minor, 'GBP')
-const hhmm = (t: string) => t.slice(0, 5)
+/** "2h", "1.5h". */
+const hoursLabel = (h: number) => `${Number(h)}h`
+const HOURS = [1, 2, 3, 4, 5]
 
 /** Add or change who pays you and their hourly rate. A new rate applies to sessions logged from now on. */
 function EmployerForm({ employer, onDone }: { employer?: TtEmployer; onDone: () => void }) {
@@ -58,8 +60,7 @@ export function Work() {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [employerId, setEmployerId] = useState('')
   const [day, setDay] = useState(todayISO())
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
+  const [hours, setHours] = useState(1)
   const [paidNow, setPaidNow] = useState(false)
 
   if (employers.error ?? sessions.error) return <ErrorState error={employers.error ?? sessions.error} onRetry={() => { void employers.refetch(); void sessions.refetch() }} />
@@ -70,7 +71,7 @@ export function Work() {
   const owed = owedByEmployer(theirs)
   const nameOf = (id: string) => employers.data.find((e) => e.id === id)?.name ?? ''
   const chosen = employerId || mine[0]?.id || ''
-  const ready = Boolean(chosen && day && start && end && end > start)
+  const ready = Boolean(chosen && day && hours)
   const months = new Map<string, typeof theirs>()
   for (const s of theirs) months.set(s.day.slice(0, 7), [...(months.get(s.day.slice(0, 7)) ?? []), s])
 
@@ -149,15 +150,21 @@ export function Work() {
             className="grid grid-cols-2 gap-1.5"
             onSubmit={(e) => {
               e.preventDefault()
-              if (ready) add.mutate({ employer_id: chosen, day, start_time: start, end_time: end, paid: paidNow }, { onSuccess: () => { setStart(''); setEnd(''); setPaidNow(false) }, onError })
+              if (ready) add.mutate({ employer_id: chosen, day, hours, paid: paidNow }, { onSuccess: () => { setHours(1); setPaidNow(false); toast.success('Session logged') }, onError })
             }}
           >
             <NativeSelect aria-label="Employer" className="h-9" value={chosen} onChange={(e) => setEmployerId(e.target.value)}>
               {mine.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </NativeSelect>
             <Input aria-label="Date" type="date" className="h-9" value={day} onChange={(e) => setDay(e.target.value)} />
-            <Input aria-label="Start" type="time" className="h-9" value={start} onChange={(e) => setStart(e.target.value)} />
-            <Input aria-label="End" type="time" className="h-9" value={end} onChange={(e) => setEnd(e.target.value)} />
+            <Segmented
+              aria-label="Hours"
+              size="sm"
+              className="col-span-2 w-full [&>*]:flex-1"
+              value={String(hours)}
+              onChange={(v) => setHours(Number(v))}
+              options={HOURS.map((h) => ({ value: String(h), label: `${h}h` }))}
+            />
             <Segmented
               aria-label="Paid for this session yet?"
               size="sm"
@@ -184,7 +191,7 @@ export function Work() {
               <li key={s.id} className="group flex items-center gap-2 py-1.5 text-sm">
                 <span className="w-16 shrink-0 text-xs text-muted-foreground">{format(parseISODate(s.day), 'EEE d')}</span>
                 <span className="min-w-0 flex-1 truncate">
-                  {hhmm(s.start_time)}–{hhmm(s.end_time)} <span className="text-xs text-muted-foreground">· {nameOf(s.employer_id)}</span>
+                  {hoursLabel(s.hours)} <span className="text-xs text-muted-foreground">· {nameOf(s.employer_id)}</span>
                 </span>
                 <span className="tabular">{money(s.amount_minor ?? 0)}</span>
                 <Button
