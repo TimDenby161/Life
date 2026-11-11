@@ -1,8 +1,9 @@
+import { format } from 'date-fns'
 import { useEffect, useState } from 'react'
 import { ListSkeleton } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { colorOf } from '@/lib/colors'
-import { todayISO, todayLabel } from '@/lib/dates'
+import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { type CalendarIntegration, useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import type { CalendarEvent } from '@/modules/calendar/lib/grid'
@@ -37,7 +38,7 @@ export function TodayCalendar({ max, compact = false }: { max?: number; compact?
 
   return (
     <Card>
-      <CardHeader className={compact ? 'p-3 pb-1 sm:p-3 sm:pb-1' : undefined}><CardTitle>{todayLabel(now)}</CardTitle></CardHeader>
+      <CardHeader className={compact ? 'p-3 pb-1 sm:p-3 sm:pb-1' : undefined}><CardTitle>{format(now, 'EEEE d MMMM')}</CardTitle></CardHeader>
       <CardContent className={compact ? 'p-3 pt-1 sm:p-3 sm:pt-1' : undefined}>
         {events.isPending || integrations.isPending ? (
           <ListSkeleton rows={compact ? 2 : 3} />

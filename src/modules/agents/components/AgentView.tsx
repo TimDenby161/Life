@@ -46,15 +46,17 @@ export function inBrowser(href: string, userAgent = navigator.userAgent): string
 const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifact/7Tm8wQd2ZezWCcVMVMs3Ra', icon: MapIcon }]
 
 /**
- * Home, sized to fit a phone screen: the morning check-in until it's done, pinned links, the rest of today's
- * calendar, the jobs I can do today (AI-picked, home or out) with what the
- * agents have flagged, and the news.
+ * Home, sized to fit a phone screen: the news, the rest of today's calendar beside pinned links, the jobs I can
+ * do today (AI-picked, home or out) with what the agents have flagged, and the morning check-in until it's done.
  */
 function HomeToday() {
   return (
     <div className="grid grid-cols-1 gap-3">
-      <MorningCheckIn />
+      <TopNews max={3} compact />
       <div className="flex items-stretch gap-3">
+        <div className="min-w-0 flex-1">
+          <TodayCalendar max={3} compact />
+        </div>
         {HOME_LINKS.map(({ label, href, icon: Icon }) => (
           <a
             key={href}
@@ -67,12 +69,9 @@ function HomeToday() {
             {label}
           </a>
         ))}
-        <div className="min-w-0 flex-1">
-          <TodayCalendar max={3} compact />
-        </div>
       </div>
       <TopJobsCard title="Today’s tasks" limit={4} footer={<AgentFlags max={2} />} />
-      <TopNews max={3} compact />
+      <MorningCheckIn />
     </div>
   )
 }
