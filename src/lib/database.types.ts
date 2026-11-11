@@ -3206,6 +3206,8 @@ export type Database = {
       trips: {
         Row: {
           abroad: boolean
+          confirmed: boolean
+          cost_minor: number | null
           created_at: string
           created_by: string
           ends_on: string
@@ -3214,6 +3216,8 @@ export type Database = {
           insurance: string
           name: string
           owner_id: string | null
+          paid_minor: number
+          plan_url: string | null
           starts_on: string
           stay: string
           time_off: string
@@ -3222,6 +3226,8 @@ export type Database = {
         }
         Insert: {
           abroad?: boolean
+          confirmed?: boolean
+          cost_minor?: number | null
           created_at?: string
           created_by?: string
           ends_on: string
@@ -3230,6 +3236,8 @@ export type Database = {
           insurance?: string
           name: string
           owner_id?: string | null
+          paid_minor?: number
+          plan_url?: string | null
           starts_on: string
           stay?: string
           time_off?: string
@@ -3238,6 +3246,8 @@ export type Database = {
         }
         Update: {
           abroad?: boolean
+          confirmed?: boolean
+          cost_minor?: number | null
           created_at?: string
           created_by?: string
           ends_on?: string
@@ -3246,6 +3256,8 @@ export type Database = {
           insurance?: string
           name?: string
           owner_id?: string | null
+          paid_minor?: number
+          plan_url?: string | null
           starts_on?: string
           stay?: string
           time_off?: string

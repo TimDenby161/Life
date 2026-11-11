@@ -290,6 +290,8 @@ export async function loadTrips(db: SupabaseClient, householdId: string, today: 
       .from('trips')
       .select('id, name, owner_id, starts_on, ends_on, abroad, transport, stay, insurance, time_off')
       .eq('household_id', householdId)
+      // Ideas (not yet going) are on Holidays only; they don't need booking.
+      .eq('confirmed', true)
       .gte('starts_on', today)
       .limit(200),
   )

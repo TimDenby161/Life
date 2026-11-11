@@ -224,7 +224,10 @@ export const useDeleteRenewal = () =>
   })
 
 export type TripRow = Tables<'trips'>
-export type TripInput = Pick<TripRow, 'name' | 'owner_id' | 'starts_on' | 'ends_on' | 'abroad' | 'transport' | 'stay' | 'insurance' | 'time_off'>
+export type TripInput = Pick<
+  TripRow,
+  'name' | 'owner_id' | 'starts_on' | 'ends_on' | 'abroad' | 'transport' | 'stay' | 'insurance' | 'time_off' | 'cost_minor' | 'paid_minor' | 'plan_url' | 'confirmed'
+>
 
 /** Trips still to come or under way, soonest first. */
 export const useTrips = () =>

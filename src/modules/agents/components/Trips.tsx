@@ -10,18 +10,18 @@ import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { ItemStatus } from '../../../../supabase/functions/_shared/agents/travel.ts'
 import { type TripInput, type TripRow, useDeleteTrip, useSaveTrip, useTrips } from '../api'
 
-const ITEMS = [
+export const ITEMS = [
   { key: 'time_off', label: 'Time off' },
   { key: 'transport', label: 'Travel' },
   { key: 'stay', label: 'Stay' },
   { key: 'insurance', label: 'Insurance' },
 ] as const
-const NEXT: Record<ItemStatus, ItemStatus> = { todo: 'done', done: 'not_needed', not_needed: 'todo' }
-const STATUS_TEXT: Record<ItemStatus, string> = { todo: 'to do', done: 'done', not_needed: 'not needed' }
+export const NEXT: Record<ItemStatus, ItemStatus> = { todo: 'done', done: 'not_needed', not_needed: 'todo' }
+export const STATUS_TEXT: Record<ItemStatus, string> = { todo: 'to do', done: 'done', not_needed: 'not needed' }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** "12–19 Jan 2027", "28 Feb – 3 Mar 2027". */
-function dates(from: string, to: string) {
+export function dates(from: string, to: string) {
   const [fy, fm, fd] = from.split('-').map(Number)
   const [ty, tm, td] = to.split('-').map(Number)
   if (from === to) return `${fd} ${MONTHS[fm - 1]} ${fy}`
@@ -39,6 +39,10 @@ const blank = (): TripInput & { id?: string } => ({
   stay: 'todo',
   insurance: 'todo',
   time_off: 'todo',
+  cost_minor: null,
+  paid_minor: 0,
+  plan_url: null,
+  confirmed: true,
 })
 
 /** Trips coming up and what's sorted for each. Both of you can see and edit them. */
