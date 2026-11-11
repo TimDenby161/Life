@@ -51,6 +51,13 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   meal_slot_notes: ['meals'],
   meal_pantry: ['meals'],
   wedding_venues: ['wedding'],
+  tt_profile: ['tt'],
+  tt_rankings: ['tt'],
+  tt_players: ['tt'],
+  tt_player_notes: ['tt'],
+  tt_employers: ['tt'],
+  tt_sessions: ['tt'],
+  tt_snapshots: ['tt'],
   profiles: ['household'],
 }
 

@@ -3134,6 +3134,299 @@ export type Database = {
           },
         ]
       }
+      tt_employers: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+          rate_minor: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          name: string
+          rate_minor: number
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+          rate_minor?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_employers_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      tt_player_notes: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          note: string
+          player_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          note: string
+          player_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          note?: string
+          player_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_player_notes_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "tt_player_notes_player_id_household_id_fkey"
+            columns: ["player_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tt_players"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      tt_players: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+          tt_user_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          name: string
+          tt_user_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+          tt_user_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_players_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      tt_profile: {
+        Row: {
+          household_id: string
+          ranking_task_id: string | null
+          tt_name: string | null
+          tt_user_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          household_id: string
+          ranking_task_id?: string | null
+          tt_name?: string | null
+          tt_user_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          household_id?: string
+          ranking_task_id?: string | null
+          tt_name?: string | null
+          tt_user_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_profile_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "tt_profile_ranking_task_id_household_id_fkey"
+            columns: ["ranking_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
+      tt_rankings: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          on_date: string
+          ranking: number
+          rating: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          on_date: string
+          ranking: number
+          rating?: number | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          on_date?: string
+          ranking?: number
+          rating?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_rankings_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      tt_sessions: {
+        Row: {
+          amount_minor: number | null
+          created_at: string
+          day: string
+          employer_id: string
+          end_time: string
+          household_id: string
+          id: string
+          paid_on: string | null
+          rate_minor: number
+          start_time: string
+          user_id: string
+        }
+        Insert: {
+          amount_minor?: number | null
+          created_at?: string
+          day: string
+          employer_id: string
+          end_time: string
+          household_id: string
+          id?: string
+          paid_on?: string | null
+          rate_minor?: number
+          start_time: string
+          user_id?: string
+        }
+        Update: {
+          amount_minor?: number | null
+          created_at?: string
+          day?: string
+          employer_id?: string
+          end_time?: string
+          household_id?: string
+          id?: string
+          paid_on?: string | null
+          rate_minor?: number
+          start_time?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_sessions_employer_id_household_id_fkey"
+            columns: ["employer_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tt_employers"
+            referencedColumns: ["id", "household_id"]
+          },
+          {
+            foreignKeyName: "tt_sessions_household_id_user_id_fkey"
+            columns: ["household_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
+      tt_snapshots: {
+        Row: {
+          day: string
+          division: string
+          household_id: string
+          league: string
+          lost: number
+          played: number
+          team: string
+          tt_user_id: string
+          won: number
+        }
+        Insert: {
+          day: string
+          division: string
+          household_id: string
+          league: string
+          lost: number
+          played: number
+          team: string
+          tt_user_id: string
+          won: number
+        }
+        Update: {
+          day?: string
+          division?: string
+          household_id?: string
+          league?: string
+          lost?: number
+          played?: number
+          team?: string
+          tt_user_id?: string
+          won?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tt_snapshots_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_preferences: {
         Row: {
           ai_priorities: boolean
@@ -3785,6 +4078,10 @@ export type Database = {
         Returns: string
       }
       task_last_done_on: { Args: { p_task_id: string }; Returns: string }
+      tt_save_snapshots: {
+        Args: { p_day: string; p_household_id: string; p_rows: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
