@@ -6,12 +6,13 @@ import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input, NativeSelect } from '@/components/ui/input'
+import { Segmented } from '@/components/ui/misc'
 import { parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type TtEmployer, useAddSession, useDeleteSession, useEmployers, useSaveEmployer, useSessions, useSetPaid } from '../api'
+import { type TtEmployer, useAddSession, useDeleteEmployer, useDeleteSession, useEmployers, useSaveEmployer, useSessions, useSetPaid } from '../api'
 import { owedByEmployer } from '../lib/progress'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
@@ -53,11 +54,13 @@ export function Work() {
   const add = useAddSession()
   const setPaid = useSetPaid()
   const del = useDeleteSession()
+  const removeEmployer = useDeleteEmployer()
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [employerId, setEmployerId] = useState('')
   const [day, setDay] = useState(todayISO())
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
+  const [paidNow, setPaidNow] = useState(false)
 
   if (employers.error ?? sessions.error) return <ErrorState error={employers.error ?? sessions.error} onRetry={() => { void employers.refetch(); void sessions.refetch() }} />
   if (employers.isPending || sessions.isPending) return <ListSkeleton rows={4} />
@@ -81,7 +84,21 @@ export function Work() {
             return (
               <li key={e.id} className="grid gap-1.5">
                 {editing === e.id ? (
-                  <EmployerForm employer={e} onDone={() => setEditing(null)} />
+                  <div className="grid gap-1">
+                    <EmployerForm employer={e} onDone={() => setEditing(null)} />
+                    {theirs.some((s) => s.employer_id === e.id) ? (
+                      <p className="text-xs text-muted-foreground">Has sessions logged, so it can’t be removed.</p>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 w-fit text-muted-foreground"
+                        onClick={() => removeEmployer.mutate(e.id, { onSuccess: () => setEditing(null), onError })}
+                      >
+                        <Trash2 /> Remove {e.name}
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">
@@ -132,7 +149,7 @@ export function Work() {
             className="grid grid-cols-2 gap-1.5"
             onSubmit={(e) => {
               e.preventDefault()
-              if (ready) add.mutate({ employer_id: chosen, day, start_time: start, end_time: end, paid: false }, { onSuccess: () => { setStart(''); setEnd('') }, onError })
+              if (ready) add.mutate({ employer_id: chosen, day, start_time: start, end_time: end, paid: paidNow }, { onSuccess: () => { setStart(''); setEnd(''); setPaidNow(false) }, onError })
             }}
           >
             <NativeSelect aria-label="Employer" className="h-9" value={chosen} onChange={(e) => setEmployerId(e.target.value)}>
@@ -141,6 +158,14 @@ export function Work() {
             <Input aria-label="Date" type="date" className="h-9" value={day} onChange={(e) => setDay(e.target.value)} />
             <Input aria-label="Start" type="time" className="h-9" value={start} onChange={(e) => setStart(e.target.value)} />
             <Input aria-label="End" type="time" className="h-9" value={end} onChange={(e) => setEnd(e.target.value)} />
+            <Segmented
+              aria-label="Paid for this session yet?"
+              size="sm"
+              className="col-span-2 w-full [&>*]:flex-1"
+              value={paidNow ? 'paid' : 'owed'}
+              onChange={(v) => setPaidNow(v === 'paid')}
+              options={[{ value: 'owed', label: 'Not paid yet' }, { value: 'paid', label: 'Paid' }]}
+            />
             <Button type="submit" size="sm" className="col-span-2" disabled={!ready || add.isPending}>
               <Plus /> Add session
             </Button>

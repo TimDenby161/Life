@@ -145,6 +145,8 @@ export const useSaveEmployer = () =>
       ? unwrap(await supabase.from('tt_employers').update({ name: e.name, rate_minor: e.rate_minor }).eq('id', e.id))
       : unwrap(await supabase.from('tt_employers').insert({ household_id: h, name: e.name, rate_minor: e.rate_minor })),
   )
+/** Removes an employer; the page only offers it when no sessions are logged against them (removing would delete those). */
+export const useDeleteEmployer = () => useTtMutation(async (_h, _me, id: string) => unwrap(await supabase.from('tt_employers').delete().eq('id', id)))
 export const useAddSession = () =>
   useTtMutation(async (h, _me, s: { employer_id: string; day: string; start_time: string; end_time: string; paid: boolean }) =>
     unwrap(
