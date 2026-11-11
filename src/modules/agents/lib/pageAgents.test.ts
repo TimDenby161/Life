@@ -27,6 +27,6 @@ describe('agent-driven pages', () => {
       expect(ids, page).toContain(page)
       for (const a of scope.agents) expect(agentById(a)?.status, `${page}: ${a}`).toBe('live')
     }
-    expect(Object.keys(PAGE_AGENTS).sort()).toEqual(['calendar', 'finances', 'health', 'home', 'investments', 'jobs', 'languages', 'stats', 'tasks', 'wedding'])
+    expect(Object.keys(PAGE_AGENTS).sort()).toEqual(['calendar', 'finances', 'health', 'home', 'jobs', 'languages', 'stats', 'tasks', 'wedding'])
   })
 })

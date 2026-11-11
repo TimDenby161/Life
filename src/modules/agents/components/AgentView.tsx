@@ -11,6 +11,7 @@ import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
 import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { WeddingPlan } from '@/modules/wedding/components/WeddingPlan'
+import { WordLists } from '@/modules/languages/components/WordLists'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
 import { OBSERVATION_KINDS } from '../../../../supabase/functions/_shared/agents/types.ts'
@@ -31,6 +32,8 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
   if (scope.extra === 'finance') return <div className="grid grid-cols-1 gap-4"><FinanceOverview /></div>
   // Wedding is its jobs and venues: the planner's notices weren't what was needed day to day.
   if (scope.extra === 'wedding') return <WeddingPlan />
+  // Languages is just the word lists: Spanish and Mandarin, known and got wrong.
+  if (scope.extra === 'languages') return <WordLists />
   return <AgentSuggestions scope={scope} onDetails={onDetails} />
 }
 

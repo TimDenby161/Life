@@ -74,6 +74,10 @@ export const useReviewItem = () =>
     return unwrap(await supabase.from('language_progress').update(patch).eq('id', row.id))
   })
 
+/** Puts a learned word back into today's reviews, starting its gaps again; not counted as getting it wrong. */
+export const useReviewAgain = () =>
+  useLanguageMutation(async (_h, id: string) => unwrap(await supabase.from('language_progress').update({ due_on: todayISO(), interval_days: 1 }).eq('id', id)))
+
 /** Ticks off a linked job if it's due today or overdue; does nothing otherwise. */
 export function useTickOffJob() {
   const qc = useQueryClient()
