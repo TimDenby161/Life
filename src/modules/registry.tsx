@@ -22,6 +22,10 @@ import { lazy, type LazyExoticComponent, type ComponentType } from 'react'
  * Every top-level feature is registered here. Navigation (sidebar, bottom
  * bar, "More" menu) and routing are derived from this list, so adding a
  * module means adding one entry and a folder under src/modules.
+ *
+ * The "More" menu (and the sidebar) puts the things you're interested in at
+ * the top and the running-the-app pages (tasks, calendar, stats, AI, settings)
+ * together at the bottom.
  */
 export type AppModule = {
   id: string
@@ -30,23 +34,31 @@ export type AppModule = {
   icon: LucideIcon
   /** Position in the phone bottom bar (1-4; the 5th slot is "More"). */
   mobilePrimary?: number
+  /** Where it sits in "More" and the sidebar: an interest at the top, or with the app's own pages at the bottom. */
+  group: 'main' | 'interest' | 'app'
+  /** Still has its page, but isn't in any menu. */
+  hidden?: boolean
   component: LazyExoticComponent<ComponentType>
 }
 
 export const modules: AppModule[] = [
-  { id: 'home', label: 'Home', path: '/', icon: Home, mobilePrimary: 1, component: lazy(() => import('./dashboard/DashboardPage')) },
-  { id: 'meals', label: 'Meals', path: '/meals', icon: UtensilsCrossed, mobilePrimary: 2, component: lazy(() => import('./meals/MealsPage')) },
-  { id: 'tasks', label: 'Tasks', path: '/tasks', icon: CheckCircle2, component: lazy(() => import('./tasks/pages/TasksPage')) },
-  { id: 'jobs', label: 'Jobs', path: '/jobs', icon: ListRestart, component: lazy(() => import('./tasks/pages/JobsPage')) },
-  { id: 'finances', label: 'Finances', path: '/finances', icon: Wallet, mobilePrimary: 3, component: lazy(() => import('./finances/pages/FinancesPage')) },
-  { id: 'investments', label: 'Investments', path: '/investments', icon: TrendingUp, component: lazy(() => import('./investments/InvestmentsPage')) },
-  { id: 'wedding', label: 'Wedding', path: '/wedding', icon: Gem, mobilePrimary: 4, component: lazy(() => import('./wedding/WeddingPage')) },
-  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, component: lazy(() => import('./calendar/CalendarPage')) },
-  { id: 'feed', label: 'Feed', path: '/feed', icon: MessagesSquare, component: lazy(() => import('./feed/FeedPage')) },
-  { id: 'languages', label: 'Languages', path: '/languages', icon: Languages, component: lazy(() => import('./languages/LanguagesPage')) },
-  { id: 'health', label: 'Health', path: '/health', icon: HeartPulse, component: lazy(() => import('./health/HealthPage')) },
-  { id: 'people', label: 'People', path: '/people', icon: Users, component: lazy(() => import('./people/PeoplePage')) },
-  { id: 'ai', label: 'AI Hub', path: '/ai', icon: Sparkles, component: lazy(() => import('./agents/AiHubPage')) },
-  { id: 'stats', label: 'Statistics', path: '/stats', icon: BarChart3, component: lazy(() => import('./stats/StatsPage')) },
-  { id: 'settings', label: 'Settings', path: '/settings', icon: Settings, component: lazy(() => import('./settings/SettingsPage')) },
+  { id: 'home', label: 'Home', path: '/', icon: Home, mobilePrimary: 1, group: 'main', component: lazy(() => import('./dashboard/DashboardPage')) },
+  { id: 'meals', label: 'Meals', path: '/meals', icon: UtensilsCrossed, mobilePrimary: 2, group: 'main', component: lazy(() => import('./meals/MealsPage')) },
+  { id: 'finances', label: 'Finances', path: '/finances', icon: Wallet, mobilePrimary: 3, group: 'main', component: lazy(() => import('./finances/pages/FinancesPage')) },
+  { id: 'wedding', label: 'Wedding', path: '/wedding', icon: Gem, mobilePrimary: 4, group: 'main', component: lazy(() => import('./wedding/WeddingPage')) },
+  { id: 'investments', label: 'Investments', path: '/investments', icon: TrendingUp, group: 'interest', component: lazy(() => import('./investments/InvestmentsPage')) },
+  { id: 'health', label: 'Health', path: '/health', icon: HeartPulse, group: 'interest', component: lazy(() => import('./health/HealthPage')) },
+  { id: 'languages', label: 'Languages', path: '/languages', icon: Languages, group: 'interest', component: lazy(() => import('./languages/LanguagesPage')) },
+  { id: 'people', label: 'People', path: '/people', icon: Users, group: 'interest', component: lazy(() => import('./people/PeoplePage')) },
+  { id: 'tasks', label: 'Tasks', path: '/tasks', icon: CheckCircle2, group: 'app', component: lazy(() => import('./tasks/pages/TasksPage')) },
+  { id: 'jobs', label: 'Jobs', path: '/jobs', icon: ListRestart, group: 'app', component: lazy(() => import('./tasks/pages/JobsPage')) },
+  { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, group: 'app', component: lazy(() => import('./calendar/CalendarPage')) },
+  { id: 'stats', label: 'Statistics', path: '/stats', icon: BarChart3, group: 'app', component: lazy(() => import('./stats/StatsPage')) },
+  { id: 'ai', label: 'AI Hub', path: '/ai', icon: Sparkles, group: 'app', component: lazy(() => import('./agents/AiHubPage')) },
+  { id: 'settings', label: 'Settings', path: '/settings', icon: Settings, group: 'app', component: lazy(() => import('./settings/SettingsPage')) },
+  // Off the menus (Tim, 11 Nov); Home's Message button and venue ideas still post here.
+  { id: 'feed', label: 'Feed', path: '/feed', icon: MessagesSquare, group: 'app', hidden: true, component: lazy(() => import('./feed/FeedPage')) },
 ]
+
+/** Modules shown in menus, in menu order. */
+export const menuModules = modules.filter((m) => !m.hidden)

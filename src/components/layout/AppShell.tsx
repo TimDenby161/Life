@@ -10,7 +10,7 @@ import { useHouseholdRealtime } from '@/lib/realtime'
 import { cn } from '@/lib/utils'
 import { useUnreadPostCount } from '@/modules/feed/hooks'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { modules } from '@/modules/registry'
+import { type AppModule, menuModules } from '@/modules/registry'
 
 function isActive(pathname: string, path: string) {
   return path === '/' ? pathname === '/' : pathname === path || pathname.startsWith(`${path}/`)
@@ -32,10 +32,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const unread = useUnreadPostCount()
   useHouseholdRealtime(household.id)
 
-  const primary = modules.filter((m) => m.mobilePrimary).toSorted((a, b) => a.mobilePrimary! - b.mobilePrimary!)
-  const secondary = modules.filter((m) => !m.mobilePrimary)
-  const moreActive = secondary.some((m) => isActive(pathname, m.path))
+  const primary = menuModules.filter((m) => m.mobilePrimary).toSorted((a, b) => a.mobilePrimary! - b.mobilePrimary!)
+  const interests = menuModules.filter((m) => !m.mobilePrimary && m.group !== 'app')
+  const appPages = menuModules.filter((m) => m.group === 'app')
+  const moreActive = [...interests, ...appPages].some((m) => isActive(pathname, m.path))
   const badgeFor = (id: string) => (id === 'feed' ? unread : 0)
+  const sideLink = (m: AppModule) => (
+    <NavLink
+      key={m.id}
+      to={m.path}
+      end={m.path === '/'}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          isActive && 'bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground',
+        )
+      }
+    >
+      <m.icon className="size-[18px]" />
+      <span className="flex-1">{m.label}</span>
+      <NavBadge count={badgeFor(m.id)} />
+    </NavLink>
+  )
 
   return (
     <div className="min-h-dvh lg:pl-64">
@@ -53,23 +71,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav aria-label="Main" className="grid gap-0.5">
-          {modules.map((m) => (
-            <NavLink
-              key={m.id}
-              to={m.path}
-              end={m.path === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                  isActive && 'bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground',
-                )
-              }
-            >
-              <m.icon className="size-[18px]" />
-              <span className="flex-1">{m.label}</span>
-              <NavBadge count={badgeFor(m.id)} />
-            </NavLink>
-          ))}
+          {primary.map(sideLink)}
+          {interests.map(sideLink)}
+          <div className="mx-3 my-2 border-t" role="separator" />
+          {appPages.map(sideLink)}
         </nav>
         <div className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2">
           <Avatar name={me.display_name} color={me.avatar_color} size="sm" />
@@ -129,8 +134,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
         <DialogContent title="More">
-          <div className="grid grid-cols-2 gap-2 pb-2">
-            {secondary.map((m) => (
+          <div className="grid grid-cols-2 gap-2">
+            {interests.map((m) => (
               <NavLink
                 key={m.id}
                 to={m.path}
@@ -143,6 +148,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }
               >
                 <m.icon className="size-5" />
+                {m.label}
+              </NavLink>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-1.5 border-t pb-2 pt-3">
+            {appPages.map((m) => (
+              <NavLink
+                key={m.id}
+                to={m.path}
+                onClick={() => setMoreOpen(false)}
+                className={({ isActive }) =>
+                  cn(
+                    'flex flex-col items-center gap-1 rounded-lg p-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+                    isActive && 'bg-accent text-accent-foreground',
+                  )
+                }
+              >
+                <m.icon className="size-[18px]" />
                 {m.label}
               </NavLink>
             ))}
