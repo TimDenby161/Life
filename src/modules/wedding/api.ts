@@ -9,6 +9,7 @@ export type WeddingSettings = Tables<'wedding_settings'>
 export type BudgetItem = Tables<'wedding_budget_items'>
 export type Guest = Tables<'wedding_guests'>
 export type Supplier = Tables<'wedding_suppliers'>
+export type Venue = Tables<'wedding_venues'>
 
 export const weddingKeys = {
   all: ['wedding'] as const,
@@ -16,6 +17,7 @@ export const weddingKeys = {
   budget: ['wedding', 'budget'] as const,
   guests: ['wedding', 'guests'] as const,
   suppliers: ['wedding', 'suppliers'] as const,
+  venues: ['wedding', 'venues'] as const,
 }
 
 const fetchers = {
@@ -76,6 +78,16 @@ export const useDeleteBudgetItem = () => useWeddingMutation(async (_h, id: strin
 export const useSaveGuest = () => useWeddingMutation(saveGuest)
 export const useDeleteGuest = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_guests').delete().eq('id', id)))
 export const useSaveSupplier = () => useWeddingMutation(saveSupplier)
+/** Venues either of you is looking at, oldest first. */
+export const useVenues = () =>
+  useQuery({ queryKey: weddingKeys.venues, queryFn: async () => unwrap(await supabase.from('wedding_venues').select('*').order('created_at')) })
+export const useAddVenue = () =>
+  useWeddingMutation(async (h, v: { name: string; url: string | null }) => unwrap(await supabase.from('wedding_venues').insert({ ...v, household_id: h })))
+export const useUpdateVenue = () =>
+  useWeddingMutation(async (_h, { id, patch }: { id: string; patch: { visited?: boolean; note?: string | null } }) =>
+    unwrap(await supabase.from('wedding_venues').update(patch).eq('id', id)),
+  )
+export const useDeleteVenue = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_venues').delete().eq('id', id)))
 export const useDeleteSupplier = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_suppliers').delete().eq('id', id)))
 
 // -----------------------------------------------------------------------------

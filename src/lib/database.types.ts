@@ -3406,6 +3406,50 @@ export type Database = {
           },
         ]
       }
+      wedding_venues: {
+        Row: {
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+          note: string | null
+          updated_at: string
+          url: string | null
+          visited: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+          note?: string | null
+          updated_at?: string
+          url?: string | null
+          visited?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+          note?: string | null
+          updated_at?: string
+          url?: string | null
+          visited?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wedding_venues_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       financial_account_balances: {
