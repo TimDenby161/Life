@@ -1,4 +1,4 @@
-import { ChevronDown, Sparkles } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Sparkles } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { ClaudeAnswer, ClaudeResult } from '@/modules/tasks/components/ClaudeWork'
-import { useOpenOccurrences } from '@/modules/tasks/hooks'
+import { useAnsweredQuestions, useOpenOccurrences } from '@/modules/tasks/hooks'
 import { useAcceptAiWork, useAiPriorities, useAiWorkSeen } from '../api'
 import { type MorningRun, morningRun } from '../lib/morningRun'
 
@@ -22,12 +22,13 @@ export function MorningRunSummary() {
   const on = useAiPriorities().data ?? false
   const seen = useAiWorkSeen()
   const open = useOpenOccurrences()
+  const answeredQs = useAnsweredQuestions()
   const accept = useAcceptAiWork()
   const [closed, setClosed] = useState(false)
   const shown = useRef(false)
 
   if (!on || seen.isPending || seen.data === today || !open.data) return null
-  const run = morningRun(open.data, today)
+  const run = morningRun(open.data, today, answeredQs.data)
   // Once shown it stays until accepted: answering the last question doesn't snatch it away.
   if (run.news) shown.current = true
   if (!shown.current) return null
@@ -40,7 +41,7 @@ export function MorningRunSummary() {
   return (
     <Dialog open={!closed} onOpenChange={(o) => !o && done()}>
       <DialogContent title="This morning" description="What Claude did for you">
-        <MorningRunBody did={run.did} asks={run.asks} />
+        <MorningRunBody did={run.did} asks={run.asks} answered={run.answered} />
         <DialogFooter>
           <Button onClick={done}>Accept</Button>
         </DialogFooter>
@@ -50,7 +51,7 @@ export function MorningRunSummary() {
 }
 
 /** What Claude did (each opens to show it all) and the questions it needs answering. */
-export function MorningRunBody({ did, asks, emptyText = 'All answered. Claude does those jobs in the morning.' }: Pick<MorningRun, 'did' | 'asks'> & { emptyText?: string }) {
+export function MorningRunBody({ did, asks, answered, emptyText = 'All answered. Claude does those jobs in the morning.' }: Pick<MorningRun, 'did' | 'asks' | 'answered'> & { emptyText?: string }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   return (
     <div className="grid gap-4">
@@ -93,9 +94,27 @@ export function MorningRunBody({ did, asks, emptyText = 'All answered. Claude do
             ))}
           </ul>
         </div>
-      ) : did.length ? null : (
-        <p className="text-sm text-muted-foreground">{emptyText}</p>
-      )}
+      ) : null}
+
+      {answered.length ? (
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold">Answered</h3>
+          <ul className="grid gap-3">
+            {answered.map((a) => (
+              <li key={a.taskId} className="grid gap-1.5 text-sm">
+                <span className="text-muted-foreground">{a.question}</span>
+                <p className="flex items-start gap-2 rounded-xl bg-muted/60 px-3 py-2">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+                  <span className="min-w-0 whitespace-pre-wrap break-words">{a.answer}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">Claude does these the next morning.</p>
+        </div>
+      ) : null}
+
+      {!did.length && !asks.length && !answered.length ? <p className="text-sm text-muted-foreground">{emptyText}</p> : null}
     </div>
   )
 }

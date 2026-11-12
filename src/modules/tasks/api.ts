@@ -20,6 +20,7 @@ export const taskKeys = {
   categories: ['tasks', 'categories'] as const,
   rooms: ['tasks', 'rooms'] as const,
   open: ['tasks', 'open'] as const,
+  answered: ['tasks', 'answered'] as const,
   done: ['tasks', 'done'] as const,
   detail: (taskId: string) => ['tasks', 'detail', taskId] as const,
   events: ['tasks', 'events'] as const,
@@ -169,6 +170,19 @@ export async function completeOccurrence(args: { occurrenceId: string; completed
       p_also_completed_by: args.alsoCompletedBy,
       p_note: args.note,
     }),
+  )
+}
+
+/** Questions from Claude you've answered, newest first, so what you said stays on show until Claude does the job. */
+export async function fetchAnsweredQuestions() {
+  return unwrap(
+    await supabase
+      .from('tasks')
+      .select('id, title, ai_answer, ai_asks_task_id, updated_at')
+      .not('ai_asks_task_id', 'is', null)
+      .not('ai_answer', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(50),
   )
 }
 

@@ -30,6 +30,10 @@ export function useCreateRoom() {
   })
 }
 
+export function useAnsweredQuestions() {
+  return useQuery({ queryKey: taskKeys.answered, queryFn: api.fetchAnsweredQuestions })
+}
+
 export function useOpenOccurrences() {
   return useQuery({ queryKey: taskKeys.open, queryFn: api.fetchOpenOccurrences })
 }

@@ -1,9 +1,9 @@
 import { claudeResults, morningRun } from './morningRun'
 
 const TODAY = '2026-11-13'
-const job = (task_id: string, title: string, extra: Partial<{ created_at: string; ai_asks_task_id: string | null; ai_result: unknown }> = {}) => ({
+const job = (task_id: string, title: string, extra: Partial<{ created_at: string; ai_asks_task_id: string | null; ai_answer: string | null; ai_result: unknown }> = {}) => ({
   task_id,
-  task: { title, created_at: '2026-11-01T09:00:00Z', ai_asks_task_id: null, ai_result: null, ...extra },
+  task: { title, created_at: '2026-11-01T09:00:00Z', ai_asks_task_id: null, ai_answer: null, ai_result: null, ...extra },
 })
 const result = (day: string) => ({ summary: '8 venues near Bath added', body: 'The shortlist.', links: [], day })
 
@@ -34,7 +34,7 @@ describe('the morning run summary', () => {
 
   it('has no news on a day the run did and asked nothing new, even with old questions waiting', () => {
     const run = morningRun([job('q', 'Which area?', { ai_asks_task_id: 'gone', created_at: '2026-11-10T06:20:00Z' }), job('a', 'A job')], TODAY)
-    expect(run).toEqual({ did: [], asks: [{ taskId: 'q', question: 'Which area?', forTitle: null, today: false }], news: false })
+    expect(run).toEqual({ did: [], asks: [{ taskId: 'q', question: 'Which area?', forTitle: null, today: false }], answered: [], news: false })
     expect(morningRun([], TODAY).news).toBe(false)
   })
 })
@@ -48,5 +48,23 @@ describe('everything Claude has done', () => {
       job('new', 'Find venues', { ai_result: result(TODAY) }),
     ])
     expect(all.map((d) => d.taskId)).toEqual(['new', 'old', 'undated'])
+  })
+})
+
+describe('answered questions', () => {
+  const q = (id: string, forId: string, answer: string | null) => ({ id, title: `Question ${id}`, ai_answer: answer, ai_asks_task_id: forId })
+
+  it('keeps what you said while the job is open and Claude has not done it yet', () => {
+    const run = morningRun(
+      [job('venues', 'Find venues'), job('done', 'Compare broadband', { ai_result: result(TODAY) })],
+      TODAY,
+      [q('a', 'venues', 'Bath, up to £15k'), q('b', 'done', 'Octopus'), q('c', 'ticked-off', 'Whatever'), q('d', 'venues', null)],
+    )
+    expect(run.answered).toEqual([{ taskId: 'a', question: 'Question a', answer: 'Bath, up to £15k', forTitle: 'Find venues' }])
+  })
+
+  it('never asks again once answered, even if the question is still open', () => {
+    const run = morningRun([job('venues', 'Find venues'), job('a', 'Question a', { ai_asks_task_id: 'venues', ai_answer: 'Bath' })], TODAY)
+    expect(run.asks).toEqual([])
   })
 })
