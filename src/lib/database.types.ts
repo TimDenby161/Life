@@ -3597,6 +3597,7 @@ export type Database = {
         Row: {
           ai_priorities: boolean
           ai_summaries: boolean
+          ai_work_seen_on: string | null
           briefing_push: boolean
           default_task_list_id: string | null
           settings: Json
@@ -3608,6 +3609,7 @@ export type Database = {
         Insert: {
           ai_priorities?: boolean
           ai_summaries?: boolean
+          ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
           settings?: Json
@@ -3619,6 +3621,7 @@ export type Database = {
         Update: {
           ai_priorities?: boolean
           ai_summaries?: boolean
+          ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
           settings?: Json

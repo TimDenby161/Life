@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
 import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
+import { MorningRunSummary } from './MorningRunSummary'
 import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { WeddingPlan } from '@/modules/wedding/components/WeddingPlan'
@@ -53,6 +54,7 @@ const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifac
 /**
  * Home, sized to fit a phone screen: the news, the rest of today's calendar beside pinned links, the jobs I can
  * do today (AI-picked, home or out), led by the morning check-in until it's done, with what the agents have flagged.
+ * On days the morning run did or asked something, its summary pops up over it until accepted.
  */
 function HomeToday() {
   return (
@@ -76,6 +78,7 @@ function HomeToday() {
         ))}
       </div>
       <TopJobsCard title="Today’s tasks" limit={4} checkIn footer={<AgentFlags max={2} />} />
+      <MorningRunSummary />
     </div>
   )
 }

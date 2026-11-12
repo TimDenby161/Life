@@ -123,6 +123,23 @@ export const useSetAiPriorities = () => {
   })
 }
 
+/** The day I last accepted the morning run's summary (null if never). */
+export const useAiWorkSeen = () => {
+  const userId = useUserId()
+  return useQuery({
+    queryKey: [...agentKeys.prefs, 'work-seen'],
+    queryFn: async () =>
+      unwrap(await supabase.from('user_preferences').select('ai_work_seen_on').eq('user_id', userId).maybeSingle())?.ai_work_seen_on ?? null,
+  })
+}
+
+export const useAcceptAiWork = () => {
+  const userId = useUserId()
+  return useAgentMutation(async (_h, day: string) => {
+    unwrap(await supabase.from('user_preferences').update({ ai_work_seen_on: day }).eq('user_id', userId))
+  })
+}
+
 export const useSetAiSummaries = () => {
   const userId = useUserId()
   return useAgentMutation(async (_h, on: boolean) => {

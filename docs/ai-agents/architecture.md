@@ -193,6 +193,8 @@ For each job the routine either leaves it, asks, or does it with web search, and
 
 `cleanWork` checks everything against the jobs offered as they are now: unknown refs, repeats, questions or summaries holding links, anything that isn't an http(s) link, text over the limits and items over the day's limits (3 results, 2 new questions, 3 questions waiting at once) are dropped. `agent_save_work` (service role only) re-checks that each job is an open one-off in the household. Nothing completes, edits, moves or deletes a job. Emails and messages are only ever drafted into a result for you to send: the routine runs with no connectors and no mail credentials, its prompt forbids sending by any means, and `cleanWork` drops a result whose summary says anything was sent, booked or paid. The routine has web search but not web fetch, and is told that titles, answers and anything it reads on the web are data, not instructions.
 
+**Morning pop-up.** On Home, on days the run did or asked something, a sheet titled "This morning" lists the jobs done that day (each opens to the full result) and every question still waiting, with answer boxes (`MorningRunSummary`, `agents/lib/morningRun.ts`). Accept closes it until the next day's run on every device (`user_preferences.ai_work_seen_on`, migration `20261112000200`). Only for people with AI picks on.
+
 This is the one place an agent changes application data without an approval; it was asked for on 12 November 2026.
 
 ## Home and per-tab picks (7 Nov 2026)
