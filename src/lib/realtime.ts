@@ -61,6 +61,7 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   hustle_settings: ['hustles'],
   hustles: ['hustles'],
   hustle_charges: ['hustles'],
+  wants: ['shopping'],
   profiles: ['household'],
 }
 

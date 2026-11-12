@@ -3647,6 +3647,63 @@ export type Database = {
           },
         ]
       }
+      wants: {
+        Row: {
+          bought_at: string | null
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+          need_by: string | null
+          note: string | null
+          owner_id: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          bought_at?: string | null
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+          need_by?: string | null
+          note?: string | null
+          owner_id?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          bought_at?: string | null
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+          need_by?: string | null
+          note?: string | null
+          owner_id?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wants_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wants_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       wedding_budget_items: {
         Row: {
           budget_minor: number
