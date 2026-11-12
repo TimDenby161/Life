@@ -39,6 +39,12 @@ export function useWaitingOn(task: { waiting_on_task_id: string | null }) {
   return waitingOnTitle(task, useOpenOccurrences().data ?? [])
 }
 
+/** For a question Claude asked as a task: the job it needs the answer for, while that's still open. */
+export function useAskedFor(task: { ai_asks_task_id: string | null }) {
+  const open = useOpenOccurrences().data ?? []
+  return task.ai_asks_task_id ? (open.find((o) => o.task_id === task.ai_asks_task_id)?.task.title ?? null) : null
+}
+
 export function useRecentlyDone(days = 14) {
   return useQuery({
     queryKey: [...taskKeys.done, days],
@@ -115,6 +121,12 @@ export function useCompleteOccurrence() {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
   })
+}
+
+/** Sends an answer to one of Claude's questions, which ticks it off. */
+export function useAnswerClaude() {
+  const invalidate = useInvalidateTasks()
+  return useMutation({ mutationFn: api.answerClaude, onSuccess: invalidate })
 }
 
 export function useSkipOccurrence() {

@@ -132,6 +132,12 @@ function AiPriorities() {
             dates and today’s busy times (not what the events are). Runs as a morning Claude routine on your Claude plan; if it doesn’t run,
             Top jobs keeps the usual order.
           </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            It also does the jobs it can: one-off jobs it can do or speed up by searching the web and writing (finding options, looking things
+            up, drafting). What it finds is left on the job, marked ✦, and wedding venues go on the Venues list; you still tick the job off.
+            When it needs to know something first it adds a short question as a task; your answer is read the next morning. Never work (C4) or
+            repeating jobs, and at most three jobs and two questions a day.
+          </p>
         </div>
         <Switch
           checked={on.data ?? false}

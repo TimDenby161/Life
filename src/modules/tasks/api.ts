@@ -172,6 +172,11 @@ export async function completeOccurrence(args: { occurrenceId: string; completed
   )
 }
 
+/** Answers a question Claude asked as a task: the answer is saved and the question ticked off. */
+export async function answerClaude(args: { taskId: string; answer: string }) {
+  unwrap(await supabase.rpc('answer_ai_question', { p_task_id: args.taskId, p_answer: args.answer }))
+}
+
 export async function skipOccurrence(occurrenceId: string) {
   return unwrap(await supabase.rpc('skip_task_occurrence', { p_occurrence_id: occurrenceId }))
 }

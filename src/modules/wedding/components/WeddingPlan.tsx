@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, Plus, X } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Plus, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { ErrorState, ListSkeleton } from '@/components/states'
@@ -10,6 +10,9 @@ import { formatDay, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { ClaudeAnswer } from '@/modules/tasks/components/ClaudeWork'
+import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
+import { parseAiResult } from '../../../../supabase/functions/_shared/agents/work.ts'
 import {
   type Venue,
   useAddChecklistTasks,
@@ -46,6 +49,8 @@ export function nameFromLink(link: string): string {
 /**
  * The jobs still to do for the wedding, soonest due first. They are the
  * wedding checklist (ordinary joint tasks), so they are on the Tasks page too.
+ * A question from Claude is answered here rather than ticked; a job Claude has
+ * worked on says what it did, and opens to show all of it.
  */
 function Jobs() {
   const settings = useWeddingSettings()
@@ -53,6 +58,7 @@ function Jobs() {
   const add = useAddChecklistTasks()
   const toggle = useToggleChecklistTask()
   const [title, setTitle] = useState('')
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const today = todayISO()
 
   if (settings.error ?? tasks.error) return <ErrorState error={settings.error ?? tasks.error} onRetry={() => void tasks.refetch()} />
@@ -85,10 +91,31 @@ function Jobs() {
           <ul className="divide-y">
             {open.map((t) => {
               const overdue = t.due_date && t.due_date < today
+              const result = parseAiResult(t.ai_result)
+              if (t.ai_asks_task_id) {
+                return (
+                  <li key={t.id} className="grid gap-1.5 py-2 text-sm">
+                    <span className="flex items-start gap-3">
+                      <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-label="Claude asks" />
+                      <span className="min-w-0 flex-1 break-words">{t.title}</span>
+                    </span>
+                    <ClaudeAnswer taskId={t.id} question={t.title} />
+                  </li>
+                )
+              }
               return (
                 <li key={t.id} className="flex items-center gap-3 py-2 text-sm">
                   <Checkbox checked={false} aria-label={`Done: ${t.title}`} disabled={toggle.isPending} onCheckedChange={() => toggle.mutate(t, { onError })} />
-                  <span className="min-w-0 flex-1 break-words">{t.title}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words">{t.title}</span>
+                    {result ? (
+                      <button type="button" className="flex max-w-full items-center gap-1 text-left text-xs text-primary hover:underline" onClick={() => setOpenTaskId(t.id)}>
+                        <Sparkles className="size-3 shrink-0" aria-hidden />
+                        <span className="sr-only">Claude: </span>
+                        <span className="truncate">{result.summary}</span>
+                      </button>
+                    ) : null}
+                  </span>
                   {t.due_date ? <span className={cn('shrink-0 text-xs', overdue ? 'text-destructive' : 'text-muted-foreground')}>{formatDay(t.due_date)}</span> : null}
                 </li>
               )
@@ -100,11 +127,12 @@ function Jobs() {
           </p>
         )}
       </CardContent>
+      <TaskDetailDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
     </Card>
   )
 }
 
-/** Venues either of you is looking at: a name and a link, who found it, and whether you've been. Adding one shows in the feed. */
+/** Venues either of you is looking at, or Claude found: a name and a link, who found it, and whether you've been. Adding one shows in the feed. */
 function Venues() {
   const { me, member } = useHousehold()
   const venues = useVenues()
@@ -166,7 +194,7 @@ function Venues() {
               <VenueRow
                 key={v.id}
                 venue={v}
-                by={v.created_by === me.id ? null : (member(v.created_by)?.display_name ?? null)}
+                by={v.created_by === me.id ? null : v.created_by ? (member(v.created_by)?.display_name ?? null) : 'Claude'}
                 onVisited={() => update.mutate({ id: v.id, patch: { visited: !v.visited } }, { onError })}
                 onDelete={() => del.mutate(v.id, { onError })}
               />
@@ -183,16 +211,19 @@ function Venues() {
 function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: string | null; onVisited: () => void; onDelete: () => void }) {
   return (
     <li className="flex items-center gap-2 py-1.5 text-sm">
-      <span className="min-w-0 flex-1 truncate">
-        {v.url ? (
-          <a href={v.url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 font-medium hover:underline">
-            <span className="truncate">{v.name}</span>
-            <ExternalLink className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-          </a>
-        ) : (
-          <span className="font-medium">{v.name}</span>
-        )}
-        {by ? <span className="text-xs text-muted-foreground"> · {by}</span> : null}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">
+          {v.url ? (
+            <a href={v.url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 font-medium hover:underline">
+              <span className="truncate">{v.name}</span>
+              <ExternalLink className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            </a>
+          ) : (
+            <span className="font-medium">{v.name}</span>
+          )}
+          {by ? <span className="text-xs text-muted-foreground"> · {by}</span> : null}
+        </span>
+        {v.note ? <span className="block truncate text-xs text-muted-foreground">{v.note}</span> : null}
       </span>
       <Button
         size="sm"

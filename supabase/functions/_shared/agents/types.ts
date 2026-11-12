@@ -31,6 +31,8 @@ export type OpenTask = {
   room_id?: string | null
   /** Minutes set on the task; null = estimate from the title. */
   duration_minutes?: number | null
+  /** Set on a question from Claude: the job it needs the answer for (work.ts). */
+  ai_asks_task_id?: string | null
 }
 
 /** A row of the append-only completion log (task_completion_events). */

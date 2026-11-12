@@ -103,7 +103,7 @@ async function fetchChecklist(categoryId: string) {
   const rows = unwrap(
     await supabase
       .from('tasks')
-      .select('id, title, due_date, assignee_id, status, completed_at, created_at, occurrences:task_occurrences(id, status, sequence)')
+      .select('id, title, due_date, assignee_id, status, completed_at, created_at, ai_asks_task_id, ai_result, occurrences:task_occurrences(id, status, sequence)')
       .eq('category_id', categoryId)
       .is('archived_at', null)
       .order('status')

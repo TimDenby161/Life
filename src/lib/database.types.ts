@@ -3061,6 +3061,9 @@ export type Database = {
       }
       tasks: {
         Row: {
+          ai_answer: string | null
+          ai_asks_task_id: string | null
+          ai_result: Json | null
           archived_at: string | null
           assignee_id: string | null
           category_id: string | null
@@ -3089,6 +3092,9 @@ export type Database = {
           waiting_on_task_id: string | null
         }
         Insert: {
+          ai_answer?: string | null
+          ai_asks_task_id?: string | null
+          ai_result?: Json | null
           archived_at?: string | null
           assignee_id?: string | null
           category_id?: string | null
@@ -3117,6 +3123,9 @@ export type Database = {
           waiting_on_task_id?: string | null
         }
         Update: {
+          ai_answer?: string | null
+          ai_asks_task_id?: string | null
+          ai_result?: Json | null
           archived_at?: string | null
           assignee_id?: string | null
           category_id?: string | null
@@ -3145,6 +3154,13 @@ export type Database = {
           waiting_on_task_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_ai_asks_task_id_household_id_fkey"
+            columns: ["ai_asks_task_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id", "household_id"]
+          },
           {
             foreignKeyName: "tasks_category_id_household_id_fkey"
             columns: ["category_id", "household_id"]
@@ -3852,7 +3868,7 @@ export type Database = {
       wedding_venues: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           household_id: string
           id: string
           name: string
@@ -3863,7 +3879,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           household_id: string
           id?: string
           name: string
@@ -3874,7 +3890,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           household_id?: string
           id?: string
           name?: string
@@ -4007,7 +4023,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_save_work: {
+        Args: { p_day: string; p_household_id: string; p_items: Json }
+        Returns: Json
+      }
       agents_dispatch: { Args: never; Returns: undefined }
+      answer_ai_question: {
+        Args: { p_answer: string; p_task_id: string }
+        Returns: undefined
+      }
       apply_sheet_balances: {
         Args: { p_balances: Json; p_error?: string; p_source_id: string }
         Returns: Json

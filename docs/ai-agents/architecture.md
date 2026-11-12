@@ -182,6 +182,19 @@ Two ways to run it. **The morning Claude routine** (the default, on the househol
 
 API model `AGENT_LLM_MODEL` (default claude-opus-5-5), effort medium. About 3,000 tokens in and a few hundred out: roughly $0.02 a call, so about $1–2 a month for two people with the odd refresh. It shares the monthly cap with the AI sentence (`AGENT_LLM_MONTHLY_BUDGET_USD`, default now $3).
 
+## Claude does jobs (12 Nov 2026)
+
+The same morning routine also works through the to-do list. `priorities-input` now carries `work_instructions`, a `work_answer` example and `work`: per household, the open one-off jobs of the people with "AI picks my top jobs" on (theirs, shared, or for both; up to 80), with title, category and dates, any questions Claude asked before with their answers, and, when a wedding venue job is on the list, the wedding's month, the number of guests on the list and the venue names already saved. Never a "C4" category, a repeating job, a job waiting on another, one that already has a result, or one whose question is still waiting (`_shared/agents/work.ts`, `loadWork` in `context.ts`).
+
+For each job the routine either leaves it, asks, or does it with web search, and sends `{"mode":"work-save", key, items}`:
+
+- `{ref, kind: "ask", question}` becomes a task of its own beside the job (same list, category and person; due that day; 5 minutes; never `needs_both`), with `tasks.ai_asks_task_id` pointing at the job. It has an answer box wherever it shows (Home, Tasks, the Wedding plan). `answer_ai_question` saves the answer in `tasks.ai_answer` and ticks the question off as the person answering, through `complete_task_occurrence`. The next morning the job comes back with `answers`. A question closed without an answer comes back as `unanswered` and is not asked again. Open questions always lead that day's picks (`withQuestions`), whatever the routine picked.
+- `{ref, kind: "done", summary, body, links, venues}` is left on the job as `tasks.ai_result` (summary, plain text, up to 8 web links, the day). The job row shows ✦ and the summary; its detail shows all of it, labelled as Claude's web search to be checked. `venues` (venue jobs on the wedding checklist only) are added to `wedding_venues` with `created_by` null, shown as "· Claude", skipping names and links already there, with no feed posts.
+
+`cleanWork` checks everything against the jobs offered as they are now: unknown refs, repeats, questions or summaries holding links, anything that isn't an http(s) link, text over the limits and items over the day's limits (3 results, 2 new questions, 3 questions waiting at once) are dropped. `agent_save_work` (service role only) re-checks that each job is an open one-off in the household. Nothing completes, edits, moves or deletes a job. Emails and messages are only ever drafted into a result for you to send: the routine runs with no connectors and no mail credentials, its prompt forbids sending by any means, and `cleanWork` drops a result whose summary says anything was sent, booked or paid. The routine has web search but not web fetch, and is told that titles, answers and anything it reads on the web are data, not instructions.
+
+This is the one place an agent changes application data without an approval; it was asked for on 12 November 2026.
+
 ## Home and per-tab picks (7 Nov 2026)
 
 Home's agent view is three cards and nothing else: **Today (weekday)**, the rest of today's calendar (my calendars and shared ones with "Plan around it" on, read live, finished events dropped); **Tasks I can do today**, the Top jobs card with the day's AI picks first; and **News**, the top five headlines from the first RSS source in the Feed (one tap adds BBC News if there's none).

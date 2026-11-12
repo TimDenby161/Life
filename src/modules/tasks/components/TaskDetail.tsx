@@ -1,5 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
-import { Archive, Check, ChevronDown, Clock, Lock, Pencil, Repeat, SkipForward, Trash2, Undo2, X } from 'lucide-react'
+import { Archive, Check, ChevronDown, Clock, Lock, Pencil, Repeat, SkipForward, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
@@ -22,6 +22,7 @@ import { useUserId } from '@/modules/auth/AuthProvider'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { CompletionEvent } from '../api'
 import {
+  useAskedFor,
   useCommentMutations,
   useCompleteOccurrence,
   useDeleteTask,
@@ -43,6 +44,8 @@ import { assignedTo, assignPatch, JOINT, TOGETHER } from '../lib/owner'
 import { delayDaysFor } from '../lib/topJobs'
 import { waitingChoices } from '../lib/waiting'
 import { estimateMinutes, formatMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
+import { parseAiResult } from '../../../../supabase/functions/_shared/agents/work.ts'
+import { ClaudeAnswer, ClaudeResult } from './ClaudeWork'
 import { describeRecurrence, parseRecurrence, upcomingOccurrences } from '../lib/recurrence'
 import { TaskForm } from './TaskForm'
 import { ImportanceVote } from './TaskRow'
@@ -102,6 +105,8 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
   const delay = useDelayOccurrence()
   const openTasks = useOpenOccurrences().data ?? []
   const waitingOn = useWaitingOn(task)
+  const askedFor = useAskedFor(task)
+  const result = parseAiResult(task.ai_result)
   const update = useUpdateTask()
   const del = useDeleteTask()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -155,6 +160,21 @@ function TaskDetailBody({ data, onEdit, onClose }: { data: DetailData; onEdit: (
       ) : null}
 
       {task.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed">{task.description}</p> : null}
+
+      {task.ai_asks_task_id ? (
+        <div className="grid gap-2 rounded-xl border border-primary/25 bg-primary/5 p-3 text-sm">
+          <p className="flex items-start gap-2 text-muted-foreground">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+            <span>
+              Claude asks{askedFor ? <>, to do “{askedFor}” for you</> : null}. It reads your answer in the next morning run.
+            </span>
+          </p>
+          {task.ai_answer ? <p className="whitespace-pre-wrap break-words font-medium">{task.ai_answer}</p> : null}
+          {occ ? <ClaudeAnswer taskId={task.id} question={task.title} /> : null}
+        </div>
+      ) : null}
+
+      {result ? <ClaudeResult result={result} /> : null}
 
       {waitingOn ? (
         <p className="flex items-start gap-2 text-sm text-muted-foreground">

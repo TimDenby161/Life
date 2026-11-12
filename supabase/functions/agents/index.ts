@@ -7,16 +7,19 @@
 //              JWT, from "Run now" in the AI Hub. Rate-limited to one run per
 //              agent per household per ten minutes.
 //   -> { status: 'ok' | 'recent' | 'error', message? }
-//   Routine    POST {"mode":"priorities-input"|"priorities-save"|"news-save"} with header
-//              x-priorities-secret, from the morning Claude routine (routine.ts).
+//   Routine    POST {"mode":"priorities-input"|"priorities-save"|"news-save"|"work-save"} with
+//              header x-priorities-secret, from the morning Claude routine (routine.ts).
 //   Push       POST {"mode":"push-key"} or {"mode":"push-test"} with the person's
 //              JWT: the public key their browser subscribes with, and a test
 //              notification to their own devices.
 //
 // Agents only read (context.ts, always scoped by household) and write through
 // agent_claim_run / agent_finish_run, which touch agent tables only. Overnight
-// the calendars also fill meal_availability via agent_save_meal_availability. Nothing
-// here changes tasks, money or anything else. After a scheduled briefing the
+// the calendars also fill meal_availability via agent_save_meal_availability. The
+// one exception to "agents only suggest" is the morning routine doing jobs
+// (work-save, agent_save_work): it can add a question as a task, leave a result
+// on a job and add wedding venues, and nothing else. Nothing here completes,
+// edits or deletes a task, or touches money. After a scheduled briefing the
 // headline goes to the phones of people who turned notifications on (notify.ts).
 //
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (provided by Supabase),
@@ -73,7 +76,7 @@ import {
 } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
-import { routineInput, routineSave, routineSaveNews, savePicks, tabsFor } from './routine.ts'
+import { routineInput, routineSave, routineSaveNews, routineSaveWork, savePicks, tabsFor } from './routine.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -387,13 +390,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (body.mode === 'priorities-input' || body.mode === 'priorities-save' || body.mode === 'news-save') {
+  if (body.mode === 'priorities-input' || body.mode === 'priorities-save' || body.mode === 'news-save' || body.mode === 'work-save') {
     const secret = Deno.env.get('PRIORITIES_SECRET')
     const given = req.headers.get('x-priorities-secret') ?? ''
     if (!secret || !sameSecret(given, secret)) return json(req, { status: 'error', message: 'Not authorised.' }, 401)
     try {
       const db = serviceClient()
       if (body.mode === 'news-save') return json(req, await routineSaveNews(db, body as { key?: unknown; items?: unknown }, now))
+      if (body.mode === 'work-save') return json(req, await routineSaveWork(db, body as { key?: unknown; items?: unknown }, now))
       return json(req, body.mode === 'priorities-input' ? await routineInput(db, now) : await routineSave(db, body as { key?: unknown; picks?: unknown }, now))
     } catch (e) {
       return json(req, { status: 'error', message: safeError(e) }, 500)

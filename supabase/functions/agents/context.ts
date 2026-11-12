@@ -22,6 +22,7 @@ import type { Progress, Study } from '../_shared/agents/languages.ts'
 import type { Trip } from '../_shared/agents/travel.ts'
 import type { CompletionEvent, OpenTask, TaskContext } from '../_shared/agents/types.ts'
 import type { WeddingInput } from '../_shared/agents/wedding.ts'
+import type { WorkState } from '../_shared/agents/work.ts'
 
 const HISTORY_DAYS = 180
 
@@ -39,7 +40,7 @@ export async function loadContext(db: SupabaseClient, householdId: string, today
     db
       .from('task_occurrences')
       .select(
-        'id, due_date, due_time, delay_count, task:tasks!inner(id, title, list_id, category_id, needs_both, priority, importance_votes, recurrence, deadline, waiting_on_task_id, created_by, created_at, archived_at, room_id, duration_minutes)',
+        'id, due_date, due_time, delay_count, task:tasks!inner(id, title, list_id, category_id, needs_both, priority, importance_votes, recurrence, deadline, waiting_on_task_id, created_by, created_at, archived_at, room_id, duration_minutes, ai_asks_task_id)',
       )
       .eq('household_id', householdId)
       .eq('status', 'open')
@@ -84,6 +85,7 @@ export async function loadContext(db: SupabaseClient, householdId: string, today
         created_at: o.task.created_at as string,
         room_id: o.task.room_id as string | null,
         duration_minutes: o.task.duration_minutes as number | null,
+        ai_asks_task_id: o.task.ai_asks_task_id as string | null,
       }),
     ),
     events: check(events) as CompletionEvent[],
@@ -167,6 +169,41 @@ export async function loadWedding(db: SupabaseClient, householdId: string, ctx: 
     suppliers: check(suppliers),
     guests: check(guests),
     checklist: { open: categoryId ? ctx.open.filter((t) => t.category_id === categoryId) : [], done: doneCount },
+  }
+}
+
+/**
+ * What Claude has asked and done so far (work.ts), and for wedding venue
+ * hunting the month, the number of guests on the list and the venue names
+ * already saved. No guest names, and nothing else about the wedding.
+ */
+export async function loadWork(db: SupabaseClient, householdId: string): Promise<WorkState> {
+  const [asked, done, settings, venues, guests] = await Promise.all([
+    db.from('tasks').select('title, ai_asks_task_id, ai_answer, status, archived_at, created_at').eq('household_id', householdId).not('ai_asks_task_id', 'is', null).limit(1000),
+    db.from('tasks').select('id, day:ai_result->>day').eq('household_id', householdId).not('ai_result', 'is', null).limit(2000),
+    db.from('wedding_settings').select('wedding_date, wedding_date_approx, task_category_id').eq('household_id', householdId).maybeSingle(),
+    db.from('wedding_venues').select('name').eq('household_id', householdId).limit(200),
+    db.from('wedding_guests').select('id', { count: 'exact', head: true }).eq('household_id', householdId),
+  ])
+  if (guests.error) throw new Error(guests.error.message)
+  const s = check(settings) as { wedding_date: string | null; wedding_date_approx: boolean; task_category_id: string | null } | null
+  type AskedRow = { title: string; ai_asks_task_id: string; ai_answer: string | null; status: string; archived_at: string | null; created_at: string }
+  return {
+    asked: (check(asked) as AskedRow[]).map((q) => ({
+      job_id: q.ai_asks_task_id,
+      question: q.title,
+      answer: q.ai_answer,
+      open: q.status === 'active' && q.archived_at === null,
+      day: q.created_at.slice(0, 10),
+    })),
+    done: (check(done) as { id: string; day: string | null }[]).map((d) => ({ task_id: d.id, day: d.day })),
+    wedding: {
+      categoryId: s?.task_category_id ?? null,
+      date: s?.wedding_date ?? null,
+      dateApprox: s?.wedding_date_approx ?? false,
+      guests: guests.count ?? 0,
+      venues: (check(venues) as { name: string }[]).map((v) => v.name),
+    },
   }
 }
 

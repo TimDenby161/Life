@@ -45,6 +45,17 @@ Each agent now works from goals set on its card in AI Hub → Agents (`agent_set
 | Free time for plans: calendar busy times (work included, never 'away'), travel time each way by event word, 07:00-22:00, at most 4h | `calendar.ts` `freeToday`/`busyBlocks`, `agents/lib/away.ts`, `TravelTimes.tsx` | Vitest |
 | Briefing goal lines (first in the briefing) | `goals.ts`, `BriefingCard.tsx` | Vitest; run locally |
 
+## Claude does jobs (12 November 2026)
+
+| Piece | Where | Checked by |
+|---|---|---|
+| Which jobs Claude is offered, what it sees, limits, and the check on its answer | `_shared/agents/work.ts` | Vitest `work.test.ts` (15), guard test |
+| Questions as tasks, answers, results on jobs, venues from Claude | migration `20261112000100_ai_work.sql` (`agent_save_work`, `answer_ai_question`) | pgTAP `33_ai_work.test.sql` (27) |
+| `work-save` and the work list in `priorities-input` | `agents/routine.ts`, `context.ts` `loadWork` | curl against the local function: a question asked, led the day's picks, answered in the browser, came back with its answer, result and two sample venues saved |
+| Answer box and results in the app | `tasks/components/ClaudeWork.tsx`, `TaskRow`, `TaskDetail`, `WeddingPlan` | browser at phone width, locally |
+
+Not verified: the routine itself doing a job with web search. Locally its calls were made by hand with made-up results.
+
 ## Known issue (CI only)
 
 On the x86-64 build of the Supabase Postgres 17.11 image that GitHub CI uses, any function call refused for lack of EXECUTE segfaults the server. The arm64 build (local Macs and the hosted project, which reports `aarch64`) doesn't. The pgTAP tests therefore check `has_function_privilege` instead of making refused calls. Don't add tests that call a function a role can't execute.

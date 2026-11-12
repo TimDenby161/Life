@@ -5,11 +5,13 @@ import { todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import type { OccurrenceWithTask, TaskCategory, TaskList } from '../api'
-import { useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
+import { useAskedFor, useDelayOccurrence, useQuickTaskUpdate, useSubtaskMutations, useWaitingOn } from '../hooks'
 import { delayLabel, dueTone } from '../lib/format'
 import { ownerOf } from '../lib/owner'
 import { estimateMinutes, formatMinutes } from '../../../../supabase/functions/_shared/agents/taskManager.ts'
+import { parseAiResult } from '../../../../supabase/functions/_shared/agents/work.ts'
 import { delayDaysFor, subtaskScore } from '../lib/topJobs'
+import { ClaudeAnswer } from './ClaudeWork'
 import { useSwipeRight } from '../lib/useSwipeRight'
 
 export function TaskCheck({
@@ -201,6 +203,17 @@ export function TaskRow({
   const subtasks = task.subtasks ?? []
   const subDone = subtasks.filter((s) => s.is_done).length
   const waitingOn = useWaitingOn(task)
+  // A question from Claude is answered rather than ticked; a job Claude has done says so.
+  const isQuestion = Boolean(task.ai_asks_task_id)
+  const askedFor = useAskedFor(task)
+  const result = parseAiResult(task.ai_result)
+  const sparkle = isQuestion
+    ? { label: 'Claude asks, to do', text: askedFor ?? '' }
+    : result
+      ? { label: 'Claude', text: result.summary }
+      : aiNote !== undefined
+        ? { label: 'Picked by AI for today', text: aiNote }
+        : null
   const update = useQuickTaskUpdate()
   const showSubtasks = !task.subtasks_collapsed
   const delay = useDelayOccurrence()
@@ -249,11 +262,14 @@ export function TaskRow({
             {task.title}
           </button>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
-            {aiNote !== undefined ? (
-              <span className="inline-flex min-w-0 items-center gap-1 text-primary" title="Picked by AI for today">
+            {sparkle ? (
+              <span className="inline-flex min-w-0 items-center gap-1 text-primary" title={sparkle.label}>
                 <Sparkles className="size-3 shrink-0" />
-                <span className="sr-only">Picked by AI for today{aiNote ? ': ' : ''}</span>
-                {aiNote ? <span className="truncate">{aiNote}</span> : null}
+                <span className="sr-only">
+                  {sparkle.label}
+                  {sparkle.text ? ': ' : ''}
+                </span>
+                {sparkle.text ? <span className="truncate">{sparkle.text}</span> : null}
               </span>
             ) : null}
             {done && completer ? (
@@ -312,10 +328,11 @@ export function TaskRow({
             ) : null}
           </div>
         </div>
-        {done || waitingOn ? null : (
+        {done || waitingOn || isQuestion ? null : (
           <WhoDidIt title={task.title} ownerId={ownerOf(task, categories, lists)} onComplete={(by, also) => onComplete?.(by, also)} />
         )}
       </div>
+      {isQuestion && !done ? <ClaudeAnswer taskId={task.id} question={task.title} className="px-3 pb-2.5" /> : null}
       {showSubtasks && subtasks.length > 0 && !done ? <SubtaskList occurrence={occurrence} categories={categories} /> : null}
     </li>
   )

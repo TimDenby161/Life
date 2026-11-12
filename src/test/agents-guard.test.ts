@@ -29,7 +29,7 @@ describe('agents Edge Function', () => {
       'wedding_settings', 'wedding_budget_items', 'wedding_suppliers', 'wedding_guests',
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
       'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations', 'feed_sources',
-      'savings_goals', 'savings_pots', 'health_measurements', 'takeaways', 'people',
+      'savings_goals', 'savings_pots', 'health_measurements', 'takeaways', 'people', 'wedding_venues',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -89,11 +89,40 @@ describe('agents Edge Function', () => {
     expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth|goals|weight|takeaway|people/i)
   })
 
-  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone, agent_save_picks and agent_save_meal_availability', () => {
+  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone, agent_save_picks, agent_save_meal_availability and agent_save_work', () => {
     for (const { f, text } of fn) {
       expect(text, f).not.toMatch(/\.(insert|update|upsert|delete)\(/)
-      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines', 'agent_save_meal_availability'], f).toContain(rpc)
+      for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) {
+        expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines', 'agent_save_meal_availability', 'agent_save_work'], f).toContain(rpc)
+      }
     }
+  })
+
+  it('lets Claude do jobs only through the routine, after checking its answer against the jobs it offered', () => {
+    const routine = fn.find((x) => x.f === 'routine.ts')!.text
+    // The one caller of agent_save_work, and it saves only what cleanWork kept.
+    for (const { f, text } of fn) if (f !== 'routine.ts') expect(text, f).not.toMatch(/rpc\('agent_save_work'/)
+    expect(routine).toMatch(/const items = cleanWork\(body\.items, jobs, workLimits\(state, ctx\.today\), state\.wedding\.venues\)[\s\S]*?rpc\('agent_save_work', \{ p_household_id: householdId, p_day: date, p_items: items \}\)/)
+    // Never paid work, repeating jobs, or the jobs of someone who hasn't switched AI picks on.
+    const work = shared.find((x) => x.f === 'work.ts')!.text
+    expect(work).toMatch(/if \(t\.recurrence \|\| t\.ai_asks_task_id \|\| done\.has\(t\.task_id\)\) return false/)
+    expect(work).toMatch(/if \(WORK_JOB\.test\(category\(t\.category_id\) \?\? ''\)\) return false/)
+    expect(work).toMatch(/if \(!t\.needs_both && owner !== null && !ids\.has\(owner\)\) return false/)
+    // It drafts emails and messages, never sends them, and a result claiming otherwise is dropped.
+    expect(work).toMatch(/Emails and messages: you may draft one, never send it\./)
+    expect(work).toMatch(/HAS_LINK\.test\(summary\) \|\| claimsAction\(summary\)/)
+    // The routine's prompt says the same, and the routine runs with no email or messaging tools.
+    const routineDoc = readFileSync(join(__dirname, '../../docs/ai-agents/morning-routine.md'), 'utf8')
+    expect(routineDoc).toMatch(/Tools: `Bash`, `Read`, `WebSearch`/)
+    expect(routineDoc).toMatch(/Never send an email or message/)
+    expect(/^- Tools: (.*)$/m.exec(routineDoc)?.[1]).not.toMatch(/gmail|mail|message|resend|slack|mcp/i)
+    expect(routineDoc).toMatch(/clear_mcp_connections: true/)
+    // Of the wedding it reads the month, a guest count and venue names: no guest names, budget or suppliers.
+    const ctx = fn.find((x) => x.f === 'context.ts')!.text
+    const loadWork = ctx.slice(ctx.indexOf('export async function loadWork'), ctx.indexOf('export async function loadLanguages'))
+    expect(loadWork).toContain(".from('wedding_guests').select('id', { count: 'exact', head: true })")
+    expect(loadWork).toContain(".from('wedding_venues').select('name')")
+    expect(loadWork).not.toMatch(/wedding_budget_items|wedding_suppliers|description/)
   })
 
   it('puts nothing but the briefing headline in a notification', () => {
