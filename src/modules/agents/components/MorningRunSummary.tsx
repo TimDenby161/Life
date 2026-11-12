@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { ClaudeAnswer, ClaudeResult } from '@/modules/tasks/components/ClaudeWork'
 import { useOpenOccurrences } from '@/modules/tasks/hooks'
 import { useAcceptAiWork, useAiPriorities, useAiWorkSeen } from '../api'
-import { morningRun } from '../lib/morningRun'
+import { type MorningRun, morningRun } from '../lib/morningRun'
 
 /**
  * Over Home, once a day: what the morning run did (each opens to show it all)
@@ -24,7 +24,6 @@ export function MorningRunSummary() {
   const open = useOpenOccurrences()
   const accept = useAcceptAiWork()
   const [closed, setClosed] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
   const shown = useRef(false)
 
   if (!on || seen.isPending || seen.data === today || !open.data) return null
@@ -41,54 +40,62 @@ export function MorningRunSummary() {
   return (
     <Dialog open={!closed} onOpenChange={(o) => !o && done()}>
       <DialogContent title="This morning" description="What Claude did for you">
-        <div className="grid gap-4">
-          {run.did.length ? (
-            <ul className="grid gap-2">
-              {run.did.map((d) => {
-                const isOpen = expanded === d.taskId
-                return (
-                  <li key={d.taskId} className="grid gap-2">
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={() => setExpanded(isOpen ? null : d.taskId)}
-                      className="flex items-start gap-2 rounded-xl border p-3 text-left text-sm hover:bg-muted/60"
-                    >
-                      <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{d.result.summary}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{d.title}</span>
-                      </span>
-                      <ChevronDown className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} aria-hidden />
-                    </button>
-                    {isOpen ? <ClaudeResult result={d.result} /> : null}
-                  </li>
-                )
-              })}
-            </ul>
-          ) : null}
-
-          {run.asks.length ? (
-            <div className="grid gap-2">
-              <h3 className="text-sm font-semibold">Needs you</h3>
-              <ul className="grid gap-3">
-                {run.asks.map((a) => (
-                  <li key={a.taskId} className="grid gap-1.5 text-sm">
-                    <span>{a.question}</span>
-                    {a.forTitle ? <span className="text-xs text-muted-foreground">For “{a.forTitle}”</span> : null}
-                    <ClaudeAnswer taskId={a.taskId} question={a.question} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : run.did.length ? null : (
-            <p className="text-sm text-muted-foreground">All answered. Claude does those jobs in the morning.</p>
-          )}
-        </div>
+        <MorningRunBody did={run.did} asks={run.asks} />
         <DialogFooter>
           <Button onClick={done}>Accept</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** What Claude did (each opens to show it all) and the questions it needs answering. */
+export function MorningRunBody({ did, asks, emptyText = 'All answered. Claude does those jobs in the morning.' }: Pick<MorningRun, 'did' | 'asks'> & { emptyText?: string }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  return (
+    <div className="grid gap-4">
+      {did.length ? (
+        <ul className="grid gap-2">
+          {did.map((d) => {
+            const isOpen = expanded === d.taskId
+            return (
+              <li key={d.taskId} className="grid gap-2">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setExpanded(isOpen ? null : d.taskId)}
+                  className="flex items-start gap-2 rounded-xl border p-3 text-left text-sm hover:bg-muted/60"
+                >
+                  <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{d.result.summary}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{d.title}</span>
+                  </span>
+                  <ChevronDown className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} aria-hidden />
+                </button>
+                {isOpen ? <ClaudeResult result={d.result} /> : null}
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+
+      {asks.length ? (
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold">Needs you</h3>
+          <ul className="grid gap-3">
+            {asks.map((a) => (
+              <li key={a.taskId} className="grid gap-1.5 text-sm">
+                <span>{a.question}</span>
+                {a.forTitle ? <span className="text-xs text-muted-foreground">For “{a.forTitle}”</span> : null}
+                <ClaudeAnswer taskId={a.taskId} question={a.question} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : did.length ? null : (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      )}
+    </div>
   )
 }

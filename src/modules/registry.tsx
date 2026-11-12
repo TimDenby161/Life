@@ -14,6 +14,7 @@ import {
   Settings,
   ShoppingBag,
   Sparkles,
+  Sunrise,
   TrendingUp,
   Trophy,
   Users,
@@ -62,6 +63,7 @@ export const modules: AppModule[] = [
   { id: 'jobs', label: 'Jobs', path: '/jobs', icon: ListRestart, group: 'app', component: lazy(() => import('./tasks/pages/JobsPage')) },
   { id: 'calendar', label: 'Calendar', path: '/calendar', icon: CalendarDays, group: 'app', component: lazy(() => import('./calendar/CalendarPage')) },
   { id: 'stats', label: 'Statistics', path: '/stats', icon: BarChart3, group: 'app', component: lazy(() => import('./stats/StatsPage')) },
+  { id: 'morning', label: 'This morning', path: '/morning', icon: Sunrise, group: 'app', component: lazy(() => import('./agents/MorningPage')) },
   { id: 'ai', label: 'AI Hub', path: '/ai', icon: Sparkles, group: 'app', component: lazy(() => import('./agents/AiHubPage')) },
   { id: 'settings', label: 'Settings', path: '/settings', icon: Settings, group: 'app', component: lazy(() => import('./settings/SettingsPage')) },
   // Off the menus (Tim, 11 Nov); Home's Message button and venue ideas still post here.

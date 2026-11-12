@@ -15,13 +15,20 @@ export type MorningRun = {
   news: boolean
 }
 
+/** Every open job Claude left a result on, newest first. */
+export function claudeResults(open: Open[]): MorningRun['did'] {
+  return open
+    .flatMap((o) => {
+      const result = parseAiResult(o.task.ai_result)
+      return result ? [{ taskId: o.task_id, title: o.task.title, result }] : []
+    })
+    .toSorted((a, b) => (b.result.day ?? '').localeCompare(a.result.day ?? ''))
+}
+
 /** What the morning run did and asked, from the open tasks. */
 export function morningRun(open: Open[], today: string): MorningRun {
   const titleOf = (taskId: string) => open.find((o) => o.task_id === taskId)?.task.title ?? null
-  const did = open.flatMap((o) => {
-    const result = parseAiResult(o.task.ai_result)
-    return result && result.day === today ? [{ taskId: o.task_id, title: o.task.title, result }] : []
-  })
+  const did = claudeResults(open).filter((d) => d.result.day === today)
   const asks = open
     .filter((o) => o.task.ai_asks_task_id)
     .map((o) => ({

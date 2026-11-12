@@ -1,4 +1,4 @@
-import { morningRun } from './morningRun'
+import { claudeResults, morningRun } from './morningRun'
 
 const TODAY = '2026-11-13'
 const job = (task_id: string, title: string, extra: Partial<{ created_at: string; ai_asks_task_id: string | null; ai_result: unknown }> = {}) => ({
@@ -36,5 +36,17 @@ describe('the morning run summary', () => {
     const run = morningRun([job('q', 'Which area?', { ai_asks_task_id: 'gone', created_at: '2026-11-10T06:20:00Z' }), job('a', 'A job')], TODAY)
     expect(run).toEqual({ did: [], asks: [{ taskId: 'q', question: 'Which area?', forTitle: null, today: false }], news: false })
     expect(morningRun([], TODAY).news).toBe(false)
+  })
+})
+
+describe('everything Claude has done', () => {
+  it('lists every open job with a result, newest first, undated last', () => {
+    const all = claudeResults([
+      job('old', 'Compare broadband', { ai_result: result('2026-11-10') }),
+      job('none', 'No result'),
+      job('undated', 'Undated', { ai_result: { ...result(TODAY), day: null } }),
+      job('new', 'Find venues', { ai_result: result(TODAY) }),
+    ])
+    expect(all.map((d) => d.taskId)).toEqual(['new', 'old', 'undated'])
   })
 })
