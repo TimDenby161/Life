@@ -313,3 +313,19 @@ export const useShortHeadlines = (day: string) =>
       return new Map(((row?.items ?? []) as { url: string; short: string }[]).map((h) => [h.url, h.short]))
     },
   })
+
+/** The areas I get a daily idea in (Settings), all ten unless changed. */
+export const useIdeaAreas = () => {
+  const userId = useUserId()
+  return useQuery({
+    queryKey: [...agentKeys.prefs, 'idea-areas'],
+    queryFn: async () => unwrap(await supabase.from('user_preferences').select('idea_areas').eq('user_id', userId).maybeSingle())?.idea_areas ?? [],
+  })
+}
+
+export const useSetIdeaAreas = () => {
+  const userId = useUserId()
+  return useAgentMutation(async (_h, areas: string[]) => {
+    unwrap(await supabase.from('user_preferences').update({ idea_areas: areas }).eq('user_id', userId))
+  })
+}

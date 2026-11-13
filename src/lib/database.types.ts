@@ -3603,6 +3603,7 @@ export type Database = {
           ai_work_seen_on: string | null
           briefing_push: boolean
           default_task_list_id: string | null
+          idea_areas: string[]
           morning_check_in: boolean
           settings: Json
           theme: string
@@ -3616,6 +3617,7 @@ export type Database = {
           ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
+          idea_areas?: string[]
           morning_check_in?: boolean
           settings?: Json
           theme?: string
@@ -3629,6 +3631,7 @@ export type Database = {
           ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
+          idea_areas?: string[]
           morning_check_in?: boolean
           settings?: Json
           theme?: string

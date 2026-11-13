@@ -3,7 +3,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(11);
 
 select set_config('t.tim', '11111111-1111-1111-1111-111111111111', true);
 select set_config('t.sophie', '22222222-2222-2222-2222-222222222222', true);
@@ -36,8 +36,12 @@ select is(
   agent_save_ideas(current_setting('t.hh')::uuid, current_setting('t.tim')::uuid, current_date, '[{"area":"table_tennis","title":"Another one"}]'::jsonb),
   0, 'no second idea while the area''s last one is open');
 select is(
-  agent_save_ideas(current_setting('t.hh')::uuid, current_setting('t.sophie')::uuid, current_date, '[{"area":"table_tennis","title":"Sophie''s own"}]'::jsonb),
+  agent_save_ideas(current_setting('t.hh')::uuid, current_setting('t.sophie')::uuid, current_date, '[{"area":"people","title":"Sophie''s own"}]'::jsonb),
   1, 'the other person has their own');
+update user_preferences set idea_areas = array['people'] where user_id = current_setting('t.sophie')::uuid;
+select is(
+  agent_save_ideas(current_setting('t.hh')::uuid, current_setting('t.sophie')::uuid, current_date, '[{"area":"languages","title":"Not one she picked"}]'::jsonb),
+  0, 'only in the areas the person has chosen');
 select throws_ok(
   format($$select agent_save_ideas(%L, %L, current_date, '[]')$$, current_setting('t.hh'), current_setting('t.out')),
   '42501', null, 'only for members of the household');

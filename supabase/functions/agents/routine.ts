@@ -18,8 +18,9 @@
 //                                   list. The only writes here that touch
 //                                   tasks, and only through agent_save_work.
 //   {"mode":"ideas-save", "key", "items":[{area, title, minutes}]}
-//                                -> one small task in each area of life, added
-//                                   to that person's list for today
+//                                -> one small task in each area of life the
+//                                   person has chosen (Settings; AI picks or
+//                                   not), added to their list for today
 //                                   (_shared/agents/ideas.ts), only through
 //                                   agent_save_ideas.
 //
@@ -92,7 +93,8 @@ export async function routineInput(db: SupabaseClient, now: Date) {
     const headlines = await loadNews(db, household.id)
     if (headlines.length) news.push({ key: `${household.id}:news:${date}`, headlines: headlinesInput(headlines) })
     const prefs = await loadPrefs(db, household.id)
-    if (!prefs.aiPriorities.size) continue
+    const ideaPeople = (m: Member) => (prefs.ideaAreas[m.id] ?? []).length > 0
+    if (!prefs.aiPriorities.size && !Object.values(prefs.ideaAreas).some((a) => a.length)) continue
     const ctx = await contextFor(db, household, now, prefs)
     const time = hhmm(localNow(now, household.timezone))
     for (const tab of tabsFor(ctx, prefs)) {
@@ -104,16 +106,19 @@ export async function routineInput(db: SupabaseClient, now: Date) {
         input: JSON.parse(prioritiesInput(ctx, tab, candidates, time)),
       })
     }
-    // Jobs Claude could do itself, for the same people.
+    const state = await loadWork(db, household.id)
+    // One small task in each area of life each person has chosen, AI picks or not.
+    const forIdeas = ctx.members.filter(ideaPeople)
+    if (forIdeas.length) {
+      const areas = await loadAreas(db, household.id, ctx.today, state.wedding)
+      for (const person of forIdeas) {
+        const input = ideasFor(ctx, areas, state.wedding.categoryId, person, prefs.ideaAreas[person.id])
+        if (input.areas.length) ideas.push({ key: `${household.id}:ideas:${person.id}:${ctx.today}`, input })
+      }
+    }
+    // Jobs Claude could do itself, for the people with AI picks on.
     const people = aiPeople(ctx, prefs)
     if (!people.length) continue
-    const state = await loadWork(db, household.id)
-    // One small task in each area of life, for each of them.
-    const areas = await loadAreas(db, household.id, ctx.today, state.wedding)
-    for (const person of people) {
-      const input = ideasFor(ctx, areas, state.wedding.categoryId, person)
-      if (input.areas.length) ideas.push({ key: `${household.id}:ideas:${person.id}:${ctx.today}`, input })
-    }
     const jobs = workJobs(ctx, people, state)
     const limits = workLimits(state, ctx.today)
     if (jobs.length && (limits.done || limits.asks)) {
@@ -141,12 +146,12 @@ export async function routineInput(db: SupabaseClient, now: Date) {
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 /** One person's areas without an open idea, each with its facts and the titles of their open jobs there. */
-function ideasFor(ctx: TaskContext, src: AreaSource, weddingCategory: string | null, person: Member) {
+function ideasFor(ctx: TaskContext, src: AreaSource, weddingCategory: string | null, person: Member, chosen: readonly string[]) {
   const facts = areaFacts(src, person.id, ctx.today)
   const categoryName = (id: string | null) => ctx.categories.find((c) => c.id === id)?.name.trim().toLowerCase()
   const inArea = (area: (typeof AREAS)[number], categoryId: string | null) =>
     (area.key === 'wedding' && categoryId !== null && categoryId === weddingCategory) || (area.names as readonly string[]).includes(categoryName(categoryId) ?? '')
-  const areas = areasFree(src, person.id).map((key: AreaKey) => {
+  const areas = areasFree(src, person.id, chosen).map((key: AreaKey) => {
     const area = AREAS.find((a) => a.key === key)!
     const open_jobs = ctx.open
       .filter((o) => inArea(area, o.category_id) && [person.id, null].includes(ownerOf(o, ctx.categories, ctx.lists)))
@@ -167,10 +172,11 @@ export async function routineSaveIdeas(db: SupabaseClient, body: { key?: unknown
   const prefs = await loadPrefs(db, householdId)
   const ctx = await contextFor(db, household as Household, now, prefs)
   if (ctx.today !== date) return { status: 'error', message: 'Those areas are from another day.' }
-  const person = aiPeople(ctx, prefs).find((m) => m.id === personId)
-  if (!person) return { status: 'error', message: 'Unknown key.' }
+  const person = ctx.members.find((m) => m.id === personId)
+  const chosen = prefs.ideaAreas[personId] ?? []
+  if (!person || !chosen.length) return { status: 'error', message: 'Unknown key.' }
   const state = await loadWork(db, householdId)
-  const items = cleanIdeas(body.items, areasFree(await loadAreas(db, householdId, ctx.today, state.wedding), person.id))
+  const items = cleanIdeas(body.items, areasFree(await loadAreas(db, householdId, ctx.today, state.wedding), person.id, chosen))
   if (!items.length) return { status: 'error', message: 'Nothing usable: unknown areas, areas with an idea still open, or not in the expected shape.' }
   const saved = await db.rpc('agent_save_ideas', { p_household_id: householdId, p_person: person.id, p_day: date, p_items: items })
   if (saved.error) throw new Error(saved.error.message)

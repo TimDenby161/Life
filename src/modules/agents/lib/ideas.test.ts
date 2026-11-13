@@ -44,6 +44,13 @@ describe('daily ideas: which areas and what Claude is told', () => {
     expect(areasFree(src, TIM)).toHaveLength(9)
   })
 
+  it('offers only the areas each person has chosen', () => {
+    const sophies = ['finance', 'wedding', 'meals', 'holidays', 'shopping', 'health', 'people', 'languages']
+    expect(areasFree({ openIdeas: [] }, SOPHIE, sophies)).toEqual(sophies)
+    expect(areasFree({ openIdeas: [{ assignee_id: SOPHIE, ai_area: 'people' }] }, SOPHIE, sophies)).not.toContain('people')
+    expect(areasFree({ openIdeas: [] }, SOPHIE, [])).toEqual([])
+  })
+
   it('gives each area plain facts: theirs and shared things only, and nothing about health', () => {
     const facts = areaFacts(
       {

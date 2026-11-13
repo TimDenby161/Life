@@ -1,6 +1,8 @@
 // Daily ideas: each morning the Claude routine adds one small task a day in
 // each area of life (finance, wedding, meals, holidays, shopping, health, table
-// tennis, side hustles, people, languages) for each person with AI picks on,
+// tennis, side hustles, people, languages) that each person has chosen in
+// Settings (user_preferences.idea_areas; Sophie's skip table tennis and side
+// hustles), whether or not they have AI picks on,
 // straight onto their own list for today (Tim asked for them to be added, not
 // suggested, 13 Nov 2026). A new one in an area waits until the last one there
 // is done or deleted, so they never pile up. Pure parts only (the areas, the
@@ -97,9 +99,9 @@ export type AreaSource = {
   openIdeas: { assignee_id: string | null; ai_area: string }[]
 }
 
-/** The areas that can have a new idea for this person today. */
-export const areasFree = (src: Pick<AreaSource, 'openIdeas'>, person: string): AreaKey[] =>
-  AREA_KEYS.filter((a) => !src.openIdeas.some((o) => o.assignee_id === person && o.ai_area === a))
+/** The areas that can have a new idea for this person today: ones they've chosen without an idea of theirs still open. */
+export const areasFree = (src: Pick<AreaSource, 'openIdeas'>, person: string, chosen: readonly string[] = AREA_KEYS): AreaKey[] =>
+  AREA_KEYS.filter((a) => chosen.includes(a) && !src.openIdeas.some((o) => o.assignee_id === person && o.ai_area === a))
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** "20 Nov", or "20 Nov 2027" in another year. */

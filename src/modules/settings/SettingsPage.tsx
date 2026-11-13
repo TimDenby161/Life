@@ -19,7 +19,9 @@ import { calendarKeys, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/hooks'
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
+import { useIdeaAreas, useSetIdeaAreas } from '@/modules/agents/api'
 import { useMorningCheckInOn, useSetMorningCheckIn } from '@/modules/health/api'
+import { AREAS } from '../../../supabase/functions/_shared/agents/ideas.ts'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
 import { useCreateCategory, useCreateRoom, useDeleteCategory, useDeleteRoom, useSetCategoryOwner, useTaskCategories, useTaskRooms } from '@/modules/tasks/hooks'
 
@@ -126,7 +128,45 @@ function HomeSection() {
           onCheckedChange={(v) => set.mutate(v, { onError: (e) => toast.error(getErrorMessage(e)) })}
         />
       </Card>
+      <IdeaAreas />
     </section>
+  )
+}
+
+/** Which areas Claude adds a small task in for me each morning. */
+function IdeaAreas() {
+  const areas = useIdeaAreas()
+  const set = useSetIdeaAreas()
+  const chosen = areas.data ?? []
+  const toggle = (key: string) =>
+    set.mutate(chosen.includes(key) ? chosen.filter((a) => a !== key) : [...chosen, key], { onError: (e) => toast.error(getErrorMessage(e)) })
+  return (
+    <Card className="mt-2 grid gap-3 p-4">
+      <div className="grid gap-0.5 text-sm">
+        Daily ideas
+        <span className="text-xs text-muted-foreground">Each morning Claude adds one small task in each area you pick</span>
+      </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Daily idea areas">
+        {AREAS.map((a) => {
+          const on = chosen.includes(a.key)
+          return (
+            <button
+              key={a.key}
+              type="button"
+              aria-pressed={on}
+              disabled={areas.isPending || set.isPending}
+              onClick={() => toggle(a.key)}
+              className={cn(
+                'h-9 rounded-full border px-3.5 text-sm transition-colors',
+                on ? 'border-primary bg-primary text-primary-foreground' : 'border-input bg-card text-muted-foreground',
+              )}
+            >
+              {a.label}
+            </button>
+          )
+        })}
+      </div>
+    </Card>
   )
 }
 

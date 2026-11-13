@@ -1,6 +1,6 @@
 # The morning Claude routine
 
-"Life – morning top jobs" is a scheduled Claude Code routine on Tim's Claude plan (no API key). It runs daily at 06:15 London time in the "Life" cloud environment, which has `LIFE_AGENTS_URL` and `LIFE_PRIORITIES_SECRET`. It plans each Top jobs tab's day, shortens the news headlines, does the jobs it can (see "Claude does jobs" in [architecture.md](architecture.md)), and adds one small task a day in each area of life for each person with AI picks on ("Daily ideas" in architecture.md).
+"Life – morning top jobs" is a scheduled Claude Code routine on Tim's Claude plan (no API key). It runs daily at 06:15 London time in the "Life" cloud environment, which has `LIFE_AGENTS_URL` and `LIFE_PRIORITIES_SECRET`. It plans each Top jobs tab's day, shortens the news headlines, does the jobs it can (see "Claude does jobs" in [architecture.md](architecture.md)), and adds one small task a day in each area of life each person has picked in Settings ("Daily ideas" in architecture.md).
 
 - Model: `claude-sonnet-5-5`
 - Tools: `Bash`, `Read`, `WebSearch`. No web fetch: it reads search results only, so a web page has less room to steer a session that holds the secret.

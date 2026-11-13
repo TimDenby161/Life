@@ -105,6 +105,8 @@ export type AgentPrefs = {
   briefingPush: Set<string>
   /** People who want Claude to pick their top jobs each morning. */
   aiPriorities: Set<string>
+  /** The areas each person wants a daily idea in (none: no ideas), by user id. */
+  ideaAreas: Record<string, string[]>
 }
 
 /** Each person's travel to and from events, from their Chief of Staff settings. */
@@ -123,11 +125,11 @@ export async function loadPrefs(db: SupabaseClient, householdId: string): Promis
   const [settings, prefs] = await Promise.all([
     db.from('agent_settings').select('user_id, agent_id, enabled, schedule, config').eq('household_id', householdId),
     // user_preferences has no household_id; these ids are this household's members.
-    db.from('user_preferences').select('user_id, ai_summaries, briefing_push, ai_priorities').in('user_id', ids),
+    db.from('user_preferences').select('user_id, ai_summaries, briefing_push, ai_priorities, idea_areas').in('user_id', ids),
   ])
   const rows = check(settings) as { user_id: string; agent_id: string; enabled: boolean; schedule: AgentSchedule; config: unknown }[]
   const row = (agentId: string, userId: string) => rows.find((r) => r.agent_id === agentId && r.user_id === userId)
-  const prefRows = check(prefs) as { user_id: string; ai_summaries: boolean; briefing_push: boolean; ai_priorities: boolean }[]
+  const prefRows = check(prefs) as { user_id: string; ai_summaries: boolean; briefing_push: boolean; ai_priorities: boolean; idea_areas: string[] | null }[]
   return {
     members: ids,
     enabled: (agentId) => ids.filter((id) => row(agentId, id)?.enabled ?? true),
@@ -136,6 +138,7 @@ export async function loadPrefs(db: SupabaseClient, householdId: string): Promis
     aiSummaries: new Set(prefRows.filter((p) => p.ai_summaries).map((p) => p.user_id)),
     briefingPush: new Set(prefRows.filter((p) => p.briefing_push).map((p) => p.user_id)),
     aiPriorities: new Set(prefRows.filter((p) => p.ai_priorities).map((p) => p.user_id)),
+    ideaAreas: Object.fromEntries(prefRows.map((p) => [p.user_id, p.idea_areas ?? []])),
   }
 }
 
