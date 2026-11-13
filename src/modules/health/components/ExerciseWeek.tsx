@@ -1,5 +1,5 @@
 import { format, startOfWeek } from 'date-fns'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { QueryState } from '@/components/states'
@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input'
 import { addDaysISO, parseISODate, todayISO, toISODate } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
+import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 import { type PlanCell, useExerciseGoals, useExercisePlan, useSaveDraft, useSetPlanCell } from '../api'
-import { draftWeek, type Goal, joinDay } from '../lib/weekPlan'
+import { calendarExercise, draftWeek, type Goal, joinDay } from '../lib/weekPlan'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 type Column = { owner: string | null; label: string }
-type Editing = { day: string; column: Column; cell?: PlanCell }
+type Editing = { day: string; column: Column; cell?: PlanCell; current: string | null }
 
 /**
  * The exercise week: Monday to Sunday down the side, each of you and Together
@@ -38,15 +39,27 @@ export function ExerciseWeek() {
     ...(partner ? [{ owner: null, label: 'Together' }] : []),
   ]
 
-  // Draft once per empty week, from this week on.
+  // Exercise already in your calendars fills its box (unless you've changed that box).
+  const events = useCalendarEvents(monday, days[6])
+  const integrations = useCalendarIntegrations()
+  const people = columns
+    .filter((c) => c.owner)
+    .map((c) => {
+      const g = goals.data?.find((x) => x.user_id === c.owner)
+      return { id: c.owner!, name: c.label, goals: (Array.isArray(g?.activities) ? g.activities : []) as Goal[] }
+    })
+  const calendarReady = !events.isPending && !integrations.isPending
+  const booked =
+    events.data?.status === 'ok' && integrations.data
+      ? calendarExercise(events.data.events, new Map(integrations.data.map((i) => [i.id, i.owner_id])), people, days)
+      : []
+
+  // Draft once per empty week, from this week on, around what's already booked.
   const drafted = useRef(new Set<string>())
   useEffect(() => {
-    if (!plan.data || !goals.data || plan.data.length || days[6] < today || drafted.current.has(monday)) return
+    if (!plan.data || !goals.data || !calendarReady || plan.data.length || days[6] < today || drafted.current.has(monday)) return
     drafted.current.add(monday)
-    const people = goals.data
-      .filter((g) => columns.some((c) => c.owner === g.user_id))
-      .map((g) => ({ id: g.user_id, goals: (Array.isArray(g.activities) ? g.activities : []) as Goal[] }))
-    const cells = joinDay(draftWeek(people))
+    const cells = joinDay(draftWeek(people.filter((p) => p.goals.length), booked)).filter((c) => !booked.some((b) => b.day === c.day && b.owner === c.owner))
     if (cells.length) draft.mutate(cells.map((c) => ({ day: days[c.day], owner_id: c.owner, activity: c.activity })), { onError })
   })
 
@@ -79,16 +92,25 @@ export function ExerciseWeek() {
                       {format(parseISODate(day), 'EEE')}
                     </th>
                     {columns.map((c) => {
-                      const cell = cellFor(day, c.owner)
+                      const saved = cellFor(day, c.owner)
+                      // Changed by one of you rather than drafted by the coach.
+                      const changed = saved && !saved.by_coach
+                      const fromCalendar = changed ? undefined : booked.find((b) => days[b.day] === day && b.owner === c.owner)
+                      const cell = fromCalendar ? { ...saved, activity: fromCalendar.activity } : saved
                       return (
                         <td key={c.label} className="p-0">
                           <button
                             type="button"
-                            className="block min-h-11 w-full break-words px-2 py-2 text-left hover:bg-muted/60"
+                            className={cn(
+                              'block min-h-11 w-full break-words px-2 py-2 text-left hover:bg-muted/60',
+                              changed && 'bg-primary/10 font-semibold text-primary hover:bg-primary/15',
+                              fromCalendar && 'bg-muted/50',
+                            )}
                             aria-label={`${c.label}, ${format(parseISODate(day), 'EEEE')}: ${cell?.activity ?? 'nothing'}`}
-                            onClick={() => setEditing({ day, column: c, cell })}
+                            onClick={() => setEditing({ day, column: c, cell: saved, current: cell?.activity ?? null })}
                           >
-                            {cell?.activity ?? <span className="text-muted-foreground/50">–</span>}
+                            {fromCalendar ? <CalendarDays className="mr-1 inline size-3.5 align-[-2px] text-muted-foreground" aria-hidden /> : null}
+                            {cell?.activity ?? <span className={changed ? 'text-primary' : 'text-muted-foreground/50'}>{changed ? 'Rest' : '–'}</span>}
                           </button>
                         </td>
                       )
@@ -100,6 +122,10 @@ export function ExerciseWeek() {
           </Card>
         )}
       </QueryState>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="inline-block size-3 rounded-sm bg-primary/20" aria-hidden /> Changed by you
+        <CalendarDays className="ml-3 size-3.5" aria-hidden /> From your calendar
+      </p>
       {editing ? <CellDialog editing={editing} suggestions={suggestions} onClose={() => setEditing(null)} /> : null}
     </div>
   )
@@ -107,7 +133,7 @@ export function ExerciseWeek() {
 
 function CellDialog({ editing, suggestions, onClose }: { editing: Editing; suggestions: string[]; onClose: () => void }) {
   const set = useSetPlanCell()
-  const [activity, setActivity] = useState(editing.cell?.activity ?? '')
+  const [activity, setActivity] = useState(editing.current ?? '')
   const save = (value: string | null) =>
     set.mutate({ id: editing.cell?.id, day: editing.day, owner_id: editing.column.owner, activity: value?.trim() || null }, { onSuccess: onClose, onError })
 
