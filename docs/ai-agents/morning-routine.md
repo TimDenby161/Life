@@ -29,7 +29,8 @@ Every save below is built with python3's json module (not by hand), written to /
 2. Questions first, so they are in today's plan. For each `work` entry, follow `work_instructions` and decide for every job: do it now, ask one question first, or leave it (most jobs you will leave). Do not search the web yet. If any jobs need a question, save them now, one call per work entry, with only the questions:
    {"mode":"work-save","key":<the work key>,"items":[{"ref":...,"kind":"ask","question":...}]}
    Remember which jobs you chose to do now, for step 5.
-   Then the day's ideas: for each `ideas` entry, follow `ideas_instructions`: one small task for every area in its `areas`, using that area's `facts` and not overlapping its `open_jobs`. Save one call per entry, shaped like `ideas_answer`:
+
+2b. The day's ideas, whatever is in `work`. For each `ideas` entry, follow `ideas_instructions`: one small task for every area in its `areas`, using that area's `facts` and not overlapping its `open_jobs`. Save one call per entry, shaped like `ideas_answer`:
    {"mode":"ideas-save","key":<the ideas key>,"items":[{"area":...,"title":...,"minutes":...}]}
 
 3. For each tab in `people`, follow `instructions` exactly: plan what that person can realistically get done today. Choose from that tab's `jobs` (no more than `instructions` allows), most important first. Jobs in a "C4" category are paid work: their `minutes` must add up to no more than `workMinutesToday` (the Work time left in their calendar). All other jobs' `minutes` must add up to no more than `freeMinutesToday` (the free time left after work and everything else in their calendar). Give each a reason of at most 12 words in plain British English, and say for each whether it needs to be done at home ("home") or can be done on a phone ("anywhere"). Use only `ref` values from that tab's own jobs. If both are 0, save no picks for that tab. Save one call per tab, shaped like `answer`:
