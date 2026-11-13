@@ -99,42 +99,43 @@ function QuickAdd({ task }: { task: ShoppingTask | null }) {
   const pending = saveWant.isPending || addItem.isPending
   const [name, setName] = useState('')
   const [needBy, setNeedBy] = useState('')
+  // The date box only exists once the calendar is tapped: iPhones can put today
+  // into a blank date box the moment it's touched or tabbed into.
+  const [dating, setDating] = useState(false)
+  const reset = () => { setName(''); setNeedBy(''); setDating(false) }
 
   return (
     <form
-      className="mb-2 flex gap-2"
+      className="mb-2 grid gap-2"
       onSubmit={(e) => {
         e.preventDefault()
         if (!name.trim() || pending) return
-        const done = { onSuccess: () => { setName(''); setNeedBy('') }, onError }
-        if (task) addItem.mutate({ task, title: name.trim(), dueDate: needBy || null }, done)
-        else saveWant.mutate({ name: name.trim(), need_by: needBy || null, owner_id: me.id }, done)
+        const due = dating && needBy ? needBy : null
+        const done = { onSuccess: reset, onError }
+        if (task) addItem.mutate({ task, title: name.trim(), dueDate: due }, done)
+        else saveWant.mutate({ name: name.trim(), need_by: due, owner_id: me.id }, done)
       }}
     >
-      <Input aria-label="Thing to buy" placeholder="Add something…" maxLength={task ? 200 : 80} enterKeyHint="done" className="min-w-0 flex-1" value={name} onChange={(e) => setName(e.target.value)} />
-      {/* A small calendar button: the real date box sits invisibly on top, so tapping it opens the phone's own date picker. */}
-      <label
-        className={cn(
-          'relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm',
-          needBy ? 'font-medium text-foreground' : 'text-muted-foreground',
-        )}
-      >
-        <CalendarDays className="size-4" aria-hidden />
-        {needBy ? formatDay(needBy).replace(/^Today \(.*\)$/, 'Today') : <span className="sr-only">Need it by</span>}
-        <input
-          type="date"
-          aria-label="Need it by"
-          min={todayISO()}
-          value={needBy}
-          onChange={(e) => setNeedBy(e.target.value)}
-          className="absolute inset-0 size-full cursor-pointer opacity-0"
-        />
-      </label>
-      {/* iPhones fill in today as soon as the date picker opens and have no clear button, so this takes the date off. */}
-      {needBy ? (
-        <Button type="button" variant="ghost" size="icon" className="-ml-1 size-10 shrink-0" aria-label="No date" onClick={() => setNeedBy('')}><X /></Button>
+      <div className="flex gap-2">
+        <Input aria-label="Thing to buy" placeholder="Add something…" maxLength={task ? 200 : 80} enterKeyHint="done" className="min-w-0 flex-1" value={name} onChange={(e) => setName(e.target.value)} />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={cn('size-10 shrink-0', dating ? 'text-foreground' : 'text-muted-foreground')}
+          aria-label={dating ? 'No date' : 'Need it by a date'}
+          aria-pressed={dating}
+          onClick={() => { setDating(!dating); setNeedBy('') }}
+        >
+          <CalendarDays />
+        </Button>
+        <Button type="submit" size="icon" className="size-10 shrink-0" aria-label="Add" disabled={pending || !name.trim()}><Plus /></Button>
+      </div>
+      {dating ? (
+        <Field label="Need it by" htmlFor="quick-date">
+          <DateBox id="quick-date" min={todayISO()} value={needBy} onChange={setNeedBy} onClear={() => { setNeedBy(''); setDating(false) }} />
+        </Field>
       ) : null}
-      <Button type="submit" size="icon" className="size-10 shrink-0" aria-label="Add" disabled={pending || !name.trim()}><Plus /></Button>
     </form>
   )
 }
@@ -200,12 +201,12 @@ function WantList({ title, rows, onEdit, action }: { title: string; rows: Row[];
 }
 
 /** A date box with a button to take the date off (iPhone date pickers can't be left blank). */
-function DateBox({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+function DateBox({ id, value, onChange, min, onClear }: { id: string; value: string; onChange: (value: string) => void; min?: string; onClear?: () => void }) {
   return (
     <div className="flex gap-2">
-      <Input id={id} type="date" className="min-w-0 flex-1" value={value} onChange={(e) => onChange(e.target.value)} />
-      {value ? (
-        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="No date" onClick={() => onChange('')}><X /></Button>
+      <Input id={id} type="date" min={min} className="min-w-0 flex-1" value={value} onChange={(e) => onChange(e.target.value)} />
+      {value || onClear ? (
+        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="No date" onClick={onClear ?? (() => onChange(''))}><X /></Button>
       ) : null}
     </div>
   )
