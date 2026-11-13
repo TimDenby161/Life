@@ -1,5 +1,4 @@
--- Calendar names for the Coach week: Tim's table tennis names are there from the
--- start, either of you can teach or forget one, a name is only remembered once,
+-- Calendar names for the Coach week: either of you can read and teach one, a name is only remembered once,
 -- created_by can't be forged, and outsiders see nothing.
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
@@ -18,7 +17,12 @@ select set_config('t.sophie', '22222222-2222-2222-2222-222222222222', true);
 select set_config('t.out', '33333333-3333-3333-3333-333333333333', true);
 select set_config('t.hh', (select household_id::text from household_members where user_id = current_setting('t.tim')::uuid), true);
 
-select is((select activity from exercise_names where phrase = 'GS1' and owner_id = current_setting('t.tim')::uuid), 'TT match', 'GS1 is Tim''s table tennis match');
+delete from exercise_names;
+insert into exercise_names (household_id, owner_id, phrase, activity, created_by)
+values (current_setting('t.hh')::uuid, current_setting('t.tim')::uuid, 'GS1', 'TT match', current_setting('t.tim')::uuid);
+
+select pg_temp.as_user(current_setting('t.tim')::uuid);
+select is((select activity from exercise_names where phrase = 'GS1'), 'TT match', 'a member reads the household''s names');
 
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 select lives_ok(format($$insert into exercise_names (household_id, owner_id, phrase, activity) values (%L, %L, 'Barnes Yoga', 'Yoga')$$,

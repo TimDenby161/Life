@@ -55,3 +55,11 @@ select h.id, r.name, r.sort_order
 from public.households h
 cross join (values ('Kitchen', 1), ('Bathroom', 2), ('Bedroom', 3), ('Living room', 4), ('Hallway', 5)) as r (name, sort_order)
 on conflict do nothing;
+
+-- Tim's table tennis calendar names (the live database got these from its migration).
+insert into public.exercise_names (household_id, owner_id, phrase, activity, created_by)
+select m.household_id, m.user_id, v.phrase, v.activity, m.user_id
+from public.household_members m
+cross join (values ('GS1', 'TT match'), ('Crusaders', 'TT match'), ('Teddington', 'TT match'), ('Graham Spicer', 'TT tournament')) as v (phrase, activity)
+where m.user_id = '11111111-1111-1111-1111-111111111111'
+on conflict do nothing;
