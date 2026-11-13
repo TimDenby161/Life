@@ -74,7 +74,7 @@ export function MorningRunBody({ did, asks, answered, emptyText = 'All answered.
                   </span>
                   <ChevronDown className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} aria-hidden />
                 </button>
-                {isOpen ? <ClaudeResult result={d.result} /> : null}
+                {isOpen ? <ClaudeResult result={d.result} showSummary={false} /> : null}
               </li>
             )
           })}

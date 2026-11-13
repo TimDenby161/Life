@@ -52,6 +52,8 @@ export type PlanRules<T> = {
   fits?: (o: T) => boolean
   /** Most minutes of other jobs to add after the AI's picks: the time freed by picks moved to another day. */
   backfill?: number
+  /** Jobs someone added by hand for today: always on today's list, before anything else, whatever the time left. */
+  added?: (o: T) => boolean
 }
 
 /**
@@ -59,10 +61,11 @@ export type PlanRules<T> = {
  * The AI's picks still open (`picked`) come first, in its order, less whatever
  * no longer fits as the day fills up. Time freed by a pick moved to another day
  * (`backfill`) is filled with jobs due today or late, best first; finishing a
- * job never brings in another. Without AI picks it's those jobs alone.
+ * job never brings in another. Without AI picks it's those jobs alone. A job
+ * added by hand for today (`added`) always shows, first, and uses up the time.
  */
 export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: ReadonlySet<string> | null, rules: PlanRules<T>): T[] {
-  const { score, minutes, budget, isWork = () => false, workBudget = 0, fits = () => true, backfill = Infinity } = rules
+  const { score, minutes, budget, isWork = () => false, workBudget = 0, fits = () => true, backfill = Infinity, added: addedByHand = () => false } = rules
   const out: T[] = []
   let total = 0
   let worked = 0
@@ -78,6 +81,13 @@ export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: R
       total += minutes(o)
     }
     if (extra) added += minutes(o)
+    out.push(o)
+  }
+  // You asked for these today: no budget check, but their time counts against the rest.
+  for (const o of ranked.filter(addedByHand)) {
+    if (out.length >= PLAN_MAX || out.includes(o)) continue
+    if (isWork(o)) worked += minutes(o)
+    else total += minutes(o)
     out.push(o)
   }
   if (picked) ranked.filter((o) => picked.has(o.task_id)).forEach((o) => take(o, false))

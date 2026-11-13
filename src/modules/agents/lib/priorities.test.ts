@@ -159,6 +159,15 @@ describe('Today’s plan on Home', () => {
     expect(todaysPlan(ranked, new Set(['a', 'b', 'c']), rules(30)).map((o) => o.task_id)).toEqual(['a', 'b', 'next'])
   })
 
+  it('always shows a job added by hand for today, first, even when the AI’s plan fills the day', () => {
+    const ranked = [job('a', 200, 60), job('b', 150, 60), job('mine', 100, 30)]
+    const rules = { score: (o: Job) => o.score, minutes: (o: Job) => o.minutes, budget: 120, backfill: 0, added: (o: Job) => o.task_id === 'mine' }
+    // Its 30 minutes come out of the day, so the second pick no longer fits.
+    expect(todaysPlan(ranked, new Set(['a', 'b']), rules).map((o) => o.task_id)).toEqual(['mine', 'a'])
+    // Even with no time left at all.
+    expect(todaysPlan(ranked, new Set(['a', 'b']), { ...rules, budget: 0 }).map((o) => o.task_id)).toEqual(['mine'])
+  })
+
   it('leaves out jobs that can’t be done today, like shopping after the shops shut', () => {
     const ranked = [job('shop', 200, 45), job('hoover', 150, 30)]
     expect(plan(ranked, new Set(['shop', 'hoover']), 120, (o) => o.task_id !== 'shop')).toEqual(['hoover'])

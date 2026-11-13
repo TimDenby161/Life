@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, type Tables } from '@/lib/supabase'
 import { fetchAllPages, unwrap } from '@/lib/utils'
+import { useUserId } from '@/modules/auth/AuthProvider'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
 
 export type MetricDefinition = Tables<'health_metric_definitions'>
@@ -79,3 +80,22 @@ export const useDeletePeriod = () => useHealthMutation(async (_h, id: string) =>
 export const useAddTakeaway = () =>
   useHealthMutation(async (h, t: { eaten_on: string; shared: boolean }) => unwrap(await supabase.from('takeaways').insert({ ...t, household_id: h })))
 export const useDeleteTakeaway = () => useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('takeaways').delete().eq('id', id)))
+
+/** Whether Home asks me for the morning check-in (weight and sleep). Each person's own, on by default. */
+export const useMorningCheckInOn = () => {
+  const userId = useUserId()
+  return useQuery({
+    queryKey: [...healthKeys.all, 'check-in-on', userId],
+    queryFn: async () =>
+      unwrap(await supabase.from('user_preferences').select('morning_check_in').eq('user_id', userId).maybeSingle())?.morning_check_in ?? true,
+  })
+}
+
+export const useSetMorningCheckIn = () => {
+  const userId = useUserId()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (on: boolean) => unwrap(await supabase.from('user_preferences').update({ morning_check_in: on }).eq('user_id', userId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: healthKeys.all }),
+  })
+}

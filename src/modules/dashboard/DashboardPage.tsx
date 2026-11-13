@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAgentSettings, useAiPicks } from '@/modules/agents/api'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
-import { awayToday, freeMinutesToday, longestGapToday, workMinutesToday } from '@/modules/agents/lib/away'
+import { awayToday, freeMinutesToday, longestGapToday, withoutWork, workMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useBalances, usePots } from '@/modules/finances/hooks'
 import { MorningCheckIn } from '@/modules/health/components/MorningCheckIn'
@@ -73,10 +73,11 @@ export default function DashboardPage() {
 }
 
 /**
- * Adding from Home always asks who, which category and when. A person's task
- * goes on their own list (so it shows as theirs); joint ones on the joint list.
+ * Adding from Home always asks who and which category; the day starts as today
+ * and can be changed (the morning routine offers a new day if it's missed).
+ * A person's task goes on their own list (so it shows as theirs); joint ones on the joint list.
  */
-function AddTask({ onAdded }: { onAdded: () => void }) {
+export function AddTask({ onAdded }: { onAdded: () => void }) {
   const { members } = useHousehold()
   const lists = useTaskLists().data ?? []
   const categories = useTaskCategories().data ?? []
@@ -85,7 +86,7 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
   const [title, setTitle] = useState('')
   const [who, setWho] = useState('')
   const [categoryId, setCategoryId] = useState('')
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(today)
 
   // An owned category is always its owner's, so picking one picks the person too.
   const pickCategory = (id: string) => {
@@ -198,10 +199,11 @@ function AddTask({ onAdded }: { onAdded: () => void }) {
 
 const JOBS_PER_STEP = 5
 
-type Place = 'home' | 'out'
+/** Off = at home but not working today: Work events count as free time and paid work stays off the list. */
+type Place = 'home' | 'off' | 'out'
 
 /**
- * A tab's At home / Out choice for today, when someone has changed it from
+ * A tab's Home / Off work / Out choice for today, when someone has changed it from
  * what the calendar says. Remembered on this device until midnight.
  */
 function useOutOverride(today: string): [(tab: string) => Place | undefined, (tab: string, place: Place) => void] {
@@ -302,7 +304,10 @@ export function TopJobsCard({
   const awayNow = who === TOGETHER ? members.some((m) => away(m.id)) : away(who)
   const [placeFor, setPlace] = useOutOverride(today)
   const [swiped, markSwiped] = useSwipedToday(today)
-  const out = (placeFor(who) ?? (awayNow ? 'out' : 'home')) === 'out'
+  const placeNow: Place = placeFor(who) ?? (awayNow ? 'out' : 'home')
+  const out = placeNow === 'out'
+  // Off work is a person's own day off; Together has no work of its own.
+  const offWork = placeNow === 'off' && who !== TOGETHER
   const scored = topJobs(items ?? [], categories, today, Infinity)
   const ai = aiFirst(scored, picks)
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name
@@ -320,7 +325,7 @@ export function TopJobsCard({
   // Paid work (C4) fits the Work time left; everything else the free time.
   const jobMinutes = (o: OccurrenceWithTask) => estimateMinutes(o.task.title, categoryName(o.task.category_id), o.task.duration_minutes)
   const isWork = (o: OccurrenceWithTask) => WORK_JOB.test(categoryName(o.task.category_id) ?? '')
-  const workNow = who === TOGETHER ? 0 : workMinutesToday(events, integrations, who, today)
+  const workNow = who === TOGETHER || offWork ? 0 : workMinutesToday(events, integrations, who, today)
   // Travel rules are each person's own settings: mine apply here (my partner's live with the agents).
   const settings = useAgentSettings().data
   const myTravel = parseTravel(settings?.find((s) => s.agent_id === 'chief_of_staff')?.config)
@@ -328,9 +333,14 @@ export function TopJobsCard({
   const myWindow = planWindow(sleepRow?.enabled === false ? null : parseSleepGoals(sleepRow?.config))
   const travel = (person: string) => (person === me.id ? myTravel : [])
   const dayWindow = (person: string) => (person === me.id ? myWindow : DEFAULT_WINDOW)
-  const freeNow = Math.min(MAX_PLAN_MINUTES, freeMinutesToday(events, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel, dayWindow))
+  const freeWith = (evs: typeof events) =>
+    Math.min(MAX_PLAN_MINUTES, freeMinutesToday(evs, integrations, who === TOGETHER ? members.map((m) => m.id) : [who], today, new Date(), travel, dayWindow))
+  const dayEvents = offWork ? withoutWork(events, integrations, who) : events
+  const freeNow = freeWith(dayEvents)
+  // The morning's AI plan counted work hours as busy: off work, the hours it didn't plan for take more jobs.
+  const offWorkMinutes = offWork ? Math.max(0, freeNow - freeWith(events)) : 0
   const people = who === TOGETHER ? members.map((m) => m.id) : [who]
-  const shopGapNow = longestGapToday(events, integrations, people, today, shopsClose(today), new Date(), travel, dayWindow)
+  const shopGapNow = longestGapToday(dayEvents, integrations, people, today, shopsClose(today), new Date(), travel, dayWindow)
   // Nothing dated after today (a job delayed since the AI picked it leaves the plan); asking a manager waits
   // for a good day (Tue-Thu), and shopping for a long enough gap before the shops shut.
   const fits = (o: OccurrenceWithTask) =>
@@ -356,7 +366,9 @@ export function TopJobsCard({
         isWork,
         workBudget: workNow,
         fits,
-        backfill: movedMinutes,
+        backfill: movedMinutes + offWorkMinutes,
+        // Added today for today, by hand (Home's +) or as the morning's daily idea for an area: shows even when the AI plan is full.
+        added: (o) => o.due_date === today && toISODate(new Date(o.task.created_at)) === today && !o.task.ai_asks_task_id,
       })
     : ranked
   const planMinutes = plan.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
@@ -412,10 +424,12 @@ export function TopJobsCard({
           <Segmented
             aria-label="Where"
             size="sm"
-            value={out ? 'out' : 'home'}
+            itemClassName="px-2"
+            value={offWork ? 'off' : out ? 'out' : 'home'}
             onChange={(v) => setPlace(who, v as Place)}
             options={[
               { value: 'home', label: 'Home' },
+              ...(who === TOGETHER ? [] : [{ value: 'off' as const, label: <span title="Off work, at home">Off</span> }]),
               { value: 'out', label: 'Out' },
             ]}
           />

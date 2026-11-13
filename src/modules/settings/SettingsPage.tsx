@@ -19,6 +19,7 @@ import { calendarKeys, useCalendarIntegrations } from '@/modules/calendar/api'
 import { useDeleteSource, useFeedSources, useSaveSource } from '@/modules/feed/hooks'
 import { feedProviders } from '@/modules/feed/providers/registry'
 import type { FeedSource } from '@/modules/feed/providers/types'
+import { useMorningCheckInOn, useSetMorningCheckIn } from '@/modules/health/api'
 import { householdKeys, useHousehold } from '@/modules/household/HouseholdProvider'
 import { useCreateCategory, useCreateRoom, useDeleteCategory, useDeleteRoom, useSetCategoryOwner, useTaskCategories, useTaskRooms } from '@/modules/tasks/hooks'
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
       <div className="grid max-w-2xl gap-2">
         <ProfileSection />
         <AppearanceSection />
+        <HomeSection />
         <HouseholdSection />
         <CalendarSection />
         <FeedSourcesSection />
@@ -100,6 +102,28 @@ function AppearanceSection() {
             void supabase.from('user_preferences').update({ theme: t }).eq('user_id', me.id)
           }}
           options={[{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+        />
+      </Card>
+    </section>
+  )
+}
+
+function HomeSection() {
+  const on = useMorningCheckInOn()
+  const set = useSetMorningCheckIn()
+  return (
+    <section>
+      <SectionTitle>Home</SectionTitle>
+      <Card className="flex items-center justify-between gap-3 p-4">
+        <label htmlFor="s-checkin" className="grid gap-0.5 text-sm">
+          Morning check-in
+          <span className="text-xs text-muted-foreground">Weight and sleep, at the top of Today’s tasks</span>
+        </label>
+        <Switch
+          id="s-checkin"
+          checked={on.data ?? true}
+          disabled={on.isPending || set.isPending}
+          onCheckedChange={(v) => set.mutate(v, { onError: (e) => toast.error(getErrorMessage(e)) })}
         />
       </Card>
     </section>

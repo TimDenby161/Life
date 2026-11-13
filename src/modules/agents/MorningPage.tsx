@@ -40,7 +40,7 @@ function MorningContent({ open, answeredRows }: { open: Parameters<typeof claude
     )
   }
   return (
-    <Card className="p-4">
+    <Card className="p-3 sm:p-4">
       <MorningRunBody did={did} asks={asks} answered={answered} />
     </Card>
   )

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { toISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { useUserId } from '@/modules/auth/AuthProvider'
-import { useAddMeasurement, useMeasurements, useMetricDefinitions } from '../api'
+import { useAddMeasurement, useMeasurements, useMetricDefinitions, useMorningCheckInOn } from '../api'
 
 /** The readings asked for each morning (Garmin has no personal API, so they're typed in). */
 const KEYS = ['weight', 'sleep_duration', 'sleep_score'] as const
@@ -38,10 +38,11 @@ const QUESTION: Record<Key, string> = {
  * One of Home's Today's tasks, each morning until done: today's weight, last
  * night's sleep and the watch's sleep score. Tap it to answer; it only asks
  * for what hasn't been logged today, and Skip hides it until tomorrow. Renders
- * an <li>, so it sits in the task list.
+ * an <li>, so it sits in the task list. Each person can switch it off in Settings.
  */
 export function MorningCheckIn() {
   const me = useUserId()
+  const on = useMorningCheckInOn()
   const defs = useMetricDefinitions()
   const measurements = useMeasurements()
   const add = useAddMeasurement()
@@ -57,7 +58,7 @@ export function MorningCheckIn() {
   const done = (key: Key) =>
     (measurements.data ?? []).some((m) => m.user_id === me && m.metric_id === defOf(key)?.id && toISODate(new Date(m.measured_at)) === today)
   const missing = KEYS.filter((k) => defOf(k) && !done(k))
-  if (skipped || !defs.data || !measurements.data || !missing.length) return null
+  if (on.data !== true || skipped || !defs.data || !measurements.data || !missing.length) return null
 
   const needs = (k: Key) => missing.includes(k)
   const sleepHours = hours.trim() || minutes.trim() ? (parse(hours || '0', 0, 16) ?? NaN) + (parse(minutes || '0', 0, 59) ?? NaN) / 60 : null

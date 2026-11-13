@@ -20,3 +20,19 @@ export function urgency(needBy: ISODate, today: ISODate, soonDays = 7): 'late' |
   if (needBy < today) return 'late'
   return daysBetween(today, needBy) <= soonDays ? 'soon' : null
 }
+
+type ChecklistItem = { id: string; title: string; is_done: boolean; done_at: string | null; due_date: string | null; created_at: string }
+
+/** A Shoppinglist checklist item in the same shape as a want, so both sort together. */
+export function fromChecklist<T extends ChecklistItem>(item: T) {
+  return {
+    source: 'list' as const,
+    id: item.id,
+    name: item.title,
+    need_by: item.due_date,
+    // Ticked before done_at was kept: still bought, just with no time.
+    bought_at: item.is_done ? (item.done_at ?? item.created_at) : null,
+    created_at: item.created_at,
+    item,
+  }
+}

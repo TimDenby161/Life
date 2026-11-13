@@ -3062,6 +3062,7 @@ export type Database = {
       tasks: {
         Row: {
           ai_answer: string | null
+          ai_area: string | null
           ai_asks_task_id: string | null
           ai_result: Json | null
           archived_at: string | null
@@ -3093,6 +3094,7 @@ export type Database = {
         }
         Insert: {
           ai_answer?: string | null
+          ai_area?: string | null
           ai_asks_task_id?: string | null
           ai_result?: Json | null
           archived_at?: string | null
@@ -3124,6 +3126,7 @@ export type Database = {
         }
         Update: {
           ai_answer?: string | null
+          ai_area?: string | null
           ai_asks_task_id?: string | null
           ai_result?: Json | null
           archived_at?: string | null
@@ -3600,6 +3603,7 @@ export type Database = {
           ai_work_seen_on: string | null
           briefing_push: boolean
           default_task_list_id: string | null
+          morning_check_in: boolean
           settings: Json
           theme: string
           updated_at: string
@@ -3612,6 +3616,7 @@ export type Database = {
           ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
+          morning_check_in?: boolean
           settings?: Json
           theme?: string
           updated_at?: string
@@ -3624,6 +3629,7 @@ export type Database = {
           ai_work_seen_on?: string | null
           briefing_push?: boolean
           default_task_list_id?: string | null
+          morning_check_in?: boolean
           settings?: Json
           theme?: string
           updated_at?: string
@@ -4069,6 +4075,15 @@ export type Database = {
       agent_save_headlines: {
         Args: { p_day: string; p_household_id: string; p_items: Json }
         Returns: undefined
+      }
+      agent_save_ideas: {
+        Args: {
+          p_day: string
+          p_household_id: string
+          p_items: Json
+          p_person: string
+        }
+        Returns: number
       }
       agent_save_meal_availability: {
         Args: { p_household_id: string; p_rows: Json; p_today: string }

@@ -104,6 +104,7 @@ export function Segmented<T extends string>({
   onChange,
   options,
   className,
+  itemClassName,
   size = 'default',
   'aria-label': ariaLabel,
 }: {
@@ -111,6 +112,8 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void
   options: { value: T; label: React.ReactNode }[]
   className?: string
+  /** Extra classes for each option (e.g. tighter padding to fit a phone row). */
+  itemClassName?: string
   size?: 'sm' | 'default'
   'aria-label': string
 }) {
@@ -129,6 +132,7 @@ export function Segmented<T extends string>({
           className={cn(
             'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium text-muted-foreground transition-all data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm',
             size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-sm',
+            itemClassName,
           )}
         >
           {o.label}

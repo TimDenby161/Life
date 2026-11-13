@@ -103,3 +103,13 @@ export function workMinutesToday(
     })
   return coveredMinutes(blocks, minuteOfDay(now))
 }
+
+/**
+ * Today's events with this person's Work ones taken out, for a day they're off
+ * work: the hours they'd have worked count as free time. The same Work events
+ * workMinutesToday counts (their own calendars and shared ones).
+ */
+export function withoutWork(events: CalendarEvent[], integrations: Pick<CalendarIntegration, 'id' | 'owner_id'>[], person: string): CalendarEvent[] {
+  const owner = new Map(integrations.map((i) => [i.id, i.owner_id]))
+  return events.filter((e) => e.allDay || !WORK_EVENT.test(e.title) || ![null, person].includes(owner.get(e.calendarId) ?? null))
+}

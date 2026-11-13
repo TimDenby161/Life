@@ -23,6 +23,7 @@ import type { Trip } from '../_shared/agents/travel.ts'
 import type { CompletionEvent, OpenTask, TaskContext } from '../_shared/agents/types.ts'
 import type { WeddingInput } from '../_shared/agents/wedding.ts'
 import type { WorkState } from '../_shared/agents/work.ts'
+import { type AreaSource, mealWindow } from '../_shared/agents/ideas.ts'
 
 const HISTORY_DAYS = 180
 
@@ -405,4 +406,46 @@ export async function loadNews(db: SupabaseClient, householdId: string): Promise
   const feed = await fetchRss(source.config).catch(() => null)
   if (feed?.status !== 'ok') return []
   return feed.items.flatMap((i) => (i.url ? [{ url: i.url, title: i.title, summary: i.summary }] : []))
+}
+
+/**
+ * What the daily ideas are built from (_shared/agents/ideas.ts areaFacts): names
+ * and dates only, no amounts, notes or health. The wedding comes from loadWork.
+ */
+export async function loadAreas(db: SupabaseClient, householdId: string, today: string, wedding: WorkState['wedding']): Promise<AreaSource> {
+  const [from, to] = mealWindow(today)
+  const [goals, trips, wants, checklist, people, languages, coaching, hustles, meals, openIdeas] = await Promise.all([
+    db.from('savings_goals').select('name, owner_id, target_date').eq('household_id', householdId).is('archived_at', null).is('reached_at', null).limit(50),
+    db.from('trips').select('name, owner_id, starts_on, ends_on, confirmed').eq('household_id', householdId).gte('starts_on', addDays(today, -60)).limit(50),
+    db.from('wants').select('name, owner_id, need_by').eq('household_id', householdId).is('bought_at', null).limit(200),
+    db
+      .from('task_subtasks')
+      .select('title, due_date, task:tasks!inner(title, status, archived_at)')
+      .eq('household_id', householdId)
+      .eq('is_done', false)
+      .ilike('task.title', '%shopping%list%')
+      .eq('task.status', 'active')
+      .is('task.archived_at', null)
+      .limit(200),
+    db.from('people').select('name, owner_id, birthday_month, birthday_day, see_every_weeks, last_seen_on').eq('household_id', householdId).limit(500),
+    db.from('language_study').select('user_id, language, active').eq('household_id', householdId),
+    db.from('tt_sessions').select('user_id, day').eq('household_id', householdId).order('day', { ascending: false }).limit(50),
+    db.from('hustles').select('user_id, name').eq('household_id', householdId).limit(50),
+    db.from('meals').select('id', { count: 'exact', head: true }).eq('household_id', householdId).gte('day', from).lte('day', to),
+    db.from('tasks').select('assignee_id, ai_area').eq('household_id', householdId).not('ai_area', 'is', null).eq('status', 'active').is('archived_at', null).limit(500),
+  ])
+  if (meals.error) throw new Error(meals.error.message)
+  return {
+    goals: check(goals),
+    wedding: { date: wedding.date, dateApprox: wedding.dateApprox, venues: wedding.venues.length, guests: wedding.guests },
+    trips: check(trips),
+    wants: check(wants),
+    checklist: (check(checklist) as { title: string; due_date: string | null }[]).map(({ title, due_date }) => ({ title, due_date })),
+    people: check(people),
+    languages: check(languages),
+    coaching: check(coaching),
+    hustles: check(hustles),
+    mealsPlanned: meals.count ?? 0,
+    openIdeas: check(openIdeas),
+  }
 }

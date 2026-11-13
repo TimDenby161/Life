@@ -30,6 +30,8 @@ describe('agents Edge Function', () => {
       'language_study', 'language_progress', 'health_exercise_sessions', 'push_subscriptions',
       'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations', 'feed_sources',
       'savings_goals', 'savings_pots', 'health_measurements', 'takeaways', 'people', 'wedding_venues',
+      // Daily ideas (loadAreas): names and dates only.
+      'wants', 'task_subtasks', 'tt_sessions', 'hustles', 'meals',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -89,13 +91,27 @@ describe('agents Edge Function', () => {
     expect(llm).not.toMatch(/fitness|wedding|languages|Session|BudgetItem|finance|netWorth|goals|weight|takeaway|people/i)
   })
 
-  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone, agent_save_picks, agent_save_meal_availability and agent_save_work', () => {
+  it('writes only through agent_claim_run, agent_finish_run, push_subscriptions_gone, agent_save_picks, agent_save_meal_availability, agent_save_work and agent_save_ideas', () => {
     for (const { f, text } of fn) {
       expect(text, f).not.toMatch(/\.(insert|update|upsert|delete)\(/)
       for (const [, rpc] of text.matchAll(/\.rpc\('([a-z_]+)'/g)) {
-        expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines', 'agent_save_meal_availability', 'agent_save_work'], f).toContain(rpc)
+        expect(['agent_claim_run', 'agent_finish_run', 'push_subscriptions_gone', 'agent_save_picks', 'agent_save_headlines', 'agent_save_meal_availability', 'agent_save_work', 'agent_save_ideas'], f).toContain(rpc)
       }
     }
+  })
+
+  it('adds daily ideas only through the routine, after checking them against the areas still free', () => {
+    const routine = fn.find((x) => x.f === 'routine.ts')!.text
+    for (const { f, text } of fn) if (f !== 'routine.ts') expect(text, f).not.toMatch(/rpc\('agent_save_ideas'/)
+    expect(routine).toMatch(/const items = cleanIdeas\(body\.items, areasFree\([\s\S]*?rpc\('agent_save_ideas', \{ p_household_id: householdId, p_person: person\.id, p_day: date, p_items: items \}\)/)
+  })
+
+  it('gives the daily ideas names and dates only: no amounts, notes or health', () => {
+    const ctx = fn.find((x) => x.f === 'context.ts')!.text
+    const areas = ctx.slice(ctx.indexOf('export async function loadAreas'))
+    expect(areas).not.toMatch(/_minor|\bnote\b|health_|weight|description/)
+    const ideas = shared.find((x) => x.f === 'ideas.ts')!.text
+    expect(ideas).not.toMatch(/_minor|weight|exercise_sessions|formatPounds/)
   })
 
   it('lets Claude do jobs only through the routine, after checking its answer against the jobs it offered', () => {

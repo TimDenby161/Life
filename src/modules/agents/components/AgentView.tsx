@@ -7,7 +7,7 @@ import { EmptyState, QueryState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDayInline as day, todayLabel } from '@/lib/dates'
-import { TopJobsCard } from '@/modules/dashboard/DashboardPage'
+import { AddTask, TopJobsCard } from '@/modules/dashboard/DashboardPage'
 import { MorningRunSummary } from './MorningRunSummary'
 import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
@@ -57,6 +57,7 @@ const HOME_LINKS = [{ label: 'Central America', href: 'https://claude.ai/artifac
  * On days the morning run did or asked something, its summary pops up over it until accepted.
  */
 function HomeToday() {
+  const [adding, setAdding] = useState(false)
   return (
     <div className="grid grid-cols-1 gap-3">
       <TopNews max={3} compact />
@@ -77,7 +78,15 @@ function HomeToday() {
           </a>
         ))}
       </div>
-      <TopJobsCard title="Today’s tasks" limit={4} checkIn footer={<AgentFlags max={2} />} />
+      {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
+      <TopJobsCard
+        title="Today’s tasks"
+        limit={4}
+        checkIn
+        adding={adding}
+        onToggleAdding={() => setAdding(!adding)}
+        footer={<AgentFlags max={2} />}
+      />
       <MorningRunSummary />
     </div>
   )

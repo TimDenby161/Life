@@ -17,6 +17,11 @@
 //                                   left on its job, venues join the wedding's
 //                                   list. The only writes here that touch
 //                                   tasks, and only through agent_save_work.
+//   {"mode":"ideas-save", "key", "items":[{area, title, minutes}]}
+//                                -> one small task in each area of life, added
+//                                   to that person's list for today
+//                                   (_shared/agents/ideas.ts), only through
+//                                   agent_save_ideas.
 //
 // Tabs: each person with "AI picks my top jobs" on (and the Chief of Staff on)
 // gets their own; Together is picked when anyone has it on. Shortlists hold job
@@ -28,7 +33,9 @@ import { cleanHeadlines, HEADLINES_PROMPT, headlinesInput } from '../_shared/age
 import { type Candidate, candidatesFor, cleanPicks, goodDayToAsk, MAX_PICKS, planBudget, PRIORITIES_PROMPT, prioritiesInput, shopGap, TOGETHER, withQuestions, workBudget } from '../_shared/agents/priorities.ts'
 import type { Member, TaskContext } from '../_shared/agents/types.ts'
 import { cleanWork, WORK_ANSWER, WORK_PROMPT, workInput, workJobs, workLimits } from '../_shared/agents/work.ts'
-import { type AgentPrefs, dayWindows, loadCalendar, loadContext, loadNews, loadPrefs, loadWork, travelRules } from './context.ts'
+import { AREAS, type AreaKey, type AreaSource, areaFacts, areasFree, cleanIdeas, IDEAS_ANSWER, IDEAS_PROMPT, ideasInput } from '../_shared/agents/ideas.ts'
+import { ownerOf } from '../_shared/agents/taskManager.ts'
+import { type AgentPrefs, dayWindows, loadAreas, loadCalendar, loadContext, loadNews, loadPrefs, loadWork, travelRules } from './context.ts'
 
 type Household = { id: string; timezone: string }
 export type Tab = Member | typeof TOGETHER
@@ -79,6 +86,7 @@ export async function routineInput(db: SupabaseClient, now: Date) {
   const tabs: { key: string; name: string; input: unknown }[] = []
   const news: { key: string; headlines: unknown }[] = []
   const work: { key: string; input: unknown }[] = []
+  const ideas: { key: string; input: unknown }[] = []
   for (const household of (households ?? []) as Household[]) {
     const { date } = localNow(now, household.timezone)
     const headlines = await loadNews(db, household.id)
@@ -100,6 +108,12 @@ export async function routineInput(db: SupabaseClient, now: Date) {
     const people = aiPeople(ctx, prefs)
     if (!people.length) continue
     const state = await loadWork(db, household.id)
+    // One small task in each area of life, for each of them.
+    const areas = await loadAreas(db, household.id, ctx.today, state.wedding)
+    for (const person of people) {
+      const input = ideasFor(ctx, areas, state.wedding.categoryId, person)
+      if (input.areas.length) ideas.push({ key: `${household.id}:ideas:${person.id}:${ctx.today}`, input })
+    }
     const jobs = workJobs(ctx, people, state)
     const limits = workLimits(state, ctx.today)
     if (jobs.length && (limits.done || limits.asks)) {
@@ -118,7 +132,49 @@ export async function routineInput(db: SupabaseClient, now: Date) {
     work_instructions: `${WORK_PROMPT} Each job's ref is its id: answer with those refs.`,
     work_answer: WORK_ANSWER,
     work,
+    ideas_instructions: IDEAS_PROMPT,
+    ideas_answer: IDEAS_ANSWER,
+    ideas,
   }
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** One person's areas without an open idea, each with its facts and the titles of their open jobs there. */
+function ideasFor(ctx: TaskContext, src: AreaSource, weddingCategory: string | null, person: Member) {
+  const facts = areaFacts(src, person.id, ctx.today)
+  const categoryName = (id: string | null) => ctx.categories.find((c) => c.id === id)?.name.trim().toLowerCase()
+  const inArea = (area: (typeof AREAS)[number], categoryId: string | null) =>
+    (area.key === 'wedding' && categoryId !== null && categoryId === weddingCategory) || (area.names as readonly string[]).includes(categoryName(categoryId) ?? '')
+  const areas = areasFree(src, person.id).map((key: AreaKey) => {
+    const area = AREAS.find((a) => a.key === key)!
+    const open_jobs = ctx.open
+      .filter((o) => inArea(area, o.category_id) && [person.id, null].includes(ownerOf(o, ctx.categories, ctx.lists)))
+      .map((o) => o.title)
+      .slice(0, 8)
+    return { area: key, label: area.label, facts: facts[key], open_jobs }
+  })
+  return ideasInput(person.name, ctx.today, WEEKDAYS[new Date(`${ctx.today}T12:00:00Z`).getUTCDay()], areas)
+}
+
+/** Claude's ideas for one person, checked against the areas still free now, added to their list for today. */
+export async function routineSaveIdeas(db: SupabaseClient, body: { key?: unknown; items?: unknown }, now: Date) {
+  const [householdId, kind, personId, date] = typeof body.key === 'string' ? body.key.split(':') : []
+  if (!householdId || kind !== 'ideas' || !personId || !date) return { status: 'error', message: 'Unknown key.' }
+  const { data: household, error } = await db.from('households').select('id, timezone').eq('id', householdId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!household) return { status: 'error', message: 'Unknown key.' }
+  const prefs = await loadPrefs(db, householdId)
+  const ctx = await contextFor(db, household as Household, now, prefs)
+  if (ctx.today !== date) return { status: 'error', message: 'Those areas are from another day.' }
+  const person = aiPeople(ctx, prefs).find((m) => m.id === personId)
+  if (!person) return { status: 'error', message: 'Unknown key.' }
+  const state = await loadWork(db, householdId)
+  const items = cleanIdeas(body.items, areasFree(await loadAreas(db, householdId, ctx.today, state.wedding), person.id))
+  if (!items.length) return { status: 'error', message: 'Nothing usable: unknown areas, areas with an idea still open, or not in the expected shape.' }
+  const saved = await db.rpc('agent_save_ideas', { p_household_id: householdId, p_person: person.id, p_day: date, p_items: items })
+  if (saved.error) throw new Error(saved.error.message)
+  return { status: 'ok', added: saved.data as number }
 }
 
 export async function routineSave(db: SupabaseClient, body: { key?: unknown; picks?: unknown }, now: Date) {

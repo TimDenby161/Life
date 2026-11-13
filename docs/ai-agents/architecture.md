@@ -197,6 +197,15 @@ For each job the routine either leaves it, asks, or does it with web search, and
 
 This is the one place an agent changes application data without an approval; it was asked for on 12 November 2026.
 
+## Daily ideas (13 Nov 2026)
+
+Tim asked for tasks in every area of life to land on the daily list, added rather than suggested. So each morning the routine adds one small task (5 to 45 minutes) in each of finance, wedding, meals, holidays, shopping, health, table tennis, side hustles, people and languages, for each person with AI picks on.
+
+- **Input** (`priorities-input` → `ideas`): per person, the areas without an open idea of theirs, each with a few facts from `loadAreas` (savings goal names, the wedding month and venue and guest counts, trip names and dates, shopping list names and dates, birthdays and friends not seen for a while, languages studied, the last coaching day, side hustle names, how many meals are planned) and the titles of their open jobs there. Names and dates only: no amounts, notes, or health readings or exercise (health gets no facts).
+- **Output** (`ideas-save`): `{area, title, minutes}` per area, checked by `cleanIdeas` against the areas still free, then written by `agent_save_ideas` (service role only): on the person's own list, for them, due today, under the area's category (the wedding checklist's for the wedding; one named for the area that isn't the other person's, made if missing; none if the name is taken by the other person's category). `tasks.ai_area` marks them and isn't client-writable.
+- **Limits**: one open idea per area per person, so they never pile up; they're ordinary tasks you tick off or delete. Personal-list tasks post nothing to the feed.
+- **Home**: tasks added today for today (by hand or as ideas) always show in Today's tasks, even when the AI plan is full (`added` in `todaysPlan`).
+
 ## Home and per-tab picks (7 Nov 2026)
 
 Home's agent view is three cards and nothing else: **Today (weekday)**, the rest of today's calendar (my calendars and shared ones with "Plan around it" on, read live, finished events dropped); **Tasks I can do today**, the Top jobs card with the day's AI picks first; and **News**, the top five headlines from the first RSS source in the Feed (one tap adds BBC News if there's none).

@@ -1,4 +1,4 @@
-import { ExternalLink, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { CalendarDays, ExternalLink, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
@@ -12,30 +12,55 @@ import { formatDay, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { type WantFields, type WantRow, useDeleteWant, useSaveWant, useSetBought, useWants } from './api'
-import { splitWants, urgency } from './lib/sort'
+import {
+  type ListItem,
+  type ShoppingTask,
+  type WantFields,
+  type WantRow,
+  useAddListItem,
+  useDeleteListItem,
+  useDeleteWant,
+  useSaveWant,
+  useSetBought,
+  useShoppingTask,
+  useUpdateListItem,
+  useWants,
+} from './api'
+import { fromChecklist, splitWants, urgency } from './lib/sort'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 
+/** One line on the page: something added here, or an item on the Shoppinglist task's checklist. */
+type Row = (WantRow & { source: 'want' }) | ReturnType<typeof fromChecklist<ListItem>>
+
 export default function ShoppingPage() {
   const wants = useWants()
-  const [editing, setEditing] = useState<Partial<WantRow> | null>(null)
+  const task = useShoppingTask()
+  const [editing, setEditing] = useState<Row | null>(null)
   const [showBought, setShowBought] = useState(false)
-  const { dated, whenever, bought } = splitWants(wants.data ?? [])
+  const rows: Row[] = [
+    ...(wants.data ?? []).map((w) => ({ ...w, source: 'want' as const })),
+    ...(task.data?.subtasks ?? []).map(fromChecklist),
+  ]
+  const { dated, whenever, bought } = splitWants(rows)
+  const error = wants.error ?? task.error
 
   return (
     <>
       <PageHeader
         title="Shopping"
-        description="Things you need or would like to buy, with a date if there is one."
-        actions={<Button onClick={() => setEditing({})}><Plus /> Add</Button>}
+        description={
+          task.data
+            ? `Includes your “${task.data.title}” checklist. Tap one to change it.`
+            : 'Things you need or would like to buy. Tap one to change it.'
+        }
       />
-      <QuickAdd />
-      {wants.error ? (
-        <ErrorState error={wants.error} onRetry={() => wants.refetch()} />
-      ) : wants.isPending ? (
+      <QuickAdd task={task.data ?? null} />
+      {error ? (
+        <ErrorState error={error} onRetry={() => { void wants.refetch(); void task.refetch() }} />
+      ) : wants.isPending || task.isPending ? (
         <ListSkeleton rows={4} />
-      ) : !wants.data.length ? (
+      ) : !rows.length ? (
         <Card>
           <EmptyState icon={ShoppingBag} title="Nothing on the list" description="Add something you need or would like to buy." />
         </Card>
@@ -57,15 +82,21 @@ export default function ShoppingPage() {
           ) : null}
         </>
       )}
-      {editing ? <WantDialog want={editing} onClose={() => setEditing(null)} /> : null}
+      {editing?.source === 'want' ? <WantDialog want={editing} onClose={() => setEditing(null)} /> : null}
+      {editing?.source === 'list' ? <ListItemDialog item={editing.item} taskTitle={task.data?.title ?? 'Shoppinglist'} onClose={() => setEditing(null)} /> : null}
     </>
   )
 }
 
-/** Type a name (and optionally a date) and press Enter. */
-function QuickAdd() {
+/**
+ * Type a name, optionally tap the calendar for a date, and press Enter. With a
+ * Shoppinglist task it goes on that checklist, so the task and this page stay one list.
+ */
+function QuickAdd({ task }: { task: ShoppingTask | null }) {
   const { me } = useHousehold()
-  const save = useSaveWant()
+  const saveWant = useSaveWant()
+  const addItem = useAddListItem()
+  const pending = saveWant.isPending || addItem.isPending
   const [name, setName] = useState('')
   const [needBy, setNeedBy] = useState('')
 
@@ -74,61 +105,87 @@ function QuickAdd() {
       className="mb-2 flex gap-2"
       onSubmit={(e) => {
         e.preventDefault()
-        if (!name.trim()) return
-        save.mutate(
-          { name: name.trim(), need_by: needBy || null, owner_id: me.id },
-          { onSuccess: () => { setName(''); setNeedBy('') }, onError },
-        )
+        if (!name.trim() || pending) return
+        const done = { onSuccess: () => { setName(''); setNeedBy('') }, onError }
+        if (task) addItem.mutate({ task, title: name.trim(), dueDate: needBy || null }, done)
+        else saveWant.mutate({ name: name.trim(), need_by: needBy || null, owner_id: me.id }, done)
       }}
     >
-      <Input aria-label="Thing to buy" placeholder="Add something…" maxLength={80} className="min-w-0 flex-1" value={name} onChange={(e) => setName(e.target.value)} />
-      <Input aria-label="Need it by" type="date" min={todayISO()} className="w-36 shrink-0" value={needBy} onChange={(e) => setNeedBy(e.target.value)} />
-      <Button type="submit" size="icon" aria-label="Add" disabled={save.isPending || !name.trim()}><Plus /></Button>
+      <Input aria-label="Thing to buy" placeholder="Add something…" maxLength={task ? 200 : 80} enterKeyHint="done" className="min-w-0 flex-1" value={name} onChange={(e) => setName(e.target.value)} />
+      {/* A small calendar button: the real date box sits invisibly on top, so tapping it opens the phone's own date picker. */}
+      <label
+        className={cn(
+          'relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-input bg-card px-3 text-sm',
+          needBy ? 'font-medium text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        <CalendarDays className="size-4" aria-hidden />
+        {needBy ? formatDay(needBy).replace(/^Today \(.*\)$/, 'Today') : <span className="sr-only">Need it by</span>}
+        <input
+          type="date"
+          aria-label="Need it by"
+          min={todayISO()}
+          value={needBy}
+          onChange={(e) => setNeedBy(e.target.value)}
+          className="absolute inset-0 size-full cursor-pointer opacity-0"
+        />
+      </label>
+      <Button type="submit" size="icon" className="size-10 shrink-0" aria-label="Add" disabled={pending || !name.trim()}><Plus /></Button>
     </form>
   )
 }
 
-function WantList({ title, rows, onEdit, action }: { title: string; rows: WantRow[]; onEdit: (w: WantRow) => void; action?: React.ReactNode }) {
+function WantList({ title, rows, onEdit, action }: { title: string; rows: Row[]; onEdit: (w: Row) => void; action?: React.ReactNode }) {
   const { me, partner } = useHousehold()
   const setBought = useSetBought()
-  const del = useDeleteWant()
+  const updateItem = useUpdateListItem()
+  const tick = (w: Row, bought: boolean) =>
+    w.source === 'list' ? updateItem.mutate({ id: w.id, is_done: bought }, { onError }) : setBought.mutate({ id: w.id, bought }, { onError })
   const today = todayISO()
-  const who = (id: string | null) => (id === me.id ? me.display_name : id && id === partner?.id ? partner.display_name : null)
+  // Your own things need no name; your partner's and shared ones do.
+  const who = (id: string | null) => (id === me.id ? null : id && id === partner?.id ? partner.display_name : 'Both')
 
   return (
     <section>
       <SectionTitle action={action}>{title}</SectionTitle>
-      <Card className="p-2">
+      <Card className="p-1.5">
         <ul className="divide-y">
           {rows.map((w) => {
             const due = w.need_by && !w.bought_at ? urgency(w.need_by, today) : null
+            const sub = w.source === 'want' ? [who(w.owner_id), w.note].filter(Boolean).join(' · ') : ''
+            const url = w.source === 'want' ? w.url : null
             return (
-              <li key={w.id} className="flex items-center gap-3 px-2 py-2.5 text-sm">
-                <Checkbox
-                  aria-label={w.bought_at ? `Put ${w.name} back on the list` : `Bought ${w.name}`}
-                  checked={!!w.bought_at}
-                  onCheckedChange={(c) => setBought.mutate({ id: w.id, bought: c === true }, { onError })}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className={cn('flex items-center gap-1.5 font-medium', w.bought_at && 'text-muted-foreground line-through')}>
-                    <span className="truncate">{w.name}</span>
-                    {w.url ? (
-                      <a href={w.url} target="_blank" rel="noreferrer noopener" aria-label={`Open link for ${w.name}`} className="shrink-0 text-muted-foreground hover:text-foreground">
-                        <ExternalLink className="size-3.5" />
-                      </a>
-                    ) : null}
+              <li key={w.id} className="flex items-center text-sm">
+                {/* Big tap area round the tick. */}
+                <label className="grid shrink-0 cursor-pointer place-items-center self-stretch px-3">
+                  <Checkbox
+                    aria-label={w.bought_at ? `Put ${w.name} back on the list` : `Bought ${w.name}`}
+                    checked={!!w.bought_at}
+                    onCheckedChange={(c) => tick(w, c === true)}
+                  />
+                </label>
+                <button type="button" onClick={() => onEdit(w)} className="flex min-w-0 flex-1 items-center gap-2 py-3 pr-2 text-left" aria-label={`Change ${w.name}`}>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('line-clamp-2 break-words font-medium', w.bought_at && 'text-muted-foreground line-through')}>{w.name}</span>
+                    {sub ? <span className="block truncate text-xs text-muted-foreground">{sub}</span> : null}
                   </span>
-                  {w.note || who(w.owner_id) ? (
-                    <span className="block truncate text-xs text-muted-foreground">{[who(w.owner_id), w.note].filter(Boolean).join(' · ')}</span>
+                  {w.need_by ? (
+                    <span className={cn('shrink-0 text-xs', due === 'late' ? 'font-medium text-destructive' : due === 'soon' ? 'font-medium text-warning' : 'text-muted-foreground')}>
+                      {formatDay(w.need_by).replace(/^Today \(.*\)$/, 'Today')}
+                    </span>
                   ) : null}
-                </span>
-                {w.need_by ? (
-                  <span className={cn('shrink-0 text-xs', due === 'late' ? 'font-medium text-destructive' : due === 'soon' ? 'font-medium text-warning' : 'text-muted-foreground')}>
-                    {formatDay(w.need_by)}
-                  </span>
+                </button>
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    aria-label={`Open link for ${w.name}`}
+                    className="grid size-10 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
+                  >
+                    <ExternalLink className="size-4" />
+                  </a>
                 ) : null}
-                <Button size="icon-sm" variant="ghost" aria-label={`Edit ${w.name}`} onClick={() => onEdit(w)}><Pencil /></Button>
-                <Button size="icon-sm" variant="ghost" aria-label={`Remove ${w.name}`} onClick={() => del.mutate(w.id, { onError })}><Trash2 /></Button>
               </li>
             )
           })}
@@ -138,9 +195,52 @@ function WantList({ title, rows, onEdit, action }: { title: string; rows: WantRo
   )
 }
 
+/** A Shoppinglist checklist item: its name and date, as on the task. */
+function ListItemDialog({ item, taskTitle, onClose }: { item: ListItem; taskTitle: string; onClose: () => void }) {
+  const update = useUpdateListItem()
+  const del = useDeleteListItem()
+  const [title, setTitle] = useState(item.title)
+  const [dueDate, setDueDate] = useState(item.due_date ?? '')
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent title={`Edit ${item.title}`} description={`On your “${taskTitle}” checklist`}>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            update.mutate({ id: item.id, title: title.trim(), due_date: dueDate || null }, { onSuccess: onClose, onError })
+          }}
+        >
+          <Field label="What" htmlFor="item-name">
+            <Input id="item-name" required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <Field label="Need it by" htmlFor="item-date" hint="Leave empty if there's no rush.">
+            <Input id="item-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </Field>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              type="button"
+              className="text-destructive sm:mr-auto"
+              disabled={del.isPending}
+              onClick={() => del.mutate(item.id, { onSuccess: onClose, onError })}
+            >
+              <Trash2 /> Remove
+            </Button>
+            <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={update.isPending || !title.trim()}>Save</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function WantDialog({ want, onClose }: { want: Partial<WantRow>; onClose: () => void }) {
   const { me, partner } = useHousehold()
   const save = useSaveWant()
+  const del = useDeleteWant()
   const [form, setForm] = useState<WantFields>({
     owner_id: want.id ? (want.owner_id ?? null) : me.id,
     name: want.name ?? '',
@@ -165,7 +265,7 @@ function WantDialog({ want, onClose }: { want: Partial<WantRow>; onClose: () => 
           }}
         >
           <Field label="What" htmlFor="want-name">
-            <Input id="want-name" autoFocus required maxLength={80} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+            <Input id="want-name" autoFocus={!want.id} required maxLength={80} value={form.name} onChange={(e) => set({ name: e.target.value })} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="For" htmlFor="want-owner">
@@ -186,6 +286,17 @@ function WantDialog({ want, onClose }: { want: Partial<WantRow>; onClose: () => 
             <Textarea id="want-note" rows={2} maxLength={300} value={form.note ?? ''} onChange={(e) => set({ note: e.target.value })} />
           </Field>
           <DialogFooter>
+            {want.id ? (
+              <Button
+                variant="ghost"
+                type="button"
+                className="text-destructive sm:mr-auto"
+                disabled={del.isPending}
+                onClick={() => del.mutate(want.id!, { onSuccess: onClose, onError })}
+              >
+                <Trash2 /> Remove
+              </Button>
+            ) : null}
             <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={save.isPending}>Save</Button>
           </DialogFooter>

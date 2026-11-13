@@ -76,7 +76,7 @@ import {
 } from './context.ts'
 import { notifyBriefings, notifyTest, vapidFromEnv } from './notify.ts'
 import { pickPriorities } from './priorities.ts'
-import { routineInput, routineSave, routineSaveNews, routineSaveWork, savePicks, tabsFor } from './routine.ts'
+import { routineInput, routineSave, routineSaveIdeas, routineSaveNews, routineSaveWork, savePicks, tabsFor } from './routine.ts'
 import { noUsage, type Usage, writeSummary } from './summary.ts'
 
 type Trigger = 'scheduled' | 'event' | 'manual'
@@ -390,7 +390,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  if (body.mode === 'priorities-input' || body.mode === 'priorities-save' || body.mode === 'news-save' || body.mode === 'work-save') {
+  if (body.mode === 'priorities-input' || body.mode === 'priorities-save' || body.mode === 'news-save' || body.mode === 'work-save' || body.mode === 'ideas-save') {
     const secret = Deno.env.get('PRIORITIES_SECRET')
     const given = req.headers.get('x-priorities-secret') ?? ''
     if (!secret || !sameSecret(given, secret)) return json(req, { status: 'error', message: 'Not authorised.' }, 401)
@@ -398,6 +398,7 @@ Deno.serve(async (req) => {
       const db = serviceClient()
       if (body.mode === 'news-save') return json(req, await routineSaveNews(db, body as { key?: unknown; items?: unknown }, now))
       if (body.mode === 'work-save') return json(req, await routineSaveWork(db, body as { key?: unknown; items?: unknown }, now))
+      if (body.mode === 'ideas-save') return json(req, await routineSaveIdeas(db, body as { key?: unknown; items?: unknown }, now))
       return json(req, body.mode === 'priorities-input' ? await routineInput(db, now) : await routineSave(db, body as { key?: unknown; picks?: unknown }, now))
     } catch (e) {
       return json(req, { status: 'error', message: safeError(e) }, 500)
