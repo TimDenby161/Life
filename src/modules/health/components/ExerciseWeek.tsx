@@ -1,5 +1,5 @@
 import { format, startOfWeek } from 'date-fns'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Users, X } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Sparkles, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -129,7 +129,7 @@ export function ExerciseWeek() {
         <span><CalendarDays className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />Calendar</span>
         <span className="font-semibold text-primary">You set</span>
         <span><Check className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />Logged</span>
-        <span>Plain: the coach</span>
+        <span><Sparkles className="mr-1 inline size-3.5 align-[-2px] text-primary" aria-hidden />Coach suggests</span>
         <span><Users className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />Both</span>
       </p>
       {noGoals.length ? (
@@ -164,7 +164,9 @@ function Chips({ items, inline }: { items: Item[]; inline?: boolean }) {
         >
           {i.source === 'calendar' ? <CalendarDays className="mr-1 inline size-3.5 align-[-2px] text-muted-foreground" aria-hidden /> : null}
           {i.source === 'logged' ? <Check className="mr-1 inline size-3.5 align-[-2px] text-success" aria-hidden /> : null}
+          {i.source === 'coach' ? <Sparkles className="mr-1 inline size-3.5 align-[-2px] text-primary" aria-label="Coach suggests" /> : null}
           {i.activity}
+          {i.time ? <span className="ml-1 text-xs font-normal text-muted-foreground">{i.time}</span> : null}
           {i.title ? <span className={cn('text-xs font-normal text-muted-foreground', inline ? 'ml-1' : 'block')}>{i.title}</span> : null}
         </span>
       ))}

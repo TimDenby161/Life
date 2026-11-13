@@ -31,7 +31,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
   finances: { label: 'Finance', agents: ['finance'], extra: 'finance' },
   wedding: { label: 'Plan', description: 'The venues you’re looking at and the jobs to do.', agents: ['wedding'], extra: 'wedding' },
   languages: { label: 'Words', description: 'The words you know, the ones you’ve got wrong, and any to review again.', agents: ['language_coach'], extra: 'languages' },
-  health: { label: 'Coach', description: 'Your exercise week, from your calendars and goals. Tap a day to change it.', agents: ['health_coach'], extra: 'exercise', goals: 'fitness' },
+  health: { label: 'Coach', agents: ['health_coach'], extra: 'exercise', goals: 'fitness' },
   stats: { label: 'Workload', description: 'How the joint jobs are shared.', agents: ['task_manager'], kinds: ['workload'] },
 }
 
