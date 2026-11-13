@@ -1,5 +1,5 @@
 import { CheckCircle2, ChevronDown, ChevronUp, MessageSquarePlus, Plus, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -228,6 +228,33 @@ function useOutOverride(today: string): [(tab: string) => Place | undefined, (ta
   return [(tab) => tabs[tab], set]
 }
 
+/**
+ * How long each of today's planned jobs is, remembered on this device while
+ * they're open, so the time of one that's later deleted can be refilled.
+ */
+function usePickMinutes(today: string, seen: [string, number][]): Record<string, number> {
+  const read = (): Record<string, number> => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('life.pickMinutes') ?? '{}') as { day?: string; minutes?: Record<string, number> }
+      return saved.day === today ? (saved.minutes ?? {}) : {}
+    } catch {
+      return {}
+    }
+  }
+  const stored = read()
+  const missing = seen.filter(([id, m]) => stored[id] !== m)
+  const merged = missing.length ? { ...stored, ...Object.fromEntries(missing) } : stored
+  useEffect(() => {
+    if (!missing.length) return
+    try {
+      localStorage.setItem('life.pickMinutes', JSON.stringify({ day: today, minutes: merged }))
+    } catch {
+      // Private browsing: a deleted job's time falls back to 15 minutes.
+    }
+  })
+  return merged
+}
+
 /** Jobs swiped away today on this device. */
 function useSwipedToday(today: string): [Set<string>, (id: string) => void] {
   const read = (): string[] => {
@@ -347,17 +374,25 @@ export function TopJobsCard({
     !(o.due_date && o.due_date > today) &&
     (goodDayToAsk(today) || !isWorkAsk(o.task.title)) &&
     (!isShopJob(o.task.title) || jobMinutes(o) <= shopGapNow)
-  // Finishing a job never brings in another. With the AI's plan, only time freed by a pick swiped off to tomorrow
-  // is refilled; without it, jobs done today still count against today's free time.
+  // Finishing a job never brings in another, and nor does putting one off (Tim, 13 Nov). With the AI's plan, only
+  // time freed by a planned job that was deleted is refilled; without it, jobs done today still count against today's free time.
   const doneToday = (recentlyDone.data ?? []).filter(
     (o) => o.completed_at && toISODate(new Date(o.completed_at)) === today && inView(o.task, who, categories, lists),
   )
   const doneMinutes = doneToday.filter((o) => !isWork(o)).reduce((sum, o) => sum + jobMinutes(o), 0)
-  // A pick swiped off to tomorrow frees its time for another job; one whose date was changed by hand doesn't.
-  const movedMinutes = (picks ?? []).reduce((sum, p) => {
+  // A planned job that was deleted (gone from the open list without being done today) frees its time for another.
+  // Its length is remembered on this device from when it was open, since a deleted task can't be looked up.
+  const pickMinutes = usePickMinutes(today, (picks ?? []).flatMap((p) => {
     const o = open.data?.find((x) => x.task_id === p.task_id)
-    return o?.due_date && o.due_date > today && swiped.has(o.id) ? sum + jobMinutes(o) : sum
-  }, 0)
+    return o ? [[p.task_id, jobMinutes(o)] as [string, number]] : []
+  }))
+  const deletedMinutes = open.data && recentlyDone.data
+    ? (picks ?? []).reduce(
+        (sum, p) =>
+          open.data.some((x) => x.task_id === p.task_id) || recentlyDone.data.some((x) => x.task_id === p.task_id) ? sum : sum + (pickMinutes[p.task_id] ?? 15),
+        0,
+      )
+    : 0
   const plan = limit
     ? todaysPlan(ranked, picks?.length ? new Set(ai.notes.keys()) : null, {
         score: (o) => taskScore(o, categories, today),
@@ -366,7 +401,7 @@ export function TopJobsCard({
         isWork,
         workBudget: workNow,
         fits,
-        backfill: movedMinutes + offWorkMinutes,
+        backfill: deletedMinutes + offWorkMinutes,
         // Added today for today, by hand (Home's +) or as the morning's daily idea for an area: shows even when the AI plan is full.
         added: (o) => o.due_date === today && toISODate(new Date(o.task.created_at)) === today && !o.task.ai_asks_task_id,
       })

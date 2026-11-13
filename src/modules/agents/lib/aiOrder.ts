@@ -50,7 +50,7 @@ export type PlanRules<T> = {
   workBudget?: number
   /** Anything else a job needs today, e.g. the shops open. */
   fits?: (o: T) => boolean
-  /** Most minutes of other jobs to add after the AI's picks: the time freed by picks moved to another day. */
+  /** Most minutes of other jobs to add after the AI's picks: the time freed by picks that were deleted (never by ones put off or done). */
   backfill?: number
   /** Jobs someone added by hand for today: always on today's list, before anything else, whatever the time left. */
   added?: (o: T) => boolean
@@ -59,9 +59,9 @@ export type PlanRules<T> = {
 /**
  * Home's Today's tasks: what can realistically get done in the time left today.
  * The AI's picks still open (`picked`) come first, in its order, less whatever
- * no longer fits as the day fills up. Time freed by a pick moved to another day
+ * no longer fits as the day fills up. Time freed by a pick that was deleted
  * (`backfill`) is filled with jobs due today or late, best first; finishing a
- * job never brings in another. Without AI picks it's those jobs alone. A job
+ * job or putting it off never brings in another. Without AI picks it's those jobs alone. A job
  * added by hand for today (`added`) always shows, first, and uses up the time.
  */
 export function todaysPlan<T extends { task_id: string }>(ranked: T[], picked: ReadonlySet<string> | null, rules: PlanRules<T>): T[] {

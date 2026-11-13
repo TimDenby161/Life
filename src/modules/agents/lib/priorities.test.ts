@@ -146,16 +146,16 @@ describe('Today’s plan on Home', () => {
     const ranked = [job('a', 200), job('b', 150), job('c', 120), job('later', 50)]
     expect(plan(ranked, new Set(['c', 'a']), 30)).toEqual(['a', 'c'])
     expect(plan(ranked, new Set(['c', 'a']))).toEqual(['a', 'c', 'b'])
-    // A pick moved to tomorrow leaves the list, and its time goes to the next job.
+    // A pick gone from the list (deleted) has its time go to the next job.
     expect(plan(ranked.filter((o) => o.task_id !== 'c'), new Set(['c', 'a']), 30)).toEqual(['a', 'b'])
   })
 
-  it('never brings in a new job when one is finished, only for time freed by a moved one', () => {
+  it('never brings in a new job when one is finished or put off, only for time freed by a deleted one', () => {
     const ranked = [job('a', 200, 30), job('b', 150, 30), job('next', 120, 30)]
     const rules = (backfill: number) => ({ score: (o: Job) => o.score, minutes: (o: Job) => o.minutes, budget: 240, backfill })
     // 'c' was picked and finished: it's gone from the open list, and nothing replaces it.
     expect(todaysPlan(ranked, new Set(['a', 'b', 'c']), rules(0)).map((o) => o.task_id)).toEqual(['a', 'b'])
-    // 'c' was moved to tomorrow, freeing 30 minutes: the next job due takes its place.
+    // 'c' was deleted, freeing 30 minutes: the next job due takes its place.
     expect(todaysPlan(ranked, new Set(['a', 'b', 'c']), rules(30)).map((o) => o.task_id)).toEqual(['a', 'b', 'next'])
   })
 
