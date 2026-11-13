@@ -5,13 +5,6 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(10);
 
-create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
-begin
-  perform set_config('role', 'authenticated', true);
-  perform set_config('request.jwt.claims', json_build_object('sub', p_id, 'role', 'authenticated')::text, true);
-end $$;
-grant execute on all functions in schema pg_temp to authenticated, anon;
-
 select set_config('t.tim', '11111111-1111-1111-1111-111111111111', true);
 select set_config('t.sophie', '22222222-2222-2222-2222-222222222222', true);
 select set_config('t.out', '33333333-3333-3333-3333-333333333333', true);
@@ -50,11 +43,8 @@ select throws_ok(
   '42501', null, 'only for members of the household');
 
 -- Clients can neither call it nor set ai_area.
-select pg_temp.as_user(current_setting('t.tim')::uuid);
-select throws_ok(
-  format($$select agent_save_ideas(%L, %L, current_date, '[]')$$, current_setting('t.hh'), current_setting('t.tim')),
-  '42501', null, 'a signed-in person cannot call it');
-select throws_ok($$update tasks set ai_area = 'finance' where ai_area = 'table_tennis'$$, '42501', null, 'ai_area is not client-writable');
+select ok(not has_function_privilege('authenticated', 'public.agent_save_ideas(uuid, uuid, date, jsonb)', 'execute'), 'a signed-in person cannot call it');
+select ok(not has_column_privilege('authenticated', 'public.tasks', 'ai_area', 'update'), 'ai_area is not client-writable');
 
 select * from finish();
 rollback;
