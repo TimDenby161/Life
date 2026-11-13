@@ -99,6 +99,17 @@ export const useSaveAgentSetting = () =>
     else unwrap(inserted)
   })
 
+/** Saves agent settings; fitness goals also refresh the Coach week, which plans from them. */
+export const useSaveAgentSettingAndWeek = () => {
+  const save = useSaveAgentSetting()
+  const qc = useQueryClient()
+  return {
+    ...save,
+    mutate: (args: Parameters<typeof save.mutate>[0], options?: Parameters<typeof save.mutate>[1]) =>
+      save.mutate(args, { ...options, onSuccess: (...a) => { qc.invalidateQueries({ queryKey: ['health', 'plan-goals'] }); options?.onSuccess?.(...a) } }),
+  }
+}
+
 /** Saves my settings for one agent's goals, keeping whether it's on and its schedule. */
 export const useSaveAgentConfig = (agentId: string, row: AgentSetting | undefined) => {
   const save = useSaveAgentSetting()

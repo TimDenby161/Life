@@ -119,17 +119,32 @@ export const useExercisePlan = (monday: string, sunday: string) =>
 export const useExerciseGoals = () =>
   useQuery({ queryKey: planKeys.goals, queryFn: async () => unwrap(await supabase.rpc('exercise_goals')) })
 
-/** The coach's draft, saved only into an empty week. Another phone drafting the same week first is fine. */
-export const useSaveDraft = () =>
-  useHealthMutation(async (h, cells: { day: string; owner_id: string | null; activity: string }[]) => {
-    const { error } = await supabase.from('exercise_plan').insert(cells.map((c) => ({ ...c, household_id: h, by_coach: true })))
-    if (error && error.code !== '23505') throw error
+type BoxWrite = { id?: string; activity: string | null; remove?: boolean }
+
+/**
+ * Save a day from the box dialog: the person's own box and the shared one
+ * together. activity null on the person = Rest; `remove` deletes the row.
+ */
+export const useSaveDay = () =>
+  useHealthMutation(async (h, { day, person, mine, both }: { day: string; person: string; mine: BoxWrite; both?: BoxWrite }) => {
+    const write = async (owner_id: string | null, w: BoxWrite) => {
+      if (w.remove) return w.id ? unwrap(await supabase.from('exercise_plan').delete().eq('id', w.id)) : null
+      return w.id
+        ? unwrap(await supabase.from('exercise_plan').update({ activity: w.activity }).eq('id', w.id))
+        : unwrap(await supabase.from('exercise_plan').insert({ household_id: h, day, owner_id, activity: w.activity }))
+    }
+    await write(person, mine)
+    if (both) await write(null, both)
   })
 
-/** Set one day for one person (or Together). Null = rest. */
-export const useSetPlanCell = () =>
-  useHealthMutation(async (h, { id, day, owner_id, activity }: { id?: string; day: string; owner_id: string | null; activity: string | null }) =>
-    id
-      ? unwrap(await supabase.from('exercise_plan').update({ activity }).eq('id', id))
-      : unwrap(await supabase.from('exercise_plan').insert({ household_id: h, day, owner_id, activity })),
+/** What calendar titles mean ("GS1" = TT match; activity null = not exercise). */
+export const useExerciseNames = () =>
+  useQuery({ queryKey: ['health', 'names'], queryFn: async () => unwrap(await supabase.from('exercise_names').select('*').order('phrase')) })
+
+export const useSaveExerciseName = () =>
+  useHealthMutation(async (h, n: { owner_id: string | null; phrase: string; activity: string | null }) =>
+    unwrap(await supabase.from('exercise_names').insert({ ...n, household_id: h, phrase: n.phrase.trim().slice(0, 60), activity: n.activity?.trim().slice(0, 40) || null })),
   )
+
+export const useDeleteExerciseName = () =>
+  useHealthMutation(async (_h, id: string) => unwrap(await supabase.from('exercise_names').delete().eq('id', id)))

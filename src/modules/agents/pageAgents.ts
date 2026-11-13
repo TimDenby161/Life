@@ -17,7 +17,11 @@ export type PageAgent = {
   limit?: number
   /** No visible title, description or agent / Details switch (Home keeps it clean). */
   bare?: boolean
+  /** A third tab, Goals, where the agent's goals are set (the Coach's weekly exercise goals). */
+  goals?: 'fitness'
 }
+
+export type PageViewName = 'agent' | 'details' | 'goals'
 
 export const PAGE_AGENTS: Record<string, PageAgent> = {
   home: { label: 'Today', description: 'The rest of today’s calendar, the jobs you can do today, and the news.', agents: ['chief_of_staff'], extra: 'today', bare: true },
@@ -27,7 +31,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
   finances: { label: 'Finance', agents: ['finance'], extra: 'finance' },
   wedding: { label: 'Plan', description: 'The venues you’re looking at and the jobs to do.', agents: ['wedding'], extra: 'wedding' },
   languages: { label: 'Words', description: 'The words you know, the ones you’ve got wrong, and any to review again.', agents: ['language_coach'], extra: 'languages' },
-  health: { label: 'Coach', description: 'Who’s exercising which day. Tap a day to change it.', agents: ['health_coach'], extra: 'exercise' },
+  health: { label: 'Coach', description: 'Your exercise week, from your calendars and goals. Tap a day to change it.', agents: ['health_coach'], extra: 'exercise', goals: 'fitness' },
   stats: { label: 'Workload', description: 'How the joint jobs are shared.', agents: ['task_manager'], kinds: ['workload'] },
 }
 
@@ -36,9 +40,9 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
  * or points inside the page (a query such as ?lang=zh, or a sub-path), so deep
  * links keep working.
  */
-export function pageView(pathname: string, base: string, params: URLSearchParams): 'agent' | 'details' {
+export function pageView(pathname: string, base: string, params: URLSearchParams): PageViewName {
   const asked = params.get('view')
-  if (asked === 'details' || asked === 'agent') return asked
+  if (asked === 'details' || asked === 'agent' || asked === 'goals') return asked
   const inside = pathname.replace(/\/$/, '') !== base.replace(/\/$/, '') || [...params.keys()].length > 0
   return inside ? 'details' : 'agent'
 }

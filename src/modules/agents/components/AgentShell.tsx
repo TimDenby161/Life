@@ -4,9 +4,10 @@ import { useLocation, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { ListSkeleton } from '@/components/states'
 import { Segmented } from '@/components/ui/misc'
-import { type PageAgent, pageView } from '../pageAgents'
+import { type PageAgent, type PageViewName, pageView } from '../pageAgents'
 
 const AgentView = lazy(() => import('./AgentView'))
+const GoalsView = lazy(() => import('./GoalsView'))
 
 /**
  * A page driven by its agent: opens on the agent view, with the page itself
@@ -17,9 +18,10 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
   const [params, setParams] = useSearchParams()
   const { pathname } = useLocation()
   // Home has no switch, so it's always the agent view unless a link points inside it.
-  const view = pageView(pathname, base, params)
-  const setView = (v: 'agent' | 'details') =>
-    setParams(v === 'agent' ? { view: 'agent' } : (p) => { p.set('view', 'details'); return p }, { replace: true })
+  const asked = pageView(pathname, base, params)
+  const view = asked === 'goals' && !scope.goals ? 'agent' : asked
+  const setView = (v: PageViewName) =>
+    setParams(v === 'details' ? (p) => { p.set('view', 'details'); return p } : { view: v }, { replace: true })
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -33,6 +35,7 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
           options={[
             { value: 'agent', label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
             { value: 'details', label: 'Details' },
+            ...(scope.goals ? [{ value: 'goals' as const, label: 'Goals' }] : []),
           ]}
         />
       )}
@@ -43,6 +46,10 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
             <AgentView scope={scope} onDetails={() => setView('details')} />
           </Suspense>
         </div>
+      ) : view === 'goals' && scope.goals ? (
+        <Suspense fallback={<ListSkeleton rows={3} />}>
+          <GoalsView kind={scope.goals} />
+        </Suspense>
       ) : (
         <Page />
       )}

@@ -677,10 +677,54 @@ export type Database = {
           },
         ]
       }
+      exercise_names: {
+        Row: {
+          activity: string | null
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          owner_id: string | null
+          phrase: string
+        }
+        Insert: {
+          activity?: string | null
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          owner_id?: string | null
+          phrase: string
+        }
+        Update: {
+          activity?: string | null
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          owner_id?: string | null
+          phrase?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_names_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_names_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       exercise_plan: {
         Row: {
           activity: string | null
-          by_coach: boolean
           created_at: string
           day: string
           household_id: string
@@ -691,7 +735,6 @@ export type Database = {
         }
         Insert: {
           activity?: string | null
-          by_coach?: boolean
           created_at?: string
           day: string
           household_id: string
@@ -702,7 +745,6 @@ export type Database = {
         }
         Update: {
           activity?: string | null
-          by_coach?: boolean
           created_at?: string
           day?: string
           household_id?: string

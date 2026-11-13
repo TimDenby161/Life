@@ -21,6 +21,11 @@ describe('agent-driven pages', () => {
     expect(view('/languages?lang=zh&view=agent', '/languages')).toBe('agent')
   })
 
+  it('open Goals when asked', () => {
+    expect(view('/health?view=goals', '/health')).toBe('goals')
+    expect(PAGE_AGENTS.health.goals).toBe('fitness')
+  })
+
   it('cover every page with an agent, using real agents', () => {
     const ids = new Set(modules.map((m) => m.id))
     for (const [page, scope] of Object.entries(PAGE_AGENTS)) {

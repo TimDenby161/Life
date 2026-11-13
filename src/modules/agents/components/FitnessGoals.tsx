@@ -6,7 +6,7 @@ import { Input, NativeSelect } from '@/components/ui/input'
 import { getErrorMessage } from '@/lib/errors'
 import { type ActivityGoal, type FitnessEvent, parseFitnessGoals } from '../../../../supabase/functions/_shared/agents/fitness.ts'
 import type { AgentSchedule } from '../../../../supabase/functions/_shared/agents/registry.ts'
-import { type AgentSetting, useSaveAgentSetting } from '../api'
+import { type AgentSetting, useSaveAgentSettingAndWeek } from '../api'
 
 const TIMES = [1, 2, 3, 4, 5, 6, 7]
 type Kind = 'goal' | 'max' | 'optional'
@@ -14,7 +14,7 @@ const kindOf = (a: ActivityGoal): Kind => (a.max ? 'max' : a.optional ? 'optiona
 
 /** My weekly fitness goals, saved with my Fitness Coach settings (only I can see them). */
 export function FitnessGoals({ row }: { row: AgentSetting | undefined }) {
-  const save = useSaveAgentSetting()
+  const save = useSaveAgentSettingAndWeek()
   const saved = parseFitnessGoals(row?.config)
   const [activeDays, setActiveDays] = useState(saved?.activeDays ?? 0)
   const [activities, setActivities] = useState<ActivityGoal[]>(saved?.activities ?? [])

@@ -1,5 +1,5 @@
--- Exercise week plan: both of you edit every cell, an edit is no longer the
--- coach's, one cell per person per day, outsiders see nothing, and
+-- Exercise week plan: both of you edit every box, one box per person (or both)
+-- per day, who changed it is recorded, outsiders see nothing, and
 -- exercise_goals gives only your own household's activities.
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
@@ -25,19 +25,19 @@ values (current_setting('t.hh')::uuid, current_setting('t.sophie')::uuid, 'healt
 on conflict (user_id, agent_id) do update set config = excluded.config;
 
 select pg_temp.as_user(current_setting('t.tim')::uuid);
-select lives_ok(format($$insert into exercise_plan (household_id, day, owner_id, activity, by_coach) values (%L, '2026-11-16', %L, 'Yoga', true)$$,
-  current_setting('t.hh'), current_setting('t.sophie')), 'the coach''s draft goes in for the other person');
+select lives_ok(format($$insert into exercise_plan (household_id, day, owner_id, activity) values (%L, '2026-11-16', %L, 'Yoga')$$,
+  current_setting('t.hh'), current_setting('t.sophie')), 'either of you sets the other''s box');
 select lives_ok(format($$insert into exercise_plan (household_id, day, activity) values (%L, '2026-11-16', 'Run')$$,
-  current_setting('t.hh')), 'and a Together day');
+  current_setting('t.hh')), 'and a box for both');
 select throws_ok(format($$insert into exercise_plan (household_id, day, activity) values (%L, '2026-11-16', 'Swim')$$,
-  current_setting('t.hh')), '23505', null, 'one Together cell per day');
+  current_setting('t.hh')), '23505', null, 'one shared box per day');
 select is((select activities from exercise_goals() where user_id = current_setting('t.sophie')::uuid),
   '[{"name":"Yoga","times":2}]'::jsonb, 'exercise_goals gives the partner''s activities and nothing else');
 
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 update exercise_plan set activity = null where owner_id = current_setting('t.sophie')::uuid;
-select is((select by_coach from exercise_plan where owner_id = current_setting('t.sophie')::uuid), false, 'a change by hand is no longer the coach''s');
-select throws_ok($$update exercise_plan set by_coach = true$$, '42501', null, 'by_coach is not client-writable on update');
+select is((select updated_by from exercise_plan where owner_id = current_setting('t.sophie')::uuid), current_setting('t.sophie')::uuid, 'who changed it is recorded');
+select throws_ok(format($$update exercise_plan set updated_by = %L$$, current_setting('t.tim')), '42501', null, 'and can''t be forged');
 
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select is((select count(*)::int from exercise_plan), 0, 'an outsider sees nothing');
