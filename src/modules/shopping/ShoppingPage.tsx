@@ -1,4 +1,4 @@
-import { CalendarDays, ExternalLink, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { CalendarDays, ExternalLink, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader, SectionTitle } from '@/components/PageHeader'
@@ -130,6 +130,10 @@ function QuickAdd({ task }: { task: ShoppingTask | null }) {
           className="absolute inset-0 size-full cursor-pointer opacity-0"
         />
       </label>
+      {/* iPhones fill in today as soon as the date picker opens and have no clear button, so this takes the date off. */}
+      {needBy ? (
+        <Button type="button" variant="ghost" size="icon" className="-ml-1 size-10 shrink-0" aria-label="No date" onClick={() => setNeedBy('')}><X /></Button>
+      ) : null}
       <Button type="submit" size="icon" className="size-10 shrink-0" aria-label="Add" disabled={pending || !name.trim()}><Plus /></Button>
     </form>
   )
@@ -195,6 +199,18 @@ function WantList({ title, rows, onEdit, action }: { title: string; rows: Row[];
   )
 }
 
+/** A date box with a button to take the date off (iPhone date pickers can't be left blank). */
+function DateBox({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex gap-2">
+      <Input id={id} type="date" className="min-w-0 flex-1" value={value} onChange={(e) => onChange(e.target.value)} />
+      {value ? (
+        <Button type="button" variant="ghost" size="icon" className="size-10 shrink-0" aria-label="No date" onClick={() => onChange('')}><X /></Button>
+      ) : null}
+    </div>
+  )
+}
+
 /** A Shoppinglist checklist item: its name and date, as on the task. */
 function ListItemDialog({ item, taskTitle, onClose }: { item: ListItem; taskTitle: string; onClose: () => void }) {
   const update = useUpdateListItem()
@@ -216,7 +232,7 @@ function ListItemDialog({ item, taskTitle, onClose }: { item: ListItem; taskTitl
             <Input id="item-name" required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
           </Field>
           <Field label="Need it by" htmlFor="item-date" hint="Leave empty if there's no rush.">
-            <Input id="item-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            <DateBox id="item-date" value={dueDate} onChange={setDueDate} />
           </Field>
           <DialogFooter>
             <Button
@@ -276,7 +292,7 @@ function WantDialog({ want, onClose }: { want: Partial<WantRow>; onClose: () => 
               </NativeSelect>
             </Field>
             <Field label="Need it by" htmlFor="want-date" hint="Leave empty if there's no rush.">
-              <Input id="want-date" type="date" value={form.need_by ?? ''} onChange={(e) => set({ need_by: e.target.value || null })} />
+              <DateBox id="want-date" value={form.need_by ?? ''} onChange={(v) => set({ need_by: v || null })} />
             </Field>
           </div>
           <Field label="Link" htmlFor="want-url">
