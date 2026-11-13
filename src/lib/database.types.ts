@@ -677,6 +677,57 @@ export type Database = {
           },
         ]
       }
+      exercise_plan: {
+        Row: {
+          activity: string | null
+          by_coach: boolean
+          created_at: string
+          day: string
+          household_id: string
+          id: string
+          owner_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          activity?: string | null
+          by_coach?: boolean
+          created_at?: string
+          day: string
+          household_id: string
+          id?: string
+          owner_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          activity?: string | null
+          by_coach?: boolean
+          created_at?: string
+          day?: string
+          household_id?: string
+          id?: string
+          owner_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_plan_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_plan_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       feed_comments: {
         Row: {
           author_id: string
@@ -4209,6 +4260,13 @@ export type Database = {
         Returns: string
       }
       current_household_id: { Args: never; Returns: string }
+      exercise_goals: {
+        Args: never
+        Returns: {
+          activities: Json
+          user_id: string
+        }[]
+      }
       household_today: { Args: { p_household_id: string }; Returns: string }
       is_household_member: {
         Args: { p_household_id: string }

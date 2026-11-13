@@ -99,3 +99,37 @@ export const useSetMorningCheckIn = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: healthKeys.all }),
   })
 }
+
+// --- Exercise week plan (Coach page) ---------------------------------------
+
+export type PlanCell = Tables<'exercise_plan'>
+export const planKeys = {
+  week: (monday: string) => ['health', 'plan', monday] as const,
+  goals: ['health', 'plan-goals'] as const,
+}
+
+/** The seven days from this Monday. */
+export const useExercisePlan = (monday: string, sunday: string) =>
+  useQuery({
+    queryKey: planKeys.week(monday),
+    queryFn: async () => unwrap(await supabase.from('exercise_plan').select('*').gte('day', monday).lte('day', sunday)),
+  })
+
+/** Each member's weekly activity goals, for the coach's draft. */
+export const useExerciseGoals = () =>
+  useQuery({ queryKey: planKeys.goals, queryFn: async () => unwrap(await supabase.rpc('exercise_goals')) })
+
+/** The coach's draft, saved only into an empty week. Another phone drafting the same week first is fine. */
+export const useSaveDraft = () =>
+  useHealthMutation(async (h, cells: { day: string; owner_id: string | null; activity: string }[]) => {
+    const { error } = await supabase.from('exercise_plan').insert(cells.map((c) => ({ ...c, household_id: h, by_coach: true })))
+    if (error && error.code !== '23505') throw error
+  })
+
+/** Set one day for one person (or Together). Null = rest. */
+export const useSetPlanCell = () =>
+  useHealthMutation(async (h, { id, day, owner_id, activity }: { id?: string; day: string; owner_id: string | null; activity: string | null }) =>
+    id
+      ? unwrap(await supabase.from('exercise_plan').update({ activity }).eq('id', id))
+      : unwrap(await supabase.from('exercise_plan').insert({ household_id: h, day, owner_id, activity })),
+  )

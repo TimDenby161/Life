@@ -13,6 +13,7 @@ import { FinanceOverview } from '@/modules/finances/components/FinanceOverview'
 import { TaskDetailDialog } from '@/modules/tasks/components/TaskDetail'
 import { WeddingPlan } from '@/modules/wedding/components/WeddingPlan'
 import { WordLists } from '@/modules/languages/components/WordLists'
+import { ExerciseWeek } from '@/modules/health/components/ExerciseWeek'
 import type { BriefingContent } from '../../../../supabase/functions/_shared/agents/chiefOfStaff.ts'
 import { agentById } from '../../../../supabase/functions/_shared/agents/registry.ts'
 import { OBSERVATION_KINDS } from '../../../../supabase/functions/_shared/agents/types.ts'
@@ -35,6 +36,8 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
   if (scope.extra === 'wedding') return <WeddingPlan />
   // Languages is just the word lists: Spanish and Mandarin, known and got wrong.
   if (scope.extra === 'languages') return <WordLists />
+  // Coach is the exercise week: who's doing what each day, drafted from the fitness goals.
+  if (scope.extra === 'exercise') return <ExerciseWeek />
   return <AgentSuggestions scope={scope} onDetails={onDetails} />
 }
 

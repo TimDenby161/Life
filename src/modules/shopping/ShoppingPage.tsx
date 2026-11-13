@@ -47,14 +47,7 @@ export default function ShoppingPage() {
 
   return (
     <>
-      <PageHeader
-        title="Shopping"
-        description={
-          task.data
-            ? `Includes your “${task.data.title}” checklist. Tap one to change it.`
-            : 'Things you need or would like to buy. Tap one to change it.'
-        }
-      />
+      <PageHeader title="Shopping" />
       <QuickAdd task={task.data ?? null} />
       {error ? (
         <ErrorState error={error} onRetry={() => { void wants.refetch(); void task.refetch() }} />

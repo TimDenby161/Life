@@ -12,7 +12,7 @@ export type PageAgent = {
   /** Only these kinds (from any of the agents above); all kinds when absent. */
   kinds?: string[]
   /** Extra output shown above the suggestions: the rest of today's calendar (live), today and packed days from the briefing, or the live goals and trend cards instead of any suggestions (finance), or the wedding's jobs and venues (wedding). */
-  extra?: 'today' | 'calendar' | 'finance' | 'wedding' | 'languages'
+  extra?: 'today' | 'calendar' | 'finance' | 'wedding' | 'languages' | 'exercise'
   /** Cap on suggestions shown (Home shows the top few). */
   limit?: number
   /** No visible title, description or agent / Details switch (Home keeps it clean). */
@@ -27,7 +27,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
   finances: { label: 'Finance', agents: ['finance'], extra: 'finance' },
   wedding: { label: 'Plan', description: 'The venues you’re looking at and the jobs to do.', agents: ['wedding'], extra: 'wedding' },
   languages: { label: 'Words', description: 'The words you know, the ones you’ve got wrong, and any to review again.', agents: ['language_coach'], extra: 'languages' },
-  health: { label: 'Coach', description: 'Your weekly goals, recovery and balance.', agents: ['health_coach'] },
+  health: { label: 'Coach', description: 'Who’s exercising which day. Tap a day to change it.', agents: ['health_coach'], extra: 'exercise' },
   stats: { label: 'Workload', description: 'How the joint jobs are shared.', agents: ['task_manager'], kinds: ['workload'] },
 }
 
