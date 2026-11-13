@@ -417,7 +417,7 @@ export async function loadNews(db: SupabaseClient, householdId: string): Promise
  */
 export async function loadAreas(db: SupabaseClient, householdId: string, today: string, wedding: WorkState['wedding']): Promise<AreaSource> {
   const [from, to] = mealWindow(today)
-  const [goals, trips, wants, checklist, people, languages, coaching, hustles, meals, openIdeas] = await Promise.all([
+  const [savings, trips, wants, checklist, people, languages, coaching, hustles, meals, openIdeas, goals] = await Promise.all([
     db.from('savings_goals').select('name, owner_id, target_date').eq('household_id', householdId).is('archived_at', null).is('reached_at', null).limit(50),
     db.from('trips').select('name, owner_id, starts_on, ends_on, confirmed').eq('household_id', householdId).gte('starts_on', addDays(today, -60)).limit(50),
     db.from('wants').select('name, owner_id, need_by').eq('household_id', householdId).is('bought_at', null).limit(200),
@@ -435,11 +435,12 @@ export async function loadAreas(db: SupabaseClient, householdId: string, today: 
     db.from('tt_sessions').select('user_id, day').eq('household_id', householdId).order('day', { ascending: false }).limit(50),
     db.from('hustles').select('user_id, name').eq('household_id', householdId).limit(50),
     db.from('meals').select('id', { count: 'exact', head: true }).eq('household_id', householdId).gte('day', from).lte('day', to),
-    db.from('tasks').select('assignee_id, ai_area').eq('household_id', householdId).not('ai_area', 'is', null).eq('status', 'active').is('archived_at', null).limit(500),
+    db.from('tasks').select('assignee_id, needs_both, ai_area, title').eq('household_id', householdId).not('ai_area', 'is', null).eq('status', 'active').is('archived_at', null).limit(500),
+    db.from('life_goals').select('owner_id, area, goal').eq('household_id', householdId).order('sort_order').limit(300),
   ])
   if (meals.error) throw new Error(meals.error.message)
   return {
-    goals: check(goals),
+    savings: check(savings),
     wedding: { date: wedding.date, dateApprox: wedding.dateApprox, venues: wedding.venues.length, guests: wedding.guests },
     trips: check(trips),
     wants: check(wants),
@@ -450,5 +451,6 @@ export async function loadAreas(db: SupabaseClient, householdId: string, today: 
     hustles: check(hustles),
     mealsPlanned: meals.count ?? 0,
     openIdeas: check(openIdeas),
+    goals: check(goals),
   }
 }

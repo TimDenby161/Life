@@ -31,7 +31,7 @@ describe('agents Edge Function', () => {
       'financial_accounts', 'account_balance_history', 'financial_transactions', 'renewals', 'trips', 'career_goals', 'calendar_integrations', 'feed_sources',
       'savings_goals', 'savings_pots', 'health_measurements', 'takeaways', 'people', 'wedding_venues',
       // Daily ideas (loadAreas): names and dates only.
-      'wants', 'task_subtasks', 'tt_sessions', 'hustles', 'meals',
+      'wants', 'task_subtasks', 'tt_sessions', 'hustles', 'meals', 'life_goals',
     ])
     for (const { f, text } of [...fn, ...shared]) {
       for (const [, table] of text.matchAll(/\.from\('([a-z_]+)'\)/g)) expect(allowed, `${f}: ${table}`).toContain(table)
@@ -100,10 +100,10 @@ describe('agents Edge Function', () => {
     }
   })
 
-  it('adds daily ideas only through the routine, after checking them against the areas still free', () => {
+  it('adds daily tasks only through the routine, after checking them against the areas and plans offered', () => {
     const routine = fn.find((x) => x.f === 'routine.ts')!.text
     for (const { f, text } of fn) if (f !== 'routine.ts') expect(text, f).not.toMatch(/rpc\('agent_save_ideas'/)
-    expect(routine).toMatch(/const items = cleanIdeas\(body\.items, areasFree\([\s\S]*?rpc\('agent_save_ideas', \{ p_household_id: householdId, p_person: person\.id, p_day: date, p_items: items \}\)/)
+    expect(routine).toMatch(/const items = cleanIdeas\(body\.items, offered\)[\s\S]*?rpc\('agent_save_ideas', \{ p_household_id: householdId, p_day: date, p_items: items \}\)/)
   })
 
   it('gives the daily ideas names and dates only: no amounts, notes or health', () => {

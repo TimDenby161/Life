@@ -1,19 +1,23 @@
-// Daily ideas: each morning the Claude routine adds one small task a day in
-// each area of life (finance, wedding, meals, holidays, shopping, health, table
-// tennis, side hustles, people, languages) that each person has chosen in
-// Settings (user_preferences.idea_areas; Sophie's skip table tennis and side
-// hustles), whether or not they have AI picks on,
-// straight onto their own list for today (Tim asked for them to be added, not
-// suggested, 13 Nov 2026). A new one in an area waits until the last one there
-// is done or deleted, so they never pile up. Pure parts only (the areas, the
-// prompt, the input and the output check); the calls are in
-// functions/agents/routine.ts and the write is agent_save_ideas.
+// Daily tasks for each area of life (finance, wedding, meals, holidays,
+// shopping, health, table tennis, side hustles, people, languages), decided
+// each morning by the Claude routine from your goals (life_goals, the Goals
+// page). Area by area, Claude works out what Tim, Sophie and the two of you
+// together need to do today to move towards those goals: nothing on a quiet
+// day, several things when something is urgent. They go straight onto the
+// lists (Tim asked for them to be added, not suggested, 13 Nov 2026). Each
+// person only gets areas they've picked in Settings (user_preferences.
+// idea_areas; Sophie's leave out table tennis and side hustles). Pure parts
+// only (the areas, the prompt, the input and the output check); the calls are
+// in functions/agents/routine.ts and the write is agent_save_ideas, which
+// also caps how many a day.
 //
-// Claude sees, per area, a few plain facts (names and dates: savings goal names,
-// the wedding month, trip names and dates, shopping list names, birthdays,
-// languages studied, the last coaching day, side hustle names, how many meals
-// are planned) and the titles of that person's open jobs there. Never amounts,
-// health readings or exercise, notes, or anyone else's private details.
+// Claude sees, per area and person: the goals as you wrote them, a few plain
+// facts (names and dates: savings goal names, the wedding month, trip names and
+// dates, shopping list names and deadlines, birthdays, languages studied, the
+// last coaching day, side hustle names, how many meals are planned), and the
+// titles of their open jobs and of the open tasks it added earlier. Never
+// account figures, health readings or exercise, notes, or anyone else's private
+// details.
 import type { ISODate } from './dates.ts'
 
 export const AREAS = [
@@ -31,44 +35,52 @@ export const AREAS = [
 
 export type AreaKey = (typeof AREAS)[number]['key']
 export const AREA_KEYS: readonly AreaKey[] = AREAS.map((a) => a.key)
+/** Together never gets these: they're one person's own. */
+export const SOLO_AREAS: readonly AreaKey[] = ['table_tennis', 'side_hustles']
+export const TOGETHER = 'together'
 
 export const MAX_IDEA_CHARS = 80
 export const MIN_IDEA_MINUTES = 5
 export const MAX_IDEA_MINUTES = 45
+/** As agent_save_ideas: new tasks a day in one area for one of you (or Together), and in all. */
+export const MAX_PER_AREA = 3
+export const MAX_PER_DAY = 6
 
-/** What Claude is told about one area for one person. */
-export type AreaInput = { area: AreaKey; label: string; facts: string[]; open_jobs: string[] }
+/** What Claude is told about one area for one of you, or for the two of you together. */
+export type Plan = { for: string; who: string; goals: string[]; facts: string[]; open_jobs: string[]; open_tasks_you_added: string[] }
+export type AreaInput = { area: AreaKey; label: string; plans: Plan[] }
 
 export const IDEAS_PROMPT = [
-  'You add one small task for today in each area of life listed, for one person in a household task app.',
-  'Each task goes straight onto their list for today, so it must be worth doing, concrete and doable in one sitting of 5 to 45 minutes.',
-  'Use the facts given for the area: something coming up (a birthday, a trip, the wedding, a deadline), something not done for a while, or setting the area up when there is little in it (e.g. add savings goals, plan the week’s meals, add friends’ birthdays, log a coaching session).',
-  'Never repeat or overlap one of the open jobs listed for the area, and don’t suggest anything already done.',
+  'You plan the day for a household, area of life by area of life, like a coach for each area. For each area, each plan is for one person or for the two of them together (for "together").',
+  'From that plan\'s goals and facts, decide what that person (or the pair) should do today to move towards their goals, and add those tasks. Most days most plans need nothing: add nothing when nothing useful is due. Add more than one only when several things are genuinely urgent (a deadline, a birthday or a trip coming up soon, something already late).',
+  `At most ${MAX_PER_AREA} tasks in one area for one plan, and at most ${MAX_PER_DAY} in all for each person and for together. Together tasks are things they do as a pair (both need to be there or decide together); a task for one of them goes to that person.`,
+  'Each task goes straight onto their list for today, so it must be worth doing, concrete and done in one sitting of 5 to 45 minutes: a step towards the goal, not the whole goal ("Shortlist three venue areas", not "Plan the wedding").',
+  'Never repeat or overlap an open job or an open task you added before (open_tasks_you_added); while those are open, add something only if it is a different, urgent thing. Goals are the people\'s own words: follow them (e.g. who plans holidays).',
   'Write each as a short instruction in plain British English starting with a verb, at most 80 characters, no emoji, no quotation marks, naming the specific thing (e.g. "Choose a gift for Jess’s birthday on 20 Nov").',
-  'Give minutes: your honest estimate, 5 to 45. Answer for every area listed, once each, using its area key.',
+  'Give minutes: your honest estimate, 5 to 45. Answer with a list of items, each with the area key, for (copied from the plan) and the title and minutes; an empty list is fine.',
 ].join(' ')
 
-export const IDEAS_ANSWER = { mode: 'ideas-save', key: '<the ideas key>', items: [{ area: '<area key>', title: '<the task>', minutes: 15 }] }
+export const IDEAS_ANSWER = { mode: 'ideas-save', key: '<the ideas key>', items: [{ area: '<area key>', for: '<the plan’s for>', title: '<the task>', minutes: 15 }] }
 
-/** The areas offered to Claude for one person today: those without an idea of theirs still open. */
-export function ideasInput(person: string, today: ISODate, weekday: string, areas: AreaInput[]) {
-  return { person, date: today, weekday, areas }
+export function ideasInput(today: ISODate, weekday: string, areas: AreaInput[]) {
+  return { date: today, weekday, areas }
 }
 
-export type Idea = { area: AreaKey; title: string; minutes: number }
+export type Idea = { area: AreaKey; for: string; title: string; minutes: number }
 
 /**
- * Claude's answer, kept only where it's usable: one per offered area, a real
- * title (whitespace tidied, no emoji or quotes, cut to length), minutes in range.
+ * Claude's answer, kept only where it's usable: an offered area and plan, a
+ * real title (whitespace tidied, no emoji or quotes, cut to length), minutes in
+ * range, no repeats, and within the caps for each plan.
  */
-export function cleanIdeas(raw: unknown, offered: readonly AreaKey[]): Idea[] {
+export function cleanIdeas(raw: unknown, offered: readonly AreaInput[]): Idea[] {
   if (!Array.isArray(raw)) return []
+  const allowed = (area: string, who: string) => offered.some((a) => a.area === area && a.plans.some((p) => p.for === who))
   const out: Idea[] = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { area, title, minutes } = item as Record<string, unknown>
-    if (typeof area !== 'string' || !offered.includes(area as AreaKey) || out.some((o) => o.area === area)) continue
-    if (typeof title !== 'string') continue
+    const { area, for: who, title, minutes } = item as Record<string, unknown>
+    if (typeof area !== 'string' || typeof who !== 'string' || !allowed(area, who) || typeof title !== 'string') continue
     const clean = title
       .replace(/\p{Extended_Pictographic}/gu, '')
       .replace(/["“”]/g, '')
@@ -77,15 +89,18 @@ export function cleanIdeas(raw: unknown, offered: readonly AreaKey[]): Idea[] {
       .slice(0, MAX_IDEA_CHARS)
       .trim()
     if (clean.length < 3) continue
+    const mine = out.filter((o) => o.for === who)
+    if (mine.length >= MAX_PER_DAY || mine.filter((o) => o.area === area).length >= MAX_PER_AREA) continue
+    if (mine.some((o) => o.title.toLowerCase() === clean.toLowerCase())) continue
     const m = typeof minutes === 'number' && Number.isFinite(minutes) ? Math.round(minutes) : 15
-    out.push({ area: area as AreaKey, title: clean, minutes: Math.min(MAX_IDEA_MINUTES, Math.max(MIN_IDEA_MINUTES, m)) })
+    out.push({ area: area as AreaKey, for: who, title: clean, minutes: Math.min(MAX_IDEA_MINUTES, Math.max(MIN_IDEA_MINUTES, m)) })
   }
   return out
 }
 
 /** The rows the facts are built from: names and dates only (functions/agents/context.ts loadAreas). */
 export type AreaSource = {
-  goals: { name: string; owner_id: string | null; target_date: ISODate | null }[]
+  savings: { name: string; owner_id: string | null; target_date: ISODate | null }[]
   wedding: { date: ISODate | null; dateApprox: boolean; venues: number; guests: number }
   trips: { name: string; owner_id: string | null; starts_on: ISODate; ends_on: ISODate | null; confirmed: boolean }[]
   wants: { name: string; owner_id: string | null; need_by: ISODate | null }[]
@@ -95,13 +110,29 @@ export type AreaSource = {
   coaching: { user_id: string; day: ISODate }[]
   hustles: { user_id: string; name: string }[]
   mealsPlanned: number
-  /** Ideas still open, by whom and area: those areas get no new one. */
-  openIdeas: { assignee_id: string | null; ai_area: string }[]
+  /** The tasks Claude added before that are still open, so it doesn't repeat them. */
+  openIdeas: { assignee_id: string | null; needs_both: boolean; ai_area: string; title: string }[]
+  /** Goals from the Goals page; owner_id null = together. */
+  goals: { owner_id: string | null; area: string; goal: string }[]
 }
 
-/** The areas that can have a new idea for this person today: ones they've chosen without an idea of theirs still open. */
-export const areasFree = (src: Pick<AreaSource, 'openIdeas'>, person: string, chosen: readonly string[] = AREA_KEYS): AreaKey[] =>
-  AREA_KEYS.filter((a) => chosen.includes(a) && !src.openIdeas.some((o) => o.assignee_id === person && o.ai_area === a))
+/** The areas each plan covers: a person's own picks, and for Together any area either of you picked (but not the solo ones). */
+export function planAreas(chosen: Record<string, readonly string[]>): { person: Record<string, AreaKey[]>; together: AreaKey[] } {
+  const person = Object.fromEntries(Object.entries(chosen).map(([id, areas]) => [id, AREA_KEYS.filter((a) => areas.includes(a))]))
+  const together = AREA_KEYS.filter((a) => !SOLO_AREAS.includes(a) && Object.values(person).some((areas) => areas.includes(a)))
+  return { person, together }
+}
+
+/** The goals and earlier tasks for one plan in one area. */
+export function planGoals(src: Pick<AreaSource, 'goals' | 'openIdeas'>, area: AreaKey, who: string) {
+  const together = who === TOGETHER
+  return {
+    goals: src.goals.filter((g) => g.area === area && (together ? g.owner_id === null : g.owner_id === who)).map((g) => g.goal),
+    open_tasks_you_added: src.openIdeas
+      .filter((o) => o.ai_area === area && (together ? o.needs_both : !o.needs_both && o.assignee_id === who))
+      .map((o) => o.title),
+  }
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 /** "20 Nov", or "20 Nov 2027" in another year. */
@@ -118,10 +149,10 @@ function nextDate(today: ISODate, month: number, dom: number): ISODate {
   return today
 }
 
-/** A few plain facts about each area for one person: theirs and shared things only. */
+/** A few plain facts about each area for one person (theirs and shared things), or for together (shared things only). */
 export function areaFacts(src: AreaSource, person: string, today: ISODate): Record<AreaKey, string[]> {
   const mine = (owner: string | null) => owner === null || owner === person
-  const goals = src.goals.filter((g) => mine(g.owner_id))
+  const goals = src.savings.filter((g) => mine(g.owner_id))
   const trips = src.trips.filter((t) => mine(t.owner_id) && (t.ends_on ?? t.starts_on) >= today).sort((a, b) => a.starts_on.localeCompare(b.starts_on))
   const wants = src.wants.filter((w) => mine(w.owner_id))
   const toBuy = [...wants.map((w) => ({ name: w.name, by: w.need_by })), ...src.checklist.map((c) => ({ name: c.title, by: c.due_date }))]

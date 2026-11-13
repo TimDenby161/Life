@@ -197,15 +197,17 @@ For each job the routine either leaves it, asks, or does it with web search, and
 
 This is the one place an agent changes application data without an approval; it was asked for on 12 November 2026.
 
-## Daily ideas (13 Nov 2026)
+## Daily tasks per area, from goals (13 Nov 2026)
 
-Tim asked for tasks in every area of life to land on the daily list, added rather than suggested. So each morning the routine adds one small task (5 to 45 minutes) in each of finance, wedding, meals, holidays, shopping, health, table tennis, side hustles, people and languages that each person has picked in Settings (`user_preferences.idea_areas`, all ten by default; Sophie's leave out table tennis and side hustles), whether or not they have AI picks on.
+Tim asked for each area of life to work like an agent: every day it decides the tasks for him, for Sophie and for the two of them together, aimed at their goals, added straight to the lists (not suggested). An area can have nothing on a quiet day, or several tasks when something is urgent.
 
-- **Input** (`priorities-input` → `ideas`): per person, the areas without an open idea of theirs, each with a few facts from `loadAreas` (savings goal names, the wedding month and venue and guest counts, trip names and dates, shopping list names and dates, birthdays and friends not seen for a while, languages studied, the last coaching day, side hustle names, how many meals are planned) and the titles of their open jobs there. Names and dates only: no amounts, notes, or health readings or exercise (health gets no facts).
-- **Output** (`ideas-save`): `{area, title, minutes}` per area, checked by `cleanIdeas` against the areas still free, then written by `agent_save_ideas` (service role only): on the person's own list, for them, due today, under the area's category (the wedding checklist's for the wedding; one named for the area that isn't the other person's, made if missing; none if the name is taken by the other person's category). `tasks.ai_area` marks them and isn't client-writable.
-- **Limits**: one open idea per area per person, so they never pile up; they're ordinary tasks you tick off or delete. Personal-list tasks post nothing to the feed.
-- **Home**: tasks added today for today (by hand or as ideas) always show in Today's tasks, even when the AI plan is full (`added` in `todaysPlan`).
-
+- **Goals** (`life_goals`, the Goals page in More): each person's and Together's goals per area, in their own words. Both can edit all of them. Seeded from what Tim said on 9 and 13 Nov.
+- **Areas**: finance, wedding, meals, holidays, shopping, health, table tennis, side hustles, people, languages. Each person gets the areas picked in Settings (`user_preferences.idea_areas`; Sophie's leave out table tennis and side hustles), AI picks on or not. Together gets any area either picked, except table tennis and side hustles.
+- **Input** (`priorities-input` → `ideas`, one entry per household): per area, a plan for each person and for Together with their goals, a few facts from `loadAreas` (names and dates only: savings goal names, the wedding month, venue and guest counts, trips, the shopping list with deadlines, birthdays, friends not seen for a while, languages studied, the last coaching day, side hustle names, meals planned), their open jobs there and the open tasks Claude added before. No account figures, notes, or health readings or exercise (health gets no facts; the goals are the person's own words).
+- **Output** (`ideas-save`): `{area, for, title, minutes}` items, checked by `cleanIdeas` against the plans offered, then written by `agent_save_ideas` (service role only): a person's on their own list for them; Together's on the Joint list with `needs_both`, for nobody; due today, under the area's category (never someone's own category for Together; made if missing). `tasks.ai_area` marks them and isn't client-writable; they post nothing to the feed.
+- **Caps** (in the SQL as well as `cleanIdeas`): 3 a day in one area for one plan, 6 a day for each person and for Together, none for anyone with 15 still open; never the same open task twice.
+- **Home**: tasks added today for today always show in Today's tasks, even when the AI plan is full; Together's show on the Together tab.
+- The rule-based agents still run hourly for their alerts and suggestions in the AI Hub.
 ## Home and per-tab picks (7 Nov 2026)
 
 Home's agent view is three cards and nothing else: **Today (weekday)**, the rest of today's calendar (my calendars and shared ones with "Plan around it" on, read live, finished events dropped); **Tasks I can do today**, the Top jobs card with the day's AI picks first; and **News**, the top five headlines from the first RSS source in the Feed (one tap adds BBC News if there's none).

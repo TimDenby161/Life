@@ -1918,6 +1918,57 @@ export type Database = {
           },
         ]
       }
+      life_goals: {
+        Row: {
+          area: string
+          created_at: string
+          created_by: string | null
+          goal: string
+          household_id: string
+          id: string
+          owner_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          created_by?: string | null
+          goal: string
+          household_id: string
+          id?: string
+          owner_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          created_by?: string | null
+          goal?: string
+          household_id?: string
+          id?: string
+          owner_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "life_goals_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "life_goals_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       meal_availability: {
         Row: {
           available: boolean
@@ -4080,12 +4131,7 @@ export type Database = {
         Returns: undefined
       }
       agent_save_ideas: {
-        Args: {
-          p_day: string
-          p_household_id: string
-          p_items: Json
-          p_person: string
-        }
+        Args: { p_day: string; p_household_id: string; p_items: Json }
         Returns: number
       }
       agent_save_meal_availability: {
