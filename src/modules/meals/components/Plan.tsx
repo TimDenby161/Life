@@ -240,7 +240,7 @@ function Grid({
  * Plan, sized to fit a phone screen: what you already have, then a line per
  * day (who is in for lunch and dinner, filled overnight from the calendars, and
  * what you want for each, and quick or a longer cook; days can be added, up to
- * a week), then Plan meals: Claude fills the empty meals and you go to Meals to
+ * a week), then Plan meals: Claude redoes every meal on those days and you go to Meals to
  * look them over, swap any, and press Complete for the recipes and list.
  */
 export function Plan({

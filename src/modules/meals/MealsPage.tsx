@@ -11,7 +11,7 @@ import { addDaysISO, parseISODate, todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { weekDays } from '@/modules/calendar/lib/grid'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { daysPlan, isMonday, isPlanDays, mealsKey, planDates, plannedMeals, weekMeals, weekStartOf } from '../../../supabase/functions/_shared/meals.ts'
+import { daysPlan, isMonday, isPlanDays, mealsKey, onDays, planDates, plannedMeals, weekMeals, weekStartOf } from '../../../supabase/functions/_shared/meals.ts'
 import {
   useDaysMeals,
   useListMealsKey,
@@ -35,8 +35,9 @@ type View = 'plan' | 'meals' | 'list' | 'recipes'
 /**
  * Two steps. Plan: who is in over the next four days (or more when days are
  * added), what you have in, what you want and whether it should be quick, then
- * Plan meals. Meals: those days filled in, any meal swapped for one you have
- * had, then Complete writes the recipes and the shopping list. The list and the
+ * Plan meals, which redoes every lunch and dinner on Meals for those days (what
+ * you typed first). Meals: any meal swapped for one you have had, then Complete
+ * writes the recipes and the shopping list from just those days' meals. The list and the
  * recipes are by week. The week, the view and any added days live in the
  * address (?week=…&view=list&days=5), so a reload keeps you where you were.
  */
@@ -83,7 +84,7 @@ export default function MealsPage() {
   const dayMeals = useDaysMeals(today, planTo)
   const [busy, setBusy] = useState<string | null>(null)
 
-  /** Step one: Claude fills the empty lunches and dinners, then you see them on Meals to swap any you don't fancy. */
+  /** Step one: Claude redoes every lunch and dinner on those days, then you see them on Meals to swap any you don't fancy. */
   const runPlan = async () => {
     const id = 'meal-plan'
     try {
@@ -91,7 +92,7 @@ export default function MealsPage() {
       const planned = await planMeals.mutateAsync({ from: today, days: planDayCount })
       if (planned.status !== 'ok') return void toast.error(planned.message, { id })
       change({ view: 'meals' })
-      toast.success(planned.placed ? `${planned.placed} meals planned: swap any, then Complete` : 'Every meal already has something: swap any, then Complete', { id })
+      toast.success(planned.placed ? `${planned.placed} meals planned: swap any, then Complete` : 'Nobody is in for any of these meals', { id })
     } catch (e) {
       toast.error(getErrorMessage(e), { id })
     } finally {
@@ -100,8 +101,8 @@ export default function MealsPage() {
   }
 
   /**
-   * Step two: rewrites the recipes for the planned days (with what you have in), then writes each week's shopping
-   * list from those recipes, and shows the list.
+   * Step two: rewrites the recipes for the meals on Meals (with what you have in), then writes the shopping list
+   * from just those meals and their recipes (one per week the days touch), and shows the list.
    */
   const runComplete = async () => {
     const id = 'meal-complete'
@@ -118,7 +119,7 @@ export default function MealsPage() {
       toast.loading('Writing the shopping list…', { id })
       const listed: string[] = []
       for (const w of weeks) {
-        const list = await make.mutateAsync(w)
+        const list = await make.mutateAsync({ weekStart: w, only: { from: today, days: planDayCount } })
         if (list.status === 'ok') listed.push(w)
         else if (list.status !== 'no_meals') return void toast.error(list.message, { id })
       }
@@ -134,7 +135,9 @@ export default function MealsPage() {
 
   const rows = meals.data ?? []
   const hasMeals = plannedMeals(week, rows, members.length).length > 0
-  const stale = Boolean(listKey.data) && listKey.data !== mealsKey(week, rows, members.length)
+  // A list from Complete covers only the days on Meals, so it matches either those days' meals or (older lists) the whole week's.
+  const planned = onDays(rows, planDates(today, planDayCount))
+  const stale = Boolean(listKey.data) && listKey.data !== mealsKey(week, rows, members.length) && listKey.data !== mealsKey(week, planned, members.length)
   const left = (items.data ?? []).filter((i) => !i.checked).length
 
   const days = weekDays(week)
@@ -239,7 +242,7 @@ export default function MealsPage() {
           items={items.data ?? []}
           hasMeals={hasMeals}
           stale={stale}
-          making={make.isPending && make.variables === week}
+          making={make.isPending && make.variables?.weekStart === week}
         />
       )}
     </>

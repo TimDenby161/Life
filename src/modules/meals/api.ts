@@ -150,12 +150,15 @@ export type MakeListResult =
   | { status: 'ok'; count: number }
   | { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error'; message: string }
 
-/** Asks the shopping-list Edge Function to write the week's list; the API key never reaches the browser. */
+/**
+ * Asks the shopping-list Edge Function to write the week's list; the API key never reaches the browser.
+ * With `only` (the days on Meals), just those days' meals are shopped for.
+ */
 export function useMakeShoppingList() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (weekStart: string): Promise<MakeListResult> => {
-      const { data, error } = await supabase.functions.invoke<MakeListResult>('shopping-list', { body: { weekStart } })
+    mutationFn: async ({ weekStart, only }: { weekStart: string; only?: { from: string; days: number } }): Promise<MakeListResult> => {
+      const { data, error } = await supabase.functions.invoke<MakeListResult>('shopping-list', { body: { weekStart, only } })
       if (error) {
         // Non-2xx responses still carry our JSON body.
         const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
@@ -269,7 +272,7 @@ export type PlanMealsResult =
   | { status: 'ok'; placed: number; weeks: string[]; at: string }
   | { status: 'not_configured' | 'over_budget' | 'error'; message: string }
 
-/** Asks Claude to fill the empty lunches and dinners over `days` days from the plan; `from` is today. */
+/** Asks Claude to redo every lunch and dinner over `days` days from the plan (empty where nobody is in); `from` is today. */
 export function usePlanMeals() {
   const qc = useQueryClient()
   return useMutation({

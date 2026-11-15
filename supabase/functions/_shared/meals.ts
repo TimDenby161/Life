@@ -347,9 +347,10 @@ export function cleanRecipes(raw: string, asked: readonly string[]): Recipe[] | 
 //
 // From the Plan view: who is in for each lunch and dinner, what you want for
 // each (the note, and whether it should be quick or a longer cook), and the
-// ingredients you have. Claude fills each empty slot someone is in for; it is
-// sent the date, the slot, how many are eating, your note and quick/long for it,
-// the ingredients you have and recent meal names. Never who is eating.
+// ingredients you have. Each Plan meals redoes every lunch and dinner on those
+// days: Claude plans each slot someone is in for, and a slot nobody is in for is
+// cleared. It is sent the date, the slot, how many are eating, your note and
+// quick/long for it, the ingredients you have and recent meal names. Never who is eating.
 
 /** Days planned unless more are added; never more than MAX_PLAN_DAYS (the calendars fill who is in that far). */
 export const PLAN_DAYS = 4
@@ -389,19 +390,21 @@ export function weekStartOf(day: string): string {
   return new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * DAY_MS).toISOString().slice(0, 10)
 }
 
-/** Lunches and dinners someone is in for (no row = in) that have no meal yet, in order. */
+/** Who is in for a meal: no row = in. */
+const eatersOf = (members: readonly string[], availability: readonly PlanAvailability[], day: string, slot: string) =>
+  members.filter((p) => availability.find((a) => a.day === day && a.slot === slot && a.person_id === p)?.available ?? true)
+
+/** Every lunch and dinner someone is in for, in order, whatever is planned there now (Plan meals redoes them all). */
 export function openSlots(
   from: string,
   members: readonly string[],
   availability: readonly PlanAvailability[],
   notes: readonly PlanNote[],
-  meals: readonly MealRow[],
   days = PLAN_DAYS,
 ): OpenSlot[] {
   return planDates(from, days).flatMap((day) =>
     PLAN_SLOTS.flatMap((slot) => {
-      if (meals.some((m) => m.day === day && m.slot === slot)) return []
-      const eaters = members.filter((p) => availability.find((a) => a.day === day && a.slot === slot && a.person_id === p)?.available ?? true)
+      const eaters = eatersOf(members, availability, day, slot)
       if (!eaters.length) return []
       const n = notes.find((n) => n.day === day && n.slot === slot)
       const effort = asEffort(n?.effort)
@@ -410,39 +413,39 @@ export function openSlots(
   )
 }
 
+/** Lunches and dinners nobody is in for: Plan meals clears whatever was there. */
+export function closedSlots(
+  from: string,
+  members: readonly string[],
+  availability: readonly PlanAvailability[],
+  days = PLAN_DAYS,
+): { day: string; slot: PlanSlot }[] {
+  return planDates(from, days).flatMap((day) => PLAN_SLOTS.filter((slot) => !eatersOf(members, availability, day, slot).length).map((slot) => ({ day, slot })))
+}
+
+/** Only the meals on the given days (the days on Meals): the recipes and list are written from those. */
+export const onDays = (rows: readonly MealRow[], days: readonly string[]) => rows.filter((r) => days.includes(r.day))
+
 /** What Claude is sent to plan with. */
 export function planInput(
   open: readonly OpenSlot[],
-  planned: readonly MealRow[],
   recent: readonly string[],
   have: readonly string[] = [],
 ): string {
   const weekday = (day: string) => DAY_NAMES[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]
   return JSON.stringify({
     slots: open.map((s) => ({ date: s.day, weekday: weekday(s.day), slot: s.slot, people: s.eaters.length, ...(s.note ? { note: s.note } : {}), ...(s.effort ? { effort: s.effort } : {}) })),
-    already_planned: distinctPlanned(planned).map((m) => ({ date: m.day, weekday: weekday(m.day), slot: m.slot, meal: tidy(m.name) })),
     recently_eaten: distinctNames(recent, MAX_RECENT),
     ...haveField(have),
   })
 }
 
-/** One entry per slot and name (a split slot with the same meal twice is one meal). */
-function distinctPlanned(rows: readonly MealRow[]): MealRow[] {
-  const seen = new Set<string>()
-  return rows.filter((r) => {
-    const k = `${r.day}|${r.slot}|${tidy(r.name).toLowerCase()}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
-}
-
 export const PLAN_PROMPT = [
   'You plan lunches and dinners for a UK household over the next few days.',
-  'The JSON you are given lists the slots to fill (date, slot, how many people are eating, sometimes a note saying what they want for that meal, and sometimes an effort), meals already planned around them, and meals eaten recently.',
-  'Give every slot exactly one meal. Follow each slot\'s note first: when it names a meal, use that meal, written as given.',
+  'The JSON you are given lists the slots to fill (date, slot, how many people are eating, sometimes a note saying what they want for that meal, and sometimes an effort), and meals eaten recently.',
+  'Give every slot exactly one meal. Follow each slot\'s note first: when it names a meal, that is the meal for the slot, written exactly as given; when it describes what they want (an ingredient, a cuisine, "something light"), choose a meal that fits it.',
   '"effort", when present, is how long they have to cook: "quick" means on the table in about 30 minutes or less with little prep; "long" means they have time for a slower cook or a bigger recipe (a roast, a stew, a curry from scratch, a bake). Choose meals that fit it.',
-  'Fill the rest with ordinary home cooking at a sensible time (where no effort is given: bigger or slower meals for dinner or the weekend, quicker ones on weekdays), without repeating a meal eaten recently or planned nearby.',
+  'Fill the rest with ordinary home cooking at a sensible time (where no effort is given: bigger or slower meals for dinner or the weekend, quicker ones on weekdays), without repeating a meal eaten recently or used in another slot.',
   '"have", when present, lists ingredients already in the kitchen: where the notes leave a choice, choose meals that use them up.',
   'Lunches can be simple: sandwiches, soup, salads, or "Leftovers" of the dinner before when that dinner makes enough. Use "Leftovers" only straight after a dinner that suits it.',
   'Keep meal names short and plain, as someone would write them on a meal plan ("Chicken stir fry"), with no brands or descriptions.',

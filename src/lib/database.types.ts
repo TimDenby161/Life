@@ -4329,6 +4329,7 @@ export type Database = {
       }
       meals_save_plan: {
         Args: {
+          p_clear?: Json
           p_household_id: string
           p_meals: Json
           p_usage: Json

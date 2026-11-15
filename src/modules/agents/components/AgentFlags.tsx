@@ -23,15 +23,20 @@ export function AgentFlags({ max = 2 }: { max?: number }) {
       {top.map((s) => {
         const label = approveLabel(s)
         return (
-          <li key={s.id} className="flex items-center gap-2 text-sm">
-            <Sparkles className={cn('size-3.5 shrink-0', s.severity >= 3 ? 'text-destructive' : 'text-warning')} />
-            <span className="min-w-0 flex-1 truncate" title={s.reason}>{s.title}</span>
-            {label ? (
-              <Button size="sm" variant="outline" className="h-7 px-2" disabled={respond.isPending} onClick={() => act(s.id, 'approve')}>
-                <Check /> {label}
-              </Button>
-            ) : null}
-            <Button size="icon-sm" variant="ghost" aria-label={`Dismiss ${s.title}`} disabled={respond.isPending} onClick={() => act(s.id, 'dismiss')}>
+          // On a phone the title wraps (two lines at most) with its action underneath; wider screens keep one line.
+          <li key={s.id} className="flex items-start gap-2 py-0.5 text-sm sm:items-center">
+            <Sparkles className={cn('mt-0.5 size-3.5 shrink-0 sm:mt-0', s.severity >= 3 ? 'text-destructive' : 'text-warning')} />
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <span className="line-clamp-2 min-w-0 leading-snug sm:flex-1" title={s.reason}>
+                {s.title}
+              </span>
+              {label ? (
+                <Button size="sm" variant="outline" className="h-7 shrink-0 px-2" disabled={respond.isPending} onClick={() => act(s.id, 'approve')}>
+                  <Check /> {label}
+                </Button>
+              ) : null}
+            </div>
+            <Button size="icon-sm" variant="ghost" className="-mt-1 shrink-0 sm:mt-0" aria-label={`Dismiss ${s.title}`} disabled={respond.isPending} onClick={() => act(s.id, 'dismiss')}>
               <X />
             </Button>
           </li>

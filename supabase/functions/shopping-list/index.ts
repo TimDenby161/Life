@@ -1,12 +1,14 @@
 // Plans the next few days' meals, and writes the week's shopping list or
 // recipes for its meals, with Claude.
 //
-// POST { weekStart: 'YYYY-MM-DD', mode?: 'list' | 'recipes' }
-//   (weekStart is a Monday; Authorization: Bearer <user JWT>)
+// POST { weekStart: 'YYYY-MM-DD', mode?: 'list' | 'recipes', only?: { from, days } }
+//   (weekStart is a Monday; Authorization: Bearer <user JWT>; with `only`,
+//   just the meals on those days of the week, the days on Meals)
 // POST { mode: 'plan', from: 'YYYY-MM-DD', days?: 1-MAX_PLAN_DAYS } (from = the person's today; days defaults to PLAN_DAYS)
 // plan                -> { status: 'ok', placed, weeks, at }   (at = the server's time, for `fresh` below)
-//                        Fills the empty lunches and dinners over those days
-//                        that someone is in for; weeks = the Mondays touched.
+//                        Redoes every lunch and dinner over those days: a new
+//                        meal wherever someone is in (your notes first), and
+//                        empty where nobody is; weeks = the Mondays touched.
 // list (the default)  -> { status: 'ok', count }
 // recipes             -> { status: 'ok', written, remaining }
 //                        Writes up to RECIPES_PER_CALL of the week's meals that
@@ -14,7 +16,8 @@
 //                        With fresh: { from, days, since }, the meals on those
 //                        days are rewritten too (once: a recipe saved after
 //                        `since` counts as fresh), so Plan meals rebuilds the
-//                        recipes it uses with what you have in.
+//                        recipes it uses with what you have in, and only
+//                        those days' meals are written.
 // either              -> { status: 'not_configured' | 'no_meals' | 'over_budget' | 'error', message }
 //
 // Everything is read as the calling user, under RLS. Claude is sent the day,
@@ -40,6 +43,7 @@ import {
   cleanItems,
   cleanPlan,
   cleanRecipes,
+  closedSlots,
   isISODate,
   isPlanDays,
   MEALS_MODEL,
@@ -47,6 +51,7 @@ import {
   type MealRow,
   mealKey,
   mealsKey,
+  onDays,
   openSlots,
   PLAN_DAYS,
   PLAN_PROMPT,
@@ -116,7 +121,14 @@ Deno.serve(async (req) => {
   const supabase = await userClient(req)
   if (!supabase) return json(req, { status: 'error', message: 'Sign in again.' }, 401)
 
-  let body: { weekStart?: string; mode?: string; from?: string; days?: number; fresh?: { from?: string; days?: number; since?: string } }
+  let body: {
+    weekStart?: string
+    mode?: string
+    from?: string
+    days?: number
+    fresh?: { from?: string; days?: number; since?: string }
+    only?: { from?: string; days?: number }
+  }
   try {
     body = await req.json()
   } catch {
@@ -142,6 +154,10 @@ Deno.serve(async (req) => {
     Number.isFinite(since) &&
     Math.abs(Date.now() - since) < 3_600_000
   if (mode === 'recipes' && fresh !== undefined && !rewrite) return json(req, { status: 'error', message: 'Invalid request' }, 400)
+  // The days on Meals: the list (with `only`) and the recipes (with `fresh`) are written from just those.
+  const only = body.only
+  if (only !== undefined && (!isISODate(only.from ?? '') || !isPlanDays(only.days))) return json(req, { status: 'error', message: 'Invalid request' }, 400)
+  const scope = rewrite ? planDates(fresh!.from!, fresh!.days) : only ? planDates(only.from!, only.days) : null
   if (!isMonday(weekStart)) return json(req, { status: 'error', message: 'Invalid week' }, 400)
 
   // RLS: these only return the caller's own household.
@@ -180,8 +196,7 @@ Deno.serve(async (req) => {
   if (mode === 'plan') {
     const dates = planDates(from, planDays)
     const last = dates[dates.length - 1]
-    const [planned, recentRows, availability, notes, pantry] = await Promise.all([
-      supabase.from('meals').select('id, day, slot, person_id, name').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
+    const [recentRows, availability, notes, pantry] = await Promise.all([
       supabase
         .from('meals')
         .select('id, day, slot, person_id, name')
@@ -193,49 +208,56 @@ Deno.serve(async (req) => {
       supabase.from('meal_slot_notes').select('day, slot, note, effort').eq('household_id', householdId).gte('day', dates[0]).lte('day', last),
       haveNames(),
     ])
-    if (planned.error || recentRows.error || availability.error || notes.error || pantry.error) {
+    if (recentRows.error || availability.error || notes.error || pantry.error) {
       return json(req, { status: 'error', message: 'Could not load the plan.' }, 500)
     }
     const weeks = [...new Set(dates.map(weekStartOf))]
-    const open = openSlots(from, memberIds, availability.data, notes.data, planned.data as MealRow[], planDays)
-    // Nothing to fill: straight on to the list and recipes.
+    const open = openSlots(from, memberIds, availability.data, notes.data, planDays)
+    const clear = closedSlots(from, memberIds, availability.data, planDays)
     const at = new Date().toISOString()
-    if (!open.length) return json(req, { status: 'ok', placed: 0, weeks, at })
-    if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
-
-    const input = planInput(
-      open,
-      planned.data as MealRow[],
-      (recentRows.data as MealRow[]).map((m) => m.name),
-      pantry.data.map((p) => p.name),
-    )
-    const refused = await overBudget(PLAN_PROMPT, input)
-    if (refused) return refused
-    const { raw, usage } = await askClaude(apiKey, model, { system: PLAN_PROMPT, schema: PLAN_SCHEMA, input, timeoutMs: 60_000 })
-    if (raw === null && !usage) return json(req, { status: 'error', message: 'Claude could not be reached. Try again in a minute.' }, 502)
-    const placed = raw === null ? null : cleanPlan(raw, open, householdSize)
+    // Nobody in for any of it: no call to Claude, those days are just emptied.
+    let placed: ReturnType<typeof cleanPlan> = []
+    let usage: Usage | null = null
+    if (open.length) {
+      if (!apiKey) return json(req, { status: 'not_configured', message: 'This needs a Claude API key.' })
+      const input = planInput(
+        open,
+        (recentRows.data as MealRow[]).map((m) => m.name),
+        pantry.data.map((p) => p.name),
+      )
+      const refused = await overBudget(PLAN_PROMPT, input)
+      if (refused) return refused
+      const asked = await askClaude(apiKey, model, { system: PLAN_PROMPT, schema: PLAN_SCHEMA, input, timeoutMs: 60_000 })
+      if (asked.raw === null && !asked.usage) return json(req, { status: 'error', message: 'Claude could not be reached. Try again in a minute.' }, 502)
+      usage = asked.usage
+      placed = asked.raw === null ? null : cleanPlan(asked.raw, open, householdSize)
+      if (!placed?.length) placed = null
+    }
+    // Replaces those days' lunches and dinners; nothing changes when Claude came back with nothing.
     const { data: count, error: saveError } = await serviceClient().rpc('meals_save_plan', {
       p_household_id: householdId,
       p_week_start: weekStart,
       p_user_id: userId,
-      p_meals: placed?.length ? placed : null,
+      p_meals: placed,
       p_usage: usage ?? {},
+      p_clear: clear,
     })
     if (saveError) return json(req, { status: 'error', message: 'Could not save the plan.' }, 500)
-    if (!placed?.length) return json(req, { status: 'error', message: 'Claude did not come back with a plan. Try again.' }, 502)
+    if (!placed) return json(req, { status: 'error', message: 'Claude did not come back with a plan. Try again.' }, 502)
     return json(req, { status: 'ok', placed: count ?? 0, weeks, at })
   }
 
   const days = weekDates(weekStart)
-  const { data: rows, error: mealsError } = await supabase
+  const { data: weekRows, error: mealsError } = await supabase
     .from('meals')
     .select('id, day, slot, person_id, name')
     .eq('household_id', householdId)
     .gte('day', days[0])
     .lte('day', days[6])
   if (mealsError) return json(req, { status: 'error', message: 'Could not load the meals.' }, 500)
+  const rows = scope ? onDays(weekRows as MealRow[], scope) : (weekRows as MealRow[])
 
-  const meals = plannedMeals(weekStart, rows as MealRow[], householdSize)
+  const meals = plannedMeals(weekStart, rows, householdSize)
   if (!meals.length) return json(req, { status: 'no_meals', message: 'Add a meal first.' })
 
   // The household's saved recipes: the list buys what they use, and recipes are only written once.
@@ -246,8 +268,8 @@ Deno.serve(async (req) => {
   if (recipesError) return json(req, { status: 'error', message: 'Could not load the recipes.' }, 500)
 
   const rewriteDays = new Set(rewrite ? planDates(fresh!.from!, fresh!.days) : [])
-  const redo = new Set((rows as MealRow[]).filter((r) => rewriteDays.has(r.day)).map((r) => mealKey(r.name)))
-  const missing = weekMeals(weekStart, rows as MealRow[]).filter((m) => {
+  const redo = new Set(rows.filter((r) => rewriteDays.has(r.day)).map((r) => mealKey(r.name)))
+  const missing = weekMeals(weekStart, rows).filter((m) => {
     const saved = recipes!.find((r) => r.meal_key === m.key)
     return !saved || (redo.has(m.key) && Date.parse(saved.created_at) < since)
   })
@@ -294,7 +316,7 @@ Deno.serve(async (req) => {
     p_household_id: householdId,
     p_week_start: weekStart,
     p_user_id: userId,
-    p_meals_key: mealsKey(weekStart, rows as MealRow[], householdSize),
+    p_meals_key: mealsKey(weekStart, rows, householdSize),
     p_items: saved,
     p_usage: usage ?? {},
   })

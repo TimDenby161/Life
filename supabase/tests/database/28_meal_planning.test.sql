@@ -79,27 +79,32 @@ select throws_ok(format($$insert into meal_slot_notes (household_id, day, slot) 
   current_setting('t.hh')), '23514', null, 'a row with neither a note nor an effort is refused');
 
 -- Claude's plan, as the shopping-list function saves it (service role) ------------------
-select ok(not has_function_privilege('authenticated', 'public.meals_save_plan(uuid, date, uuid, jsonb, jsonb)', 'execute'),
+select ok(not has_function_privilege('authenticated', 'public.meals_save_plan(uuid, date, uuid, jsonb, jsonb, jsonb)', 'execute'),
   'a client cannot call meals_save_plan');
 reset role;
 delete from meals;
 insert into meal_wishes (household_id, name, created_by) values
   (current_setting('t.hh')::uuid, 'Fish pie', current_setting('t.tim')::uuid),
   (current_setting('t.hh')::uuid, 'Ramen', current_setting('t.tim')::uuid);
-insert into meals (household_id, day, slot, name, created_by) values (current_setting('t.hh')::uuid, '2026-11-12', 'lunch', 'Soup', current_setting('t.tim')::uuid);
+insert into meals (household_id, day, slot, person_id, name, created_by) values
+  (current_setting('t.hh')::uuid, '2026-11-12', 'lunch', null, 'Soup', current_setting('t.tim')::uuid),
+  (current_setting('t.hh')::uuid, '2026-11-13', 'dinner', current_setting('t.tim')::uuid, 'Old dinner', current_setting('t.tim')::uuid),
+  (current_setting('t.hh')::uuid, '2026-11-13', 'breakfast', null, 'Porridge', current_setting('t.tim')::uuid),
+  (current_setting('t.hh')::uuid, '2026-11-14', 'lunch', null, 'Nobody in', current_setting('t.tim')::uuid),
+  (current_setting('t.hh')::uuid, '2026-11-15', 'lunch', null, 'Not in the plan', current_setting('t.tim')::uuid);
 select is(
   meals_save_plan(current_setting('t.hh')::uuid, '2026-11-09', current_setting('t.tim')::uuid, jsonb_build_array(
     jsonb_build_object('day', '2026-11-12', 'slot', 'lunch', 'person_id', null, 'name', 'Not over soup'),
     jsonb_build_object('day', '2026-11-12', 'slot', 'dinner', 'person_id', current_setting('t.tim'), 'name', 'fish pie'),
     jsonb_build_object('day', '2026-11-13', 'slot', 'dinner', 'person_id', null, 'name', 'Chilli'),
     jsonb_build_object('day', '2026-11-13', 'slot', 'breakfast', 'person_id', null, 'name', 'Toast')
-  ), '{"cost_micro_usd": 9000}'::jsonb),
-  2, 'it fills empty lunches and dinners only');
+  ), '{"cost_micro_usd": 9000}'::jsonb, '[{"day": "2026-11-14", "slot": "lunch"}]'::jsonb),
+  3, 'it redoes the planned lunches and dinners only');
 select is((select string_agg(day || ' ' || slot || ' ' || name || ' ' || coalesce(person_id::text, 'both'), ', ' order by day, slot) from meals),
-  '2026-11-12 dinner fish pie ' || current_setting('t.tim') || ', 2026-11-12 lunch Soup both, 2026-11-13 dinner Chilli both',
-  'never over a meal already there, and a meal for one when only one is in');
+  '2026-11-12 dinner fish pie ' || current_setting('t.tim') || ', 2026-11-12 lunch Not over soup both, 2026-11-13 breakfast Porridge both, 2026-11-13 dinner Chilli both, 2026-11-15 lunch Not in the plan both',
+  'replaces what was there (a meal each included), empties slots nobody is in for, keeps breakfast and other days, and a meal for one when only one is in');
 select is((select string_agg(name, ',') from meal_wishes), 'Ramen', 'a wanted meal it used comes off the list');
-select is((select kind || ':' || ok || ':' || item_count || ':' || llm_cost_micro_usd from shopping_list_runs where kind = 'plan'), 'plan:true:2:9000',
+select is((select kind || ':' || ok || ':' || item_count || ':' || llm_cost_micro_usd from shopping_list_runs where kind = 'plan'), 'plan:true:3:9000',
   'and the call is costed with the lists and recipes');
 select is((select created_by::text from meals where name = 'Chilli'), current_setting('t.tim'), 'planned meals are by the person who asked');
 
