@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/misc'
 import { formatDay, todayISO } from '@/lib/dates'
+import { parseMoney, toMoneyInput } from '@/lib/money'
 import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
@@ -24,6 +25,7 @@ import {
   useWeddingChecklist,
   useWeddingSettings,
 } from '../api'
+import { money } from '../lib/money'
 import { MAX_AREA_CHARS, venueSearchTitle, waitingAreas } from '../lib/venueSearch'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
@@ -241,6 +243,7 @@ export function Venues() {
                 venue={v}
                 by={v.created_by === me.id ? null : v.created_by ? (member(v.created_by)?.display_name ?? null) : 'Claude'}
                 onVisited={() => update.mutate({ id: v.id, patch: { visited: !v.visited } }, { onError })}
+                onPrice={(price_minor) => update.mutate({ id: v.id, patch: { price_minor } }, { onError })}
                 onDelete={() => del.mutate(v.id, { onError })}
               />
             ))}
@@ -253,7 +256,19 @@ export function Venues() {
   )
 }
 
-function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: string | null; onVisited: () => void; onDelete: () => void }) {
+function VenueRow({
+  venue: v,
+  by,
+  onVisited,
+  onPrice,
+  onDelete,
+}: {
+  venue: Venue
+  by: string | null
+  onVisited: () => void
+  onPrice: (minor: number | null) => void
+  onDelete: () => void
+}) {
   return (
     <li className="flex items-start gap-1 py-2 text-sm">
       <span className="min-w-0 flex-1 py-1">
@@ -270,6 +285,7 @@ function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: str
         </span>
         {v.note ? <span className="mt-0.5 block break-words text-xs text-muted-foreground">{v.note}</span> : null}
       </span>
+      <VenuePrice name={v.name} price={v.price_minor ?? null} onSave={onPrice} />
       <Button
         size="sm"
         variant={v.visited ? 'secondary' : 'ghost'}
@@ -285,6 +301,52 @@ function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: str
         <X />
       </Button>
     </li>
+  )
+}
+
+/**
+ * What a venue costs, in whole pounds: tap to type it, saved on leaving the
+ * box (or Enter); emptied clears it. "£?" until someone puts one in.
+ */
+function VenuePrice({ name, price, onSave }: { name: string; price: number | null; onSave: (minor: number | null) => void }) {
+  const [text, setText] = useState<string | null>(null)
+  const save = () => {
+    if (text === null) return
+    const t = text.trim()
+    const minor = t ? parseMoney(t) : null
+    setText(null)
+    if (t && (minor === null || minor < 0)) return void toast.error('Type the price in pounds, e.g. 12500')
+    if (minor !== price) onSave(minor)
+  }
+  if (text !== null) {
+    return (
+      <Input
+        autoFocus
+        aria-label={`Price of ${name}`}
+        inputMode="decimal"
+        enterKeyHint="done"
+        placeholder="£"
+        className="h-9 w-24 shrink-0 text-right tabular sm:h-8"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setText(null)
+        }}
+      />
+    )
+  }
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className={cn('h-9 shrink-0 px-2 text-xs tabular sm:h-8', price == null ? 'text-muted-foreground' : 'font-medium')}
+      aria-label={price == null ? `Add the price of ${name}` : `Price of ${name}: ${money(price)}`}
+      onClick={() => setText(price == null ? '' : toMoneyInput(price).replace(/\.00$/, ''))}
+    >
+      {price == null ? '£?' : money(price)}
+    </Button>
   )
 }
 

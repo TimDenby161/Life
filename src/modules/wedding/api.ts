@@ -84,7 +84,7 @@ export const useVenues = () =>
 export const useAddVenue = () =>
   useWeddingMutation(async (h, v: { name: string; url: string | null }) => unwrap(await supabase.from('wedding_venues').insert({ ...v, household_id: h })))
 export const useUpdateVenue = () =>
-  useWeddingMutation(async (_h, { id, patch }: { id: string; patch: { visited?: boolean; note?: string | null } }) =>
+  useWeddingMutation(async (_h, { id, patch }: { id: string; patch: { visited?: boolean; note?: string | null; price_minor?: number | null } }) =>
     unwrap(await supabase.from('wedding_venues').update(patch).eq('id', id)),
   )
 export const useDeleteVenue = () => useWeddingMutation(async (_h, id: string) => unwrap(await supabase.from('wedding_venues').delete().eq('id', id)))

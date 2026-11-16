@@ -4153,6 +4153,7 @@ export type Database = {
           id: string
           name: string
           note: string | null
+          price_minor: number | null
           updated_at: string
           url: string | null
           visited: boolean
@@ -4164,6 +4165,7 @@ export type Database = {
           id?: string
           name: string
           note?: string | null
+          price_minor?: number | null
           updated_at?: string
           url?: string | null
           visited?: boolean
@@ -4175,6 +4177,7 @@ export type Database = {
           id?: string
           name?: string
           note?: string | null
+          price_minor?: number | null
           updated_at?: string
           url?: string | null
           visited?: boolean

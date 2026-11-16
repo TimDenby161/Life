@@ -4,7 +4,7 @@
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(10);
 
 create function pg_temp.as_user(p_id uuid) returns void language plpgsql as $$
 begin
@@ -33,6 +33,9 @@ select throws_ok(format($$insert into wedding_venues (household_id, name, create
 select pg_temp.as_user(current_setting('t.sophie')::uuid);
 update wedding_venues set visited = true;
 select is((select visited from wedding_venues), true, 'the partner sees it and can tick it visited');
+update wedding_venues set price_minor = 1250000;
+select is((select price_minor from wedding_venues), 1250000::bigint, 'and can put in what it costs');
+select throws_ok($$update wedding_venues set price_minor = -1$$, '23514', null, 'a price is never negative');
 
 select pg_temp.as_user(current_setting('t.out')::uuid);
 select is((select count(*)::int from wedding_venues), 0, 'an outsider sees none of it');
