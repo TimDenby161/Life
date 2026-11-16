@@ -24,6 +24,7 @@ import {
   useWeddingChecklist,
   useWeddingSettings,
 } from '../api'
+import { MAX_AREA_CHARS, venueSearchTitle, waitingAreas } from '../lib/venueSearch'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 
@@ -132,18 +133,29 @@ function Jobs() {
   )
 }
 
-/** Venues either of you is looking at, or Claude found: a name and a link, who found it, and whether you've been. Adding one shows in the feed. */
+/**
+ * Venues either of you is looking at, or Claude found: a name and a link, who
+ * found it, and whether you've been. Adding one shows in the feed. "Find more"
+ * asks Claude to search an area (a wedding job its morning run picks up).
+ * Stacks on a phone: name and note wrap rather than cut off.
+ */
 function Venues() {
   const { me, member } = useHousehold()
   const venues = useVenues()
   const add = useAddVenue()
   const update = useUpdateVenue()
   const del = useDeleteVenue()
+  const settings = useWeddingSettings()
+  const jobs = useWeddingChecklist(settings.data?.task_category_id)
+  const addJob = useAddChecklistTasks()
   const [name, setName] = useState('')
   const [link, setLink] = useState('')
+  const [area, setArea] = useState('')
   const url = asLink(link)
   const badLink = Boolean(link.trim()) && !url
   const ready = (Boolean(name.trim()) || Boolean(url)) && !badLink
+  const searchTitle = venueSearchTitle(area)
+  const waiting = waitingAreas(jobs.data ?? [])
 
   if (venues.error) return <ErrorState error={venues.error} onRetry={() => void venues.refetch()} />
 
@@ -152,9 +164,9 @@ function Venues() {
       <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1">
         <CardTitle>Venues</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-1 px-3 pb-3 pt-1 sm:px-3">
+      <CardContent className="grid gap-2 px-3 pb-3 pt-1 sm:px-3">
         <form
-          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5"
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
           onSubmit={(e) => {
             e.preventDefault()
             if (!ready) return
@@ -170,7 +182,7 @@ function Venues() {
             )
           }}
         >
-          <Input aria-label="Venue name" placeholder="Venue" maxLength={120} className="h-9" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input aria-label="Venue name" placeholder="Venue" maxLength={120} className="col-span-2 h-10 sm:col-span-1 sm:h-9" value={name} onChange={(e) => setName(e.target.value)} />
           <Input
             aria-label="Link to the venue"
             aria-invalid={badLink || undefined}
@@ -178,14 +190,47 @@ function Venues() {
             inputMode="url"
             autoCapitalize="off"
             maxLength={500}
-            className={cn('h-9', badLink && 'border-destructive')}
+            className={cn('h-10 sm:h-9', badLink && 'border-destructive')}
             value={link}
             onChange={(e) => setLink(e.target.value)}
           />
-          <Button type="submit" size="icon" variant="outline" aria-label="Add venue" disabled={!ready || add.isPending}>
+          <Button type="submit" size="icon" variant="outline" className="sm:size-9" aria-label="Add venue" disabled={!ready || add.isPending}>
             <Plus />
           </Button>
         </form>
+        <form
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!searchTitle) return
+            addJob.mutate([{ title: searchTitle, due_date: null }], {
+              onSuccess: () => {
+                setArea('')
+                toast.success('Claude searches there tomorrow morning')
+              },
+              onError,
+            })
+          }}
+        >
+          <Input
+            aria-label="Area for Claude to search"
+            placeholder="Area, e.g. Derby"
+            maxLength={MAX_AREA_CHARS}
+            enterKeyHint="search"
+            className="h-10 sm:h-9"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+          />
+          <Button type="submit" variant="outline" className="h-10 gap-1.5 px-3 sm:h-9" disabled={!searchTitle || addJob.isPending}>
+            <Sparkles className="size-4 text-primary" aria-hidden /> Find more
+          </Button>
+        </form>
+        {waiting.length ? (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Sparkles className="mt-0.5 size-3 shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 break-words">Tomorrow: {waiting.join(', ')}</span>
+          </p>
+        ) : null}
         {venues.isPending ? (
           <ListSkeleton rows={2} />
         ) : venues.data.length ? (
@@ -210,31 +255,33 @@ function Venues() {
 
 function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: string | null; onVisited: () => void; onDelete: () => void }) {
   return (
-    <li className="flex items-center gap-2 py-1.5 text-sm">
-      <span className="min-w-0 flex-1">
-        <span className="block truncate">
+    <li className="flex items-start gap-1 py-2 text-sm">
+      <span className="min-w-0 flex-1 py-1">
+        <span className="block break-words">
           {v.url ? (
-            <a href={v.url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 font-medium hover:underline">
-              <span className="truncate">{v.name}</span>
-              <ExternalLink className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            <a href={v.url} target="_blank" rel="noreferrer noopener" className="font-medium hover:underline">
+              {v.name}
+              <ExternalLink className="ml-1 inline size-3 align-baseline text-muted-foreground" aria-hidden />
             </a>
           ) : (
             <span className="font-medium">{v.name}</span>
           )}
           {by ? <span className="text-xs text-muted-foreground"> · {by}</span> : null}
         </span>
-        {v.note ? <span className="block truncate text-xs text-muted-foreground">{v.note}</span> : null}
+        {v.note ? <span className="mt-0.5 block break-words text-xs text-muted-foreground">{v.note}</span> : null}
       </span>
       <Button
         size="sm"
         variant={v.visited ? 'secondary' : 'ghost'}
-        className={cn('h-7 shrink-0 rounded-full px-2.5 text-xs', v.visited ? 'text-success' : 'text-muted-foreground')}
+        className={cn('h-9 shrink-0 rounded-full px-2.5 text-xs sm:h-8', v.visited ? 'text-success' : 'text-muted-foreground')}
         aria-pressed={v.visited}
+        aria-label={`Visited ${v.name}`}
         onClick={onVisited}
       >
-        {v.visited ? <CheckCircle2 className="size-3.5" /> : null} Visited
+        <CheckCircle2 className={cn('size-4', !v.visited && 'opacity-40')} aria-hidden />
+        <span className="hidden sm:inline">Visited</span>
       </Button>
-      <Button size="icon-sm" variant="ghost" className="shrink-0 text-muted-foreground" aria-label={`Remove ${v.name}`} onClick={onDelete}>
+      <Button size="icon" variant="ghost" className="size-9 shrink-0 text-muted-foreground sm:size-8" aria-label={`Remove ${v.name}`} onClick={onDelete}>
         <X />
       </Button>
     </li>
