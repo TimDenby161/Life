@@ -24,6 +24,8 @@ describe('agent-driven pages', () => {
   it('open Goals when asked', () => {
     expect(view('/health?view=goals', '/health')).toBe('goals')
     expect(PAGE_AGENTS.health.goals).toBe('fitness')
+    expect(view('/finances?view=cashflow', '/finances')).toBe('cashflow')
+    expect(PAGE_AGENTS.finances.cashflow).toBe(true)
   })
 
   it('cover every page with an agent, using real agents', () => {

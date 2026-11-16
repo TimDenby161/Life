@@ -19,16 +19,18 @@ export type PageAgent = {
   bare?: boolean
   /** A third tab, Goals, where the agent's goals are set (the Coach's weekly exercise goals). */
   goals?: 'fitness'
+  /** A Cashflow tab between the agent view and Details (Finance). */
+  cashflow?: true
 }
 
-export type PageViewName = 'agent' | 'details' | 'goals'
+export type PageViewName = 'agent' | 'details' | 'goals' | 'cashflow'
 
 export const PAGE_AGENTS: Record<string, PageAgent> = {
   home: { label: 'Today', description: 'The rest of today’s calendar, the jobs you can do today, and the news.', agents: ['chief_of_staff'], extra: 'today', bare: true },
   tasks: { label: 'Task Manager', description: 'Put-off and overdue tasks, deadline risks, duplicates and moves off packed days.', agents: ['task_manager'], kinds: ['overdue', 'put_off', 'deadline_risk', 'blocked', 'undated', 'duplicate', 'automate', 'packed_day', 'workload'] },
   jobs: { label: 'Household', description: 'Upkeep that’s easy to forget, rooms with nothing set up, and jobs that keep slipping.', agents: ['household', 'task_manager'], kinds: ['maintenance', 'empty_room', 'missed_repeat', 'repeat'] },
   calendar: { label: 'This week', description: 'Today’s calendar, packed days ahead, and jobs worth moving off them.', agents: ['chief_of_staff', 'task_manager'], kinds: ['packed_day'], extra: 'calendar' },
-  finances: { label: 'Finance', agents: ['finance'], extra: 'finance' },
+  finances: { label: 'Finance', agents: ['finance'], extra: 'finance', cashflow: true },
   wedding: { label: 'Plan', description: 'The venues you’re looking at and the jobs to do.', agents: ['wedding'], extra: 'wedding' },
   languages: { label: 'Words', description: 'The words you know, the ones you’ve got wrong, and any to review again.', agents: ['language_coach'], extra: 'languages' },
   health: { label: 'Coach', agents: ['health_coach'], extra: 'exercise', goals: 'fitness' },
@@ -42,7 +44,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
  */
 export function pageView(pathname: string, base: string, params: URLSearchParams): PageViewName {
   const asked = params.get('view')
-  if (asked === 'details' || asked === 'agent' || asked === 'goals') return asked
+  if (asked === 'details' || asked === 'agent' || asked === 'goals' || asked === 'cashflow') return asked
   const inside = pathname.replace(/\/$/, '') !== base.replace(/\/$/, '') || [...params.keys()].length > 0
   return inside ? 'details' : 'agent'
 }
