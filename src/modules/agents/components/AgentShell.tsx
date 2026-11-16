@@ -8,6 +8,7 @@ import { type PageAgent, type PageViewName, pageView } from '../pageAgents'
 
 const AgentView = lazy(() => import('./AgentView'))
 const GoalsView = lazy(() => import('./GoalsView'))
+const Venues = lazy(() => import('@/modules/wedding/components/WeddingPlan').then((m) => ({ default: m.Venues })))
 const CashflowTab = lazy(() => import('@/modules/finances/pages/CashflowTab').then((m) => ({ default: m.CashflowTab })))
 
 /**
@@ -20,7 +21,7 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
   const { pathname } = useLocation()
   // Home has no switch, so it's always the agent view unless a link points inside it.
   const asked = pageView(pathname, base, params)
-  const view = (asked === 'goals' && !scope.goals) || (asked === 'cashflow' && !scope.cashflow) ? 'agent' : asked
+  const view = (asked === 'goals' && !scope.goals) || (asked === 'cashflow' && !scope.cashflow) || (asked === 'venues' && !scope.venues) ? 'agent' : asked
   const setView = (v: PageViewName) =>
     setParams(v === 'details' ? (p) => { p.set('view', 'details'); return p } : { view: v }, { replace: true })
 
@@ -36,6 +37,7 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
           options={[
             { value: 'agent', label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
             ...(scope.cashflow ? [{ value: 'cashflow' as const, label: 'Cashflow' }] : []),
+            ...(scope.venues ? [{ value: 'venues' as const, label: 'Venues' }] : []),
             { value: 'details', label: 'Details' },
             ...(scope.goals ? [{ value: 'goals' as const, label: 'Goals' }] : []),
           ]}
@@ -51,6 +53,10 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
       ) : view === 'cashflow' ? (
         <Suspense fallback={<ListSkeleton rows={3} />}>
           <CashflowTab />
+        </Suspense>
+      ) : view === 'venues' ? (
+        <Suspense fallback={<ListSkeleton rows={3} />}>
+          <div className="md:max-w-2xl"><Venues /></div>
         </Suspense>
       ) : view === 'goals' && scope.goals ? (
         <Suspense fallback={<ListSkeleton rows={3} />}>

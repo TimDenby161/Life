@@ -139,7 +139,7 @@ function Jobs() {
  * asks Claude to search an area (a wedding job its morning run picks up).
  * Stacks on a phone: name and note wrap rather than cut off.
  */
-function Venues() {
+export function Venues() {
   const { me, member } = useHousehold()
   const venues = useVenues()
   const add = useAddVenue()
@@ -288,11 +288,10 @@ function VenueRow({ venue: v, by, onVisited, onDelete }: { venue: Venue; by: str
   )
 }
 
-/** The Wedding page's first view: the venues you're looking at, then the jobs to do. Budget, guests and the rest are under Details. */
+/** The Wedding page's first view: the jobs to do. Venues are their own tab; budget, guests and the rest are under Details. */
 export function WeddingPlan() {
   return (
     <div className="grid grid-cols-1 gap-3 md:max-w-2xl">
-      <Venues />
       <Jobs />
     </div>
   )

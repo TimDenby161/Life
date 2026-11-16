@@ -32,7 +32,7 @@ export default function AgentView({ scope, onDetails }: { scope: PageAgent; onDe
   if (scope.extra === 'today') return <HomeToday />
   // Finance is the live goals and trend cards only: the agent's notes repeated them.
   if (scope.extra === 'finance') return <div className="grid grid-cols-1 gap-4"><FinanceOverview /></div>
-  // Wedding is its jobs and venues: the planner's notices weren't what was needed day to day.
+  // Wedding is its jobs (venues have their own tab): the planner's notices weren't what was needed day to day.
   if (scope.extra === 'wedding') return <WeddingPlan />
   // Languages is just the word lists: Spanish and Mandarin, known and got wrong.
   if (scope.extra === 'languages') return <WordLists />
