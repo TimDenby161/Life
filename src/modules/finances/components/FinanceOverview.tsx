@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns'
-import { AlertTriangle, CheckCircle2, PiggyBank } from 'lucide-react'
+import { PiggyBank } from 'lucide-react'
 import { useMemo } from 'react'
 import { ErrorState, ListSkeleton } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,45 +8,34 @@ import { todayISO } from '@/lib/dates'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
-import { useAccounts, useBalances, useGoals, usePots, useSnapshots, useTransactions } from '../hooks'
-import { netWorthDates } from '../lib/calc'
-import { type GoalPlan, goalAccounts, goalPlans, recentChanges, trendConcerns, trendPoints } from '../lib/insights'
+import { useBalances, useGoals, usePots } from '../hooks'
+import { type GoalPlan, goalPlans } from '../lib/insights'
 
 const money = (v: number) => formatMoney(v, 'GBP', { hidePence: true })
-const signed = (v: number) => `${v < 0 ? '−' : '+'}${money(Math.abs(v))}`
 
-/**
- * The top of the Finance view: what each goal needs a month, and anything
- * worrying in how the balances have moved update to update. Live, from the
- * same balances as Details.
- */
+/** The Finance view: what each goal needs a month. Live, from the same balances as Details. */
 export function FinanceOverview() {
-  const { household, members, member } = useHousehold()
-  const accounts = useAccounts()
+  const { members, member } = useHousehold()
   const balances = useBalances()
-  const snapshots = useSnapshots()
-  const transactions = useTransactions()
   const goals = useGoals()
   const pots = usePots()
   const today = todayISO()
-  const queries = [accounts, balances, snapshots, transactions, goals, pots]
+  const queries = [balances, goals, pots]
 
   const derived = useMemo(() => {
-    if (!accounts.data || !balances.data || !snapshots.data || !transactions.data || !goals.data || !pots.data) return null
+    if (!balances.data || !goals.data || !pots.data) return null
     const allGoals = [...goals.data, ...pots.data.items]
     const plans = goalPlans(allGoals, pots.data.pots, balances.data, today)
     const needed = plans.reduce((t, p) => t + (p.perMonth ?? 0), 0)
     // Split evenly only when every goal being paid into is a joint one.
     const allJoint = plans.every((p) => p.perMonth === null || !p.owner_id)
-    const included = accounts.data.filter((a) => !a.archived_at && a.include_in_net_worth && a.currency === household.default_currency)
-    const points = trendPoints(included, snapshots.data, transactions.data, netWorthDates(snapshots.data, today), goalAccounts(allGoals, pots.data.pots))
-    return { plans, needed, allJoint, concerns: trendConcerns(points, needed, today), changes: recentChanges(points) }
-  }, [accounts.data, balances.data, snapshots.data, transactions.data, goals.data, pots.data, household.default_currency, today])
+    return { plans, needed, allJoint }
+  }, [balances.data, goals.data, pots.data, today])
 
   const failed = queries.find((q) => q.error)
   if (failed) return <ErrorState error={failed.error} onRetry={() => queries.forEach((q) => q.refetch())} />
   if (!derived) return <ListSkeleton rows={4} />
-  const { plans, needed, allJoint, concerns, changes } = derived
+  const { plans, needed, allJoint } = derived
   const both = members.length > 1 && allJoint
 
   return (
@@ -72,43 +61,6 @@ export function FinanceOverview() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="p-3 pb-1 sm:p-3 sm:pb-1">
-          <CardTitle>Month to month</CardTitle>
-          {changes.length ? <span className="shrink-0 text-[11px] text-muted-foreground">Net worth, calculated</span> : null}
-        </CardHeader>
-        <CardContent className="grid gap-2 px-3 pb-3 pt-0 sm:px-3">
-          {concerns.length ? (
-            <ul className="grid gap-1.5">
-              {concerns.map((c) => (
-                <li key={c.key} className="flex gap-2 text-sm leading-snug">
-                  <AlertTriangle className={cn('mt-0.5 size-3.5 shrink-0', c.severity === 'high' ? 'text-destructive' : 'text-warning')} aria-hidden />
-                  <span className="min-w-0">
-                    <span className="font-medium">{c.title}</span>
-                    {c.detail ? <span className="text-muted-foreground"> {c.detail}</span> : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-success" /> {changes.length ? 'Nothing worrying in the recent updates.' : 'Not enough updates yet to see a trend.'}
-            </p>
-          )}
-          {changes.length ? (
-            <div className="border-t pt-2">
-              <ul className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
-                {changes.toReversed().slice(0, 3).map((c) => (
-                  <li key={c.date} className="flex justify-between gap-1.5">
-                    <span className="text-muted-foreground">{format(parseISO(c.date), 'd MMM')}</span>
-                    <span className={cn('tabular', c.change < 0 && 'text-destructive')}>{signed(c.change)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
     </>
   )
 }
