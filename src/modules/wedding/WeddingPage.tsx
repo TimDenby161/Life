@@ -135,7 +135,7 @@ function SettingsDialog({ settings, onClose }: { settings: WeddingSettings | nul
               )}
             </div>
           </Field>
-          <Field label="Paid for by" htmlFor="w-goal" hint="This pot item's target always equals the budget total once the budget has items.">
+          <Field label="Paid for by" htmlFor="w-goal" hint="This pot item's amount is always the budget total, due the day before the wedding.">
             <NativeSelect id="w-goal" value={goalId} onChange={(e) => setGoalId(e.target.value)}>
               <option value="">Not linked</option>
               {(pots.data?.items ?? []).map((i) => <option key={i.id} value={i.id}>{potName(i.pot_id)} · {i.name}</option>)}

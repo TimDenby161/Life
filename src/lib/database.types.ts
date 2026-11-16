@@ -3381,6 +3381,7 @@ export type Database = {
           owner_id: string | null
           paid_minor: number
           plan_url: string | null
+          pot_goal_id: string | null
           starts_on: string
           stay: string
           time_off: string
@@ -3401,6 +3402,7 @@ export type Database = {
           owner_id?: string | null
           paid_minor?: number
           plan_url?: string | null
+          pot_goal_id?: string | null
           starts_on: string
           stay?: string
           time_off?: string
@@ -3421,6 +3423,7 @@ export type Database = {
           owner_id?: string | null
           paid_minor?: number
           plan_url?: string | null
+          pot_goal_id?: string | null
           starts_on?: string
           stay?: string
           time_off?: string
@@ -3441,6 +3444,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "household_members"
             referencedColumns: ["household_id", "user_id"]
+          },
+          {
+            foreignKeyName: "trips_pot_goal_id_fkey"
+            columns: ["pot_goal_id"]
+            isOneToOne: false
+            referencedRelation: "savings_goals"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4315,6 +4325,10 @@ export type Database = {
         Returns: boolean
       }
       is_valid_recurrence: { Args: { p_rule: Json }; Returns: boolean }
+      linked_goal_target: {
+        Args: { p_goal: string }
+        Returns: Record<string, unknown>
+      }
       log_feed_event: {
         Args: {
           p_actor_id: string
@@ -4467,6 +4481,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sync_linked_goal: { Args: { p_goal: string }; Returns: undefined }
       sync_wedding_pot_target: {
         Args: { p_household_id: string }
         Returns: undefined

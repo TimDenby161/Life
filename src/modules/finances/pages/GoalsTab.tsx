@@ -11,7 +11,9 @@ import { formatDay } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
 import { cn } from '@/lib/utils'
+import { useTrips } from '@/modules/agents/api'
 import { useHousehold } from '@/modules/household/HouseholdProvider'
+import { useWeddingSettings } from '@/modules/wedding/api'
 import { type Account, LIABILITY_TYPES, type SavingsGoal, type SavingsPot, VALUED_TYPES } from '../api'
 import { MoneyInput } from '../components/forms'
 import { useAccounts, useBalances, useDeletePot, useDeletePotItem, usePots, useReorderPotItems, useSavePot, useSavePotItem } from '../hooks'
@@ -25,6 +27,7 @@ export function GoalsTab() {
   const balances = useBalances()
   const accounts = useAccounts()
   const [editingPot, setEditingPot] = useState<SavingsPot | 'new' | null>(null)
+  const links = useLinks()
 
   if (pots.isPending || balances.isPending || accounts.isPending) return <ListSkeleton rows={3} />
   if (pots.error) return <ErrorState error={pots.error} onRetry={() => pots.refetch()} />
@@ -48,6 +51,7 @@ export function GoalsTab() {
               account={accounts.data?.find((a) => a.id === p.account_id)}
               balance={p.account_id ? (balances.data?.get(p.account_id) ?? 0) : 0}
               items={pots.data.items.filter((i) => i.pot_id === p.id)}
+              links={links}
               onEdit={() => setEditingPot(p)}
             />
           ))}
@@ -58,7 +62,17 @@ export function GoalsTab() {
   )
 }
 
-function PotCard({ pot, account, balance, items, onEdit }: { pot: SavingsPot; account?: Account; balance: number; items: SavingsGoal[]; onEdit: () => void }) {
+/** Pot items whose amount and date come from a holiday or the wedding (kept in step by the database), by item id. */
+function useLinks(): ReadonlyMap<string, string> {
+  const trips = useTrips()
+  const wedding = useWeddingSettings()
+  const links = new Map<string, string>()
+  for (const t of trips.data ?? []) if (t.pot_goal_id && t.cost_minor != null) links.set(t.pot_goal_id, t.name)
+  if (wedding.data?.pot_goal_id) links.set(wedding.data.pot_goal_id, 'the wedding')
+  return links
+}
+
+function PotCard({ pot, account, balance, items, links, onEdit }: { pot: SavingsPot; account?: Account; balance: number; items: SavingsGoal[]; links: ReadonlyMap<string, string>; onEdit: () => void }) {
   const reorder = useReorderPotItems()
   const remove = useDeletePotItem()
   const [editing, setEditing] = useState<SavingsGoal | 'new' | null>(null)
@@ -104,7 +118,7 @@ function PotCard({ pot, account, balance, items, onEdit }: { pot: SavingsPot; ac
       </ol>
       <Button variant="ghost" size="sm" className="mt-2 max-w-full" onClick={() => setEditing('new')}><Plus /> <span className="truncate">Add to {pot.name}</span></Button>
 
-      <PotItemDialog key={editing === 'new' ? 'new' : editing?.id} pot={pot} item={editing} nextOrder={items.length} onClose={() => setEditing(null)} />
+      <PotItemDialog key={editing === 'new' ? 'new' : editing?.id} pot={pot} item={editing} link={editing && editing !== 'new' ? links.get(editing.id) : undefined} nextOrder={items.length} onClose={() => setEditing(null)} />
     </Card>
   )
 }
@@ -125,7 +139,7 @@ function PotItemRow({
   onDelete: () => void
 }) {
   const [confirm, setConfirm] = useState(false)
-  const pct = Math.round((item.funded / item.target_minor) * 100)
+  const pct = item.target_minor ? Math.round((item.funded / item.target_minor) * 100) : 100
   return (
     <li className={cn('grid grid-cols-1 gap-1 rounded-lg p-2', item.status === 'funding' && 'bg-muted/50')}>
       <div className="flex items-start justify-between gap-2 text-sm">
@@ -212,7 +226,7 @@ function PotDialog({ pot, accounts, onClose }: { pot: SavingsPot | 'new' | null;
   )
 }
 
-function PotItemDialog({ pot, item, nextOrder, onClose }: { pot: SavingsPot; item: SavingsGoal | 'new' | null; nextOrder: number; onClose: () => void }) {
+function PotItemDialog({ pot, item, link, nextOrder, onClose }: { pot: SavingsPot; item: SavingsGoal | 'new' | null; link?: string; nextOrder: number; onClose: () => void }) {
   const save = useSavePotItem()
   const existing = item && item !== 'new' ? item : undefined
   const [name, setName] = useState(existing?.name ?? '')
@@ -229,9 +243,9 @@ function PotItemDialog({ pot, item, nextOrder, onClose }: { pot: SavingsPot; ite
             e.preventDefault()
             const target = parseMoney(amount)
             if (!name.trim()) return setError('Give it a name')
-            if (!target || target <= 0) return setError('Enter an amount')
+            if (!link && (!target || target <= 0)) return setError('Enter an amount')
             save.mutate(
-              { id: existing?.id, pot_id: pot.id, name: name.trim(), target_minor: target, target_date: date || null, sort_order: existing?.sort_order ?? nextOrder },
+              { id: existing?.id, pot_id: pot.id, name: name.trim(), target_minor: target ?? existing?.target_minor ?? 0, target_date: date || null, sort_order: existing?.sort_order ?? nextOrder },
               { onSuccess: onClose, onError: (err) => toast.error(getErrorMessage(err)) },
             )
           }}
@@ -239,14 +253,15 @@ function PotItemDialog({ pot, item, nextOrder, onClose }: { pot: SavingsPot; ite
           <Field label="What for" htmlFor="item-name" error={error}>
             <Input id="item-name" autoFocus value={name} maxLength={80} placeholder={pot.name.toLowerCase().includes('service') ? 'e.g. Service charge (Jan)' : 'e.g. Italy, June'} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset disabled={Boolean(link)} className="grid gap-4 sm:grid-cols-2">
             <Field label="Amount" htmlFor="item-amount">
               <MoneyInput id="item-amount" value={amount} onChange={setAmount} />
             </Field>
             <Field label="Due (optional)" htmlFor="item-date">
               <Input id="item-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </Field>
-          </div>
+          </fieldset>
+          {link ? <p className="-mt-2 text-xs text-muted-foreground">Amount and date follow {link}. Change them there.</p> : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={save.isPending}>Save</Button>

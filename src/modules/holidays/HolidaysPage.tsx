@@ -7,12 +7,13 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
-import { Field, Input } from '@/components/ui/input'
+import { Field, Input, NativeSelect } from '@/components/ui/input'
 import { Progress, Segmented } from '@/components/ui/misc'
 import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
 import { cn } from '@/lib/utils'
+import { usePots } from '@/modules/finances/hooks'
 import { inBrowser } from '@/modules/agents/components/AgentView'
 import { dates, ITEMS, NEXT, STATUS_TEXT } from '@/modules/agents/components/Trips'
 import { type TripRow, useDeleteTrip, useSaveTrip, useTrips } from '@/modules/agents/api'
@@ -21,7 +22,7 @@ import type { ItemStatus } from '../../../supabase/functions/_shared/agents/trav
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 const money = (minor: number) => formatMoney(minor, 'GBP', { hidePence: true })
 
-type Form = { id?: string; name: string; starts_on: string; ends_on: string; cost: string; paid: string; plan_url: string; confirmed: boolean }
+type Form = { id?: string; name: string; starts_on: string; ends_on: string; cost: string; paid: string; plan_url: string; confirmed: boolean; pot_goal_id: string }
 
 const toForm = (t?: TripRow): Form => ({
   id: t?.id,
@@ -32,11 +33,19 @@ const toForm = (t?: TripRow): Form => ({
   paid: t?.paid_minor ? toMoneyInput(t.paid_minor) : '',
   plan_url: t?.plan_url ?? '',
   confirmed: t?.confirmed ?? true,
+  pot_goal_id: t?.pot_goal_id ?? '',
 })
 
-/** Add or change a holiday: name, dates, cost and paid (for both of you), the plan's link, and whether you're going or it's an idea. */
-function HolidayDialog({ initial, onClose }: { initial: Form; onClose: () => void }) {
+/**
+ * Add or change a holiday: name, dates, cost and paid (for both of you), the plan's link, whether you're going or it's
+ * an idea, and the savings pot item it's saved in (whose amount and date then follow the holiday's; see the trip_pot_goals migration).
+ */
+function HolidayDialog({ initial, trips, onClose }: { initial: Form; trips: TripRow[]; onClose: () => void }) {
   const save = useSaveTrip()
+  const pots = usePots()
+  const potName = (id: string | null) => pots.data?.pots.find((p) => p.id === id)?.name ?? ''
+  // Each pot item pays for one holiday.
+  const taken = new Set(trips.filter((t) => t.id !== initial.id && t.pot_goal_id).map((t) => t.pot_goal_id))
   const [f, setF] = useState(initial)
   const cost = f.cost.trim() ? parseMoney(f.cost) : null
   const paid = f.paid.trim() ? parseMoney(f.paid) : 0
@@ -65,6 +74,7 @@ function HolidayDialog({ initial, onClose }: { initial: Form; onClose: () => voi
                 paid_minor: paid ?? 0,
                 plan_url: link || null,
                 confirmed: f.confirmed,
+                pot_goal_id: f.pot_goal_id || null,
                 ...(f.id ? {} : { owner_id: null, abroad: true, transport: 'todo', stay: 'todo', insurance: 'todo', time_off: 'todo' }),
               },
               { onSuccess: onClose, onError },
@@ -98,6 +108,12 @@ function HolidayDialog({ initial, onClose }: { initial: Form; onClose: () => voi
           </div>
           <Field label="Link to the plan" htmlFor="h-url">
             <Input id="h-url" inputMode="url" autoCapitalize="off" placeholder="https://claude.ai/artifact/…" maxLength={300} value={f.plan_url} onChange={(e) => setF({ ...f, plan_url: e.target.value })} />
+          </Field>
+          <Field label="Saved in" htmlFor="h-goal" hint="Its amount follows the cost less what's paid, due the day before you go.">
+            <NativeSelect id="h-goal" value={f.pot_goal_id} onChange={(e) => setF({ ...f, pot_goal_id: e.target.value })}>
+              <option value="">Not linked</option>
+              {(pots.data?.items ?? []).filter((i) => !taken.has(i.id)).map((i) => <option key={i.id} value={i.id}>{potName(i.pot_id)} · {i.name}</option>)}
+            </NativeSelect>
           </Field>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
@@ -212,7 +228,7 @@ export default function HolidaysPage() {
           trips.data.map((t) => <HolidayCard key={t.id} trip={t} onEdit={() => setEditing(toForm(t))} />)
         )}
       </div>
-      {editing ? <HolidayDialog initial={editing} onClose={() => setEditing(null)} /> : null}
+      {editing ? <HolidayDialog initial={editing} trips={trips.data ?? []} onClose={() => setEditing(null)} /> : null}
     </>
   )
 }

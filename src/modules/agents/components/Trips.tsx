@@ -32,6 +32,7 @@ export function dates(from: string, to: string) {
 const blank = (): TripInput & { id?: string } => ({
   name: '',
   owner_id: null,
+  pot_goal_id: null,
   starts_on: '',
   ends_on: '',
   abroad: true,

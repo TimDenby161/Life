@@ -75,7 +75,7 @@ export const useAiSummaries = () => {
   })
 }
 
-function useAgentMutation<TArgs, TResult = unknown>(fn: (householdId: string, args: TArgs) => Promise<TResult>, alsoTasks = false) {
+function useAgentMutation<TArgs, TResult = unknown>(fn: (householdId: string, args: TArgs) => Promise<TResult>, alsoTasks = false, alsoFinances = false) {
   const { household } = useHousehold()
   const qc = useQueryClient()
   return useMutation({
@@ -83,6 +83,7 @@ function useAgentMutation<TArgs, TResult = unknown>(fn: (householdId: string, ar
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentKeys.all })
       if (alsoTasks) qc.invalidateQueries({ queryKey: ['tasks'] })
+      if (alsoFinances) qc.invalidateQueries({ queryKey: ['finances'] })
     },
   })
 }
@@ -254,7 +255,7 @@ export const useDeleteRenewal = () =>
 export type TripRow = Tables<'trips'>
 export type TripInput = Pick<
   TripRow,
-  'name' | 'owner_id' | 'starts_on' | 'ends_on' | 'abroad' | 'transport' | 'stay' | 'insurance' | 'time_off' | 'cost_minor' | 'paid_minor' | 'plan_url' | 'confirmed'
+  'name' | 'owner_id' | 'starts_on' | 'ends_on' | 'abroad' | 'transport' | 'stay' | 'insurance' | 'time_off' | 'cost_minor' | 'paid_minor' | 'plan_url' | 'confirmed' | 'pot_goal_id'
 >
 
 /** Trips still to come or under way, soonest first. */
@@ -264,12 +265,13 @@ export const useTrips = () =>
     queryFn: async () => unwrap(await supabase.from('trips').select('*').gte('ends_on', new Date().toISOString().slice(0, 10)).order('starts_on')),
   })
 
+/** A trip's cost, paid and start date set its linked pot item (in the database), so Finance refreshes too. */
 export const useSaveTrip = () =>
   useAgentMutation(async (householdId, t: Partial<TripInput> & { id?: string }) => {
     const { id, ...fields } = t
     if (id) unwrap(await supabase.from('trips').update(fields).eq('id', id))
     else unwrap(await supabase.from('trips').insert({ ...(fields as TripInput), household_id: householdId }))
-  })
+  }, false, true)
 
 export const useDeleteTrip = () =>
   useAgentMutation(async (_h, id: string) => {
