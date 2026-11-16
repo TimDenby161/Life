@@ -13,6 +13,7 @@ export const useBudgets = () => useQuery({ queryKey: financeKeys.budgets, queryF
 export const useGoals = () => useQuery({ queryKey: financeKeys.goals, queryFn: api.fetchGoals })
 export const usePots = () => useQuery({ queryKey: financeKeys.pots, queryFn: api.fetchPots })
 export const useSheetSource = () => useQuery({ queryKey: financeKeys.sheetSource, queryFn: api.fetchSheetSource })
+export const useCashflow = () => useQuery({ queryKey: financeKeys.cashflow, queryFn: api.fetchCashflow })
 export const useSheetLinks = () => useQuery({ queryKey: financeKeys.sheetLinks, queryFn: api.fetchSheetLinks })
 
 export function useAccountCurrency() {
@@ -60,3 +61,5 @@ export const useDeletePot = () => useFinanceMutation((_h, id: string) => api.del
 export const useSavePotItem = () => useFinanceMutation((h, input: Parameters<typeof api.savePotItem>[1]) => api.savePotItem(h, input))
 export const useDeletePotItem = () => useFinanceMutation((_h, id: string) => api.deletePotItem(id))
 export const useReorderPotItems = () => useFinanceMutation((_h, ids: string[]) => api.reorderPotItems(ids))
+export const useSaveCashflowItem = () => useFinanceMutation((h, input: Parameters<typeof api.saveCashflowItem>[1]) => api.saveCashflowItem(h, input))
+export const useDeleteCashflowItem = () => useFinanceMutation((_h, id: string) => api.deleteCashflowItem(id))

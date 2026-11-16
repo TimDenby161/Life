@@ -13,6 +13,7 @@ export type Budget = Tables<'budgets'>
 export type SavingsGoal = Tables<'savings_goals'>
 export type SavingsPot = Tables<'savings_pots'>
 export type SheetSource = Tables<'finance_sheet_sources'>
+export type CashflowItem = Tables<'cashflow_items'>
 
 export const ACCOUNT_TYPES = [
   { value: 'current', label: 'Current account' },
@@ -43,6 +44,7 @@ export const financeKeys = {
   pots: ['finances', 'pots'] as const,
   sheetSource: ['finances', 'sheet-source'] as const,
   sheetLinks: ['finances', 'sheet-links'] as const,
+  cashflow: ['finances', 'cashflow'] as const,
 }
 
 export async function fetchAccounts() {
@@ -261,4 +263,23 @@ export async function deletePotItem(id: string) {
 /** Saves a pot's items in the given order. */
 export async function reorderPotItems(ids: readonly string[]) {
   await Promise.all(ids.map(async (id, i) => unwrap(await supabase.from('savings_goals').update({ sort_order: i }).eq('id', id))))
+}
+
+// -----------------------------------------------------------------------------
+// Cashflow: regular money in and out, typed in (lib/cashflow.ts).
+// -----------------------------------------------------------------------------
+export async function fetchCashflow() {
+  return unwrap(await supabase.from('cashflow_items').select('*').order('sort_order').order('created_at'))
+}
+
+export async function saveCashflowItem(
+  householdId: string,
+  input: { id?: string; direction: 'in' | 'out'; name: string; amount_minor: number; every: 'month' | 'year'; owner_id: string | null; sort_order?: number },
+) {
+  const { id, ...fields } = input
+  if (id) unwrap(await supabase.from('cashflow_items').update(fields).eq('id', id))
+  else unwrap(await supabase.from('cashflow_items').insert({ ...fields, household_id: householdId }))
+}
+export async function deleteCashflowItem(id: string) {
+  unwrap(await supabase.from('cashflow_items').delete().eq('id', id))
 }

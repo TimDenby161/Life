@@ -18,6 +18,7 @@ export const REALTIME_TABLES: Record<string, string[]> = {
   budgets: ['finances'],
   savings_goals: ['finances'],
   finance_categories: ['finances'],
+  cashflow_items: ['finances'],
   feed_posts: ['feed'],
   feed_comments: ['feed'],
   feed_reads: ['feed'],

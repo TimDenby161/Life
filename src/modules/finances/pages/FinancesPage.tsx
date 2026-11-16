@@ -17,9 +17,10 @@ import { AccountDialog } from '../components/forms'
 import { useAccounts, useBalances, useSnapshots, useTransactions } from '../hooks'
 import { accountsForSelection, type ChartSelection, groupOf, NET_WORTH_GROUPS, type NetWorthGroup, netWorth, netWorthDates, netWorthHistory, percentChange, selectionKey, sheetPartHistory } from '../lib/calc'
 import { AccountsTab } from './AccountsTab'
+import { CashflowTab } from './CashflowTab'
 import { GoalsTab } from './GoalsTab'
 
-const TABS = ['overview', 'accounts', 'goals'] as const
+const TABS = ['overview', 'accounts', 'goals', 'cashflow'] as const
 type Tab = (typeof TABS)[number]
 
 export default function FinancesPage() {
@@ -34,10 +35,12 @@ export default function FinancesPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="goals">Goals</TabsTrigger>
+          <TabsTrigger value="cashflow">Cashflow</TabsTrigger>
         </TabsList>
         <TabsContent value="overview"><Overview /></TabsContent>
         <TabsContent value="accounts"><AccountsTab /></TabsContent>
         <TabsContent value="goals"><GoalsTab /></TabsContent>
+        <TabsContent value="cashflow"><CashflowTab /></TabsContent>
       </Tabs>
     </>
   )

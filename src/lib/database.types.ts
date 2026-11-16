@@ -677,6 +677,63 @@ export type Database = {
           },
         ]
       }
+      cashflow_items: {
+        Row: {
+          amount_minor: number
+          created_at: string
+          created_by: string
+          direction: string
+          every: string
+          household_id: string
+          id: string
+          name: string
+          owner_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amount_minor: number
+          created_at?: string
+          created_by?: string
+          direction: string
+          every?: string
+          household_id: string
+          id?: string
+          name: string
+          owner_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_minor?: number
+          created_at?: string
+          created_by?: string
+          direction?: string
+          every?: string
+          household_id?: string
+          id?: string
+          name?: string
+          owner_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashflow_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_items_household_id_owner_id_fkey"
+            columns: ["household_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "household_members"
+            referencedColumns: ["household_id", "user_id"]
+          },
+        ]
+      }
       exercise_names: {
         Row: {
           activity: string | null
