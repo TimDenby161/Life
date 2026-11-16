@@ -4,12 +4,18 @@ import { useLocation, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { ListSkeleton } from '@/components/states'
 import { Segmented } from '@/components/ui/misc'
-import { type PageAgent, type PageViewName, pageView } from '../pageAgents'
+import { type ExtraTab, type PageAgent, type PageViewName, pageView } from '../pageAgents'
 
 const AgentView = lazy(() => import('./AgentView'))
 const GoalsView = lazy(() => import('./GoalsView'))
-const Venues = lazy(() => import('@/modules/wedding/components/WeddingPlan').then((m) => ({ default: m.Venues })))
-const CashflowTab = lazy(() => import('@/modules/finances/pages/CashflowTab').then((m) => ({ default: m.CashflowTab })))
+
+/** The tabs a page can have between its agent view and Details. */
+const TABS: Record<ExtraTab, { label: string; Component: ComponentType }> = {
+  cashflow: { label: 'Cashflow', Component: lazy(() => import('@/modules/finances/pages/CashflowTab').then((m) => ({ default: m.CashflowTab }))) },
+  venues: { label: 'Venues', Component: lazy(() => import('@/modules/wedding/components/WeddingPlan').then((m) => ({ default: m.Venues }))) },
+  guests: { label: 'Guests', Component: lazy(() => import('@/modules/wedding/components/GuestsTab').then((m) => ({ default: m.GuestsTab }))) },
+  suppliers: { label: 'Suppliers', Component: lazy(() => import('@/modules/wedding/components/SuppliersTab').then((m) => ({ default: m.SuppliersTab }))) },
+}
 
 /**
  * A page driven by its agent: opens on the agent view, with the page itself
@@ -21,7 +27,16 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
   const { pathname } = useLocation()
   // Home has no switch, so it's always the agent view unless a link points inside it.
   const asked = pageView(pathname, base, params)
-  const view = (asked === 'goals' && !scope.goals) || (asked === 'cashflow' && !scope.cashflow) || (asked === 'venues' && !scope.venues) ? 'agent' : asked
+  const tabs = scope.tabs ?? []
+  const isTab = (v: PageViewName): v is ExtraTab => (tabs as readonly string[]).includes(v)
+  const view = (asked === 'goals' && !scope.goals) || (asked in TABS && !isTab(asked)) ? 'agent' : asked
+  const Tab = isTab(view) ? TABS[view].Component : null
+  const options = [
+    { value: 'agent' as const, label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
+    ...tabs.map((t) => ({ value: t, label: TABS[t].label })),
+    { value: 'details' as const, label: 'Details' },
+    ...(scope.goals ? [{ value: 'goals' as const, label: 'Goals' }] : []),
+  ]
   const setView = (v: PageViewName) =>
     setParams(v === 'details' ? (p) => { p.set('view', 'details'); return p } : { view: v }, { replace: true })
 
@@ -31,16 +46,12 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
         <Segmented
           aria-label="View"
           size="sm"
-          className="w-fit"
+          className="w-fit max-w-full overflow-x-auto"
+          // Five or more fit a phone row with tighter padding.
+          itemClassName={options.length >= 5 ? 'px-2' : undefined}
           value={view}
           onChange={setView}
-          options={[
-            { value: 'agent', label: <span className="flex items-center gap-1.5"><Sparkles className="size-3.5" />{scope.label}</span> },
-            ...(scope.cashflow ? [{ value: 'cashflow' as const, label: 'Cashflow' }] : []),
-            ...(scope.venues ? [{ value: 'venues' as const, label: 'Venues' }] : []),
-            { value: 'details', label: 'Details' },
-            ...(scope.goals ? [{ value: 'goals' as const, label: 'Goals' }] : []),
-          ]}
+          options={options}
         />
       )}
       {view === 'agent' ? (
@@ -50,13 +61,9 @@ export function AgentShell({ scope, base, title, page: Page }: { scope: PageAgen
             <AgentView scope={scope} onDetails={() => setView('details')} />
           </Suspense>
         </div>
-      ) : view === 'cashflow' ? (
+      ) : Tab ? (
         <Suspense fallback={<ListSkeleton rows={3} />}>
-          <CashflowTab />
-        </Suspense>
-      ) : view === 'venues' ? (
-        <Suspense fallback={<ListSkeleton rows={3} />}>
-          <div className="md:max-w-2xl"><Venues /></div>
+          <div className={view === 'venues' ? 'md:max-w-2xl' : undefined}><Tab /></div>
         </Suspense>
       ) : view === 'goals' && scope.goals ? (
         <Suspense fallback={<ListSkeleton rows={3} />}>

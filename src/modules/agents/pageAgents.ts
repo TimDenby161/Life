@@ -19,21 +19,21 @@ export type PageAgent = {
   bare?: boolean
   /** A third tab, Goals, where the agent's goals are set (the Coach's weekly exercise goals). */
   goals?: 'fitness'
-  /** A Cashflow tab between the agent view and Details (Finance). */
-  cashflow?: true
-  /** A Venues tab between the agent view and Details (Wedding). */
-  venues?: true
+  /** Tabs between the agent view and Details, in order: Cashflow (Finance); Venues, Guests, Suppliers (Wedding). */
+  tabs?: readonly ExtraTab[]
 }
 
-export type PageViewName = 'agent' | 'details' | 'goals' | 'cashflow' | 'venues'
+export const EXTRA_TABS = ['cashflow', 'venues', 'guests', 'suppliers'] as const
+export type ExtraTab = (typeof EXTRA_TABS)[number]
+export type PageViewName = 'agent' | 'details' | 'goals' | ExtraTab
 
 export const PAGE_AGENTS: Record<string, PageAgent> = {
   home: { label: 'Today', description: 'The rest of today’s calendar, the jobs you can do today, and the news.', agents: ['chief_of_staff'], extra: 'today', bare: true },
   tasks: { label: 'Task Manager', description: 'Put-off and overdue tasks, deadline risks, duplicates and moves off packed days.', agents: ['task_manager'], kinds: ['overdue', 'put_off', 'deadline_risk', 'blocked', 'undated', 'duplicate', 'automate', 'packed_day', 'workload'] },
   jobs: { label: 'Household', description: 'Upkeep that’s easy to forget, rooms with nothing set up, and jobs that keep slipping.', agents: ['household', 'task_manager'], kinds: ['maintenance', 'empty_room', 'missed_repeat', 'repeat'] },
   calendar: { label: 'This week', description: 'Today’s calendar, packed days ahead, and jobs worth moving off them.', agents: ['chief_of_staff', 'task_manager'], kinds: ['packed_day'], extra: 'calendar' },
-  finances: { label: 'Finance', agents: ['finance'], extra: 'finance', cashflow: true },
-  wedding: { label: 'Plan', description: 'The jobs to do.', agents: ['wedding'], extra: 'wedding', venues: true },
+  finances: { label: 'Finance', agents: ['finance'], extra: 'finance', tabs: ['cashflow'] },
+  wedding: { label: 'Todo', description: 'The jobs to do.', agents: ['wedding'], extra: 'wedding', tabs: ['venues', 'guests', 'suppliers'] },
   languages: { label: 'Words', description: 'The words you know, the ones you’ve got wrong, and any to review again.', agents: ['language_coach'], extra: 'languages' },
   health: { label: 'Coach', agents: ['health_coach'], extra: 'exercise', goals: 'fitness' },
   stats: { label: 'Workload', description: 'How the joint jobs are shared.', agents: ['task_manager'], kinds: ['workload'] },
@@ -46,7 +46,7 @@ export const PAGE_AGENTS: Record<string, PageAgent> = {
  */
 export function pageView(pathname: string, base: string, params: URLSearchParams): PageViewName {
   const asked = params.get('view')
-  if (asked === 'details' || asked === 'agent' || asked === 'goals' || asked === 'cashflow' || asked === 'venues') return asked
+  if (asked === 'details' || asked === 'agent' || asked === 'goals' || (EXTRA_TABS as readonly string[]).includes(asked ?? '')) return asked as PageViewName
   const inside = pathname.replace(/\/$/, '') !== base.replace(/\/$/, '') || [...params.keys()].length > 0
   return inside ? 'details' : 'agent'
 }

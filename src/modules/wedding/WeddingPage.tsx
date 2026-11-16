@@ -16,12 +16,11 @@ import { fundPot } from '@/modules/finances/lib/pots'
 import { type WeddingSettings, useBudgetItems, useGuests, useSaveWeddingSettings, useWeddingChecklist, useWeddingSettings } from './api'
 import { BudgetTab } from './components/BudgetTab'
 import { ChecklistTab } from './components/ChecklistTab'
-import { GuestsTab } from './components/GuestsTab'
-import { SuppliersTab } from './components/SuppliersTab'
 import { money } from './lib/money'
 import { budgetTotals, guestCounts, taskCounts } from './lib/summary'
 
-const TABS = ['budget', 'guests', 'checklist', 'suppliers'] as const
+// Guests and Suppliers are their own tabs at the top (beside Todo and Venues).
+const TABS = ['budget', 'checklist'] as const
 type Tab = (typeof TABS)[number]
 
 export default function WeddingPage() {
@@ -80,14 +79,10 @@ export default function WeddingPage() {
       <Tabs value={tab} onValueChange={(v) => setParams((p) => { p.set('tab', v); return p }, { replace: true })}>
         <TabsList className="max-w-full">
           <TabsTrigger value="budget">Budget</TabsTrigger>
-          <TabsTrigger value="guests">Guests</TabsTrigger>
           <TabsTrigger value="checklist">Checklist</TabsTrigger>
-          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
         </TabsList>
         <TabsContent value="budget"><BudgetTab /></TabsContent>
-        <TabsContent value="guests"><GuestsTab /></TabsContent>
         <TabsContent value="checklist"><ChecklistTab /></TabsContent>
-        <TabsContent value="suppliers"><SuppliersTab /></TabsContent>
       </Tabs>
 
       {editing ? <SettingsDialog settings={settings.data ?? null} onClose={() => setEditing(false)} /> : null}
