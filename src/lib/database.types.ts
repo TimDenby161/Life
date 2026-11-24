@@ -3426,6 +3426,7 @@ export type Database = {
       trip_bookings: {
         Row: {
           book_by: string | null
+          cost_minor: number | null
           created_at: string
           created_by: string
           done: boolean
@@ -3438,6 +3439,7 @@ export type Database = {
         }
         Insert: {
           book_by?: string | null
+          cost_minor?: number | null
           created_at?: string
           created_by?: string
           done?: boolean
@@ -3450,6 +3452,7 @@ export type Database = {
         }
         Update: {
           book_by?: string | null
+          cost_minor?: number | null
           created_at?: string
           created_by?: string
           done?: boolean

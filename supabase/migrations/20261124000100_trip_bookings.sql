@@ -1,8 +1,9 @@
 -- =============================================================================
 -- Holidays Todo tab: the bookings each trip's plan says to make (its "Book now"
 -- list), one row each, ticked off when booked, with the date to book it by so
--- the tab can put the most urgent first. Shared by both of you like trips.
--- Just what to book: no references, prices or booking details are stored.
+-- the tab can put the most urgent first, and what it costs for 2 (the same
+-- figure as the trip's plan). Shared by both of you like trips. No booking
+-- references or payment details are stored.
 -- =============================================================================
 
 create table public.trip_bookings (
@@ -11,6 +12,7 @@ create table public.trip_bookings (
   trip_id uuid not null,
   title text not null check (char_length(trim(title)) between 1 and 200),
   book_by date,
+  cost_minor bigint check (cost_minor is null or cost_minor >= 0),
   done boolean not null default false,
   sort int not null default 0,
   created_by uuid not null default auth.uid(),
@@ -33,7 +35,7 @@ create policy "trip_bookings: members all" on public.trip_bookings
 
 -- created_by is not client-writable (it defaults to the caller).
 grant select, delete on public.trip_bookings to authenticated;
-grant insert (household_id, trip_id, title, book_by, sort) on public.trip_bookings to authenticated;
-grant update (title, book_by, done, sort) on public.trip_bookings to authenticated;
+grant insert (household_id, trip_id, title, book_by, cost_minor, sort) on public.trip_bookings to authenticated;
+grant update (title, book_by, cost_minor, done, sort) on public.trip_bookings to authenticated;
 
 alter publication supabase_realtime add table public.trip_bookings;

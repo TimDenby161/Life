@@ -19,7 +19,7 @@ import { inBrowser } from '@/modules/agents/components/AgentView'
 import { dates, ITEMS, NEXT, STATUS_TEXT } from '@/modules/agents/components/Trips'
 import { type TripBookingRow, type TripRow, useDeleteTrip, useDeleteTripBooking, useSaveTrip, useSaveTripBooking, useTripBookings, useTrips } from '@/modules/agents/api'
 import type { ItemStatus } from '../../../supabase/functions/_shared/agents/travel.ts'
-import { byDate, todoItems, type Urgency, URGENCY_LABELS, urgency } from './lib/todo'
+import { byDate, type TodoItem, todoItems, type Urgency, URGENCY_LABELS, urgency } from './lib/todo'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 const money = (minor: number) => formatMoney(minor, 'GBP', { hidePence: true })
@@ -195,29 +195,33 @@ function HolidayCard({ trip: t, onEdit }: { trip: TripRow; onEdit: () => void })
 /** Add a booking to a trip, with the date to book it by. */
 function AddBooking({ trips }: { trips: TripRow[] }) {
   const save = useSaveTripBooking()
-  const [f, setF] = useState({ trip_id: trips[0]?.id ?? '', title: '', book_by: '' })
-  const ready = Boolean(f.trip_id && f.title.trim())
+  const [f, setF] = useState({ trip_id: trips[0]?.id ?? '', title: '', book_by: '', cost: '' })
+  const cost = f.cost.trim() ? parseMoney(f.cost) : null
+  const ready = Boolean(f.trip_id && f.title.trim()) && (!f.cost.trim() || cost !== null)
   return (
     <form
-      className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[8rem_1fr_9rem_auto]"
+      className="grid grid-cols-[1fr_5rem_auto] gap-2 sm:grid-cols-[8rem_1fr_5rem_9rem_auto]"
       onSubmit={(e) => {
         e.preventDefault()
         if (!ready) return
         save.mutate(
-          { trip_id: f.trip_id, title: f.title.trim(), book_by: f.book_by || null, sort: Date.now() % 1_000_000_000 },
-          { onSuccess: () => setF({ ...f, title: '', book_by: '' }), onError },
+          { trip_id: f.trip_id, title: f.title.trim(), book_by: f.book_by || null, cost_minor: cost, sort: Date.now() % 1_000_000_000 },
+          { onSuccess: () => setF({ ...f, title: '', book_by: '', cost: '' }), onError },
         )
       }}
     >
-      <NativeSelect aria-label="Holiday" className="col-span-2 h-8 text-sm sm:col-span-1" value={f.trip_id} onChange={(e) => setF({ ...f, trip_id: e.target.value })}>
+      <NativeSelect aria-label="Holiday" className="col-span-3 h-8 text-sm sm:col-span-1" value={f.trip_id} onChange={(e) => setF({ ...f, trip_id: e.target.value })}>
         {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
       </NativeSelect>
       <Input aria-label="Booking" placeholder="Add a booking" maxLength={200} className="h-8 text-sm" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+      <Input aria-label="Cost for 2" inputMode="decimal" placeholder="£" className="h-8 text-sm" value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} />
       <Input aria-label="Book by" type="date" className="h-8 text-sm" value={f.book_by} onChange={(e) => setF({ ...f, book_by: e.target.value })} />
       <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!ready || save.isPending}>Add</Button>
     </form>
   )
 }
+
+const sumCost = (rows: TodoItem[]) => rows.reduce((s, i) => s + (i.kind === 'booking' ? (i.cost ?? 0) : 0), 0)
 
 const URGENCY_TONE: Record<Urgency, string> = {
   overdue: 'text-destructive',
@@ -254,6 +258,7 @@ function TodoList({ trips, bookings }: { trips: TripRow[]; bookings: TripBooking
           <section key={u} aria-label={URGENCY_LABELS[u]}>
             <h2 className={cn('mb-1 px-1 text-xs font-semibold uppercase tracking-wide', URGENCY_TONE[u])}>
               {URGENCY_LABELS[u]} · {rows.length}
+              {sumCost(rows) ? ` · ${money(sumCost(rows))}` : ''}
             </h2>
             <Card className="divide-y p-0">
               {rows.map((i) => (
@@ -274,7 +279,8 @@ function TodoList({ trips, bookings }: { trips: TripRow[]; bookings: TripBooking
                       <span className="block text-sm leading-snug">{i.label}</span>
                       <span className="block text-xs text-muted-foreground">{i.trip.name}</span>
                     </span>
-                    <span className={cn('shrink-0 text-xs tabular', URGENCY_TONE[u])}>{i.bookBy ? byDate(i.bookBy, today) : '—'}</span>
+                    {i.kind === 'booking' && i.cost != null ? <span className="shrink-0 text-sm tabular">{money(i.cost)}</span> : null}
+                    <span className={cn('w-20 shrink-0 text-right text-xs tabular', URGENCY_TONE[u])}>{i.bookBy ? byDate(i.bookBy, today) : '—'}</span>
                   </button>
                   {i.kind === 'booking' ? (
                     <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label={`Remove ${i.label}`} onClick={() => delBooking.mutate(i.id, { onError })}>

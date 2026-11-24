@@ -6,10 +6,10 @@ type ItemKey = 'time_off' | 'transport' | 'stay' | 'insurance'
 export const ITEM_LABELS: Record<ItemKey, string> = { time_off: 'Time off', transport: 'Travel', stay: 'Stay', insurance: 'Insurance' }
 
 type Trip = { id: string; name: string; starts_on: string; confirmed: boolean } & Record<ItemKey, string>
-type Booking = { id: string; trip_id: string; title: string; book_by: string | null; done: boolean; sort: number }
+type Booking = { id: string; trip_id: string; title: string; book_by: string | null; cost_minor: number | null; done: boolean; sort: number }
 
 export type TodoItem =
-  | { kind: 'booking'; id: string; trip: Trip; label: string; bookBy: string | null }
+  | { kind: 'booking'; id: string; trip: Trip; label: string; bookBy: string | null; cost: number | null }
   | { kind: 'item'; id: string; trip: Trip; key: ItemKey; label: string; bookBy: string }
 
 export type Urgency = 'overdue' | 'month' | 'quarter' | 'later'
@@ -19,14 +19,15 @@ const iso = (d: Date) => format(d, 'yyyy-MM-dd')
 
 /**
  * The trip's own items get a date from its bookings: time off and insurance are
- * needed before you pay for anything (the trip's first booking), and travel and
+ * needed before you pay for anything (the trip's first booking with a cost, so
+ * research and checks don't count), and travel and
  * stay cover whatever's left, two months before you go. With no bookings, time
  * off and insurance fall back to three months before.
  */
 function itemDate(trip: Trip, key: ItemKey, open: Booking[]) {
   const start = parseISO(trip.starts_on)
   if (key === 'transport' || key === 'stay') return iso(addMonths(start, -2))
-  const first = open.map((b) => b.book_by).filter((d): d is string => !!d).sort()[0]
+  const first = open.filter((b) => b.cost_minor != null).map((b) => b.book_by).filter((d): d is string => !!d).sort()[0]
   return first ?? iso(addMonths(start, -3))
 }
 
@@ -34,7 +35,7 @@ export function todoItems(trips: Trip[], bookings: Booking[]): TodoItem[] {
   const items: TodoItem[] = []
   for (const trip of trips.filter((t) => t.confirmed)) {
     const open = bookings.filter((b) => b.trip_id === trip.id && !b.done)
-    for (const b of open) items.push({ kind: 'booking', id: b.id, trip, label: b.title, bookBy: b.book_by })
+    for (const b of open) items.push({ kind: 'booking', id: b.id, trip, label: b.title, bookBy: b.book_by, cost: b.cost_minor })
     for (const key of Object.keys(ITEM_LABELS) as ItemKey[]) {
       if (trip[key] === 'todo') items.push({ kind: 'item', id: `${trip.id}:${key}`, trip, key, label: ITEM_LABELS[key], bookBy: itemDate(trip, key, open) })
     }

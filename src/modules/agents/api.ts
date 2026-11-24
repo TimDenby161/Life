@@ -288,10 +288,10 @@ export const useTripBookings = () =>
   })
 
 export const useSaveTripBooking = () =>
-  useAgentMutation(async (householdId, b: { id?: string; trip_id?: string; title?: string; book_by?: string | null; done?: boolean; sort?: number }) => {
+  useAgentMutation(async (householdId, b: { id?: string; trip_id?: string; title?: string; book_by?: string | null; cost_minor?: number | null; done?: boolean; sort?: number }) => {
     const { id, ...fields } = b
     if (id) unwrap(await supabase.from('trip_bookings').update(fields).eq('id', id))
-    else unwrap(await supabase.from('trip_bookings').insert({ household_id: householdId, trip_id: fields.trip_id!, title: fields.title!, book_by: fields.book_by ?? null, sort: fields.sort ?? 0 }))
+    else unwrap(await supabase.from('trip_bookings').insert({ household_id: householdId, trip_id: fields.trip_id!, title: fields.title!, book_by: fields.book_by ?? null, cost_minor: fields.cost_minor ?? null, sort: fields.sort ?? 0 }))
   })
 
 export const useDeleteTripBooking = () =>
