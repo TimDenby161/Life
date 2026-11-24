@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { Check, ExternalLink, Minus, Pencil, Plane, Plus, Trash2 } from 'lucide-react'
+import { Check, CircleCheck, ExternalLink, Minus, Pencil, Plane, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/states'
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { Field, Input, NativeSelect } from '@/components/ui/input'
-import { Progress, Segmented } from '@/components/ui/misc'
+import { Progress, Segmented, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
 import { todayISO } from '@/lib/dates'
 import { getErrorMessage } from '@/lib/errors'
 import { formatMoney, parseMoney, toMoneyInput } from '@/lib/money'
@@ -190,19 +191,74 @@ function HolidayCard({ trip: t, onEdit }: { trip: TripRow; onEdit: () => void })
   )
 }
 
+/** What's left to book: every item still to do on the trips you're going on, soonest trip first; tap one when it's booked. */
+function TodoList({ trips }: { trips: TripRow[] }) {
+  const save = useSaveTrip()
+  const open = trips
+    .filter((t) => t.confirmed)
+    .map((t) => ({ trip: t, items: ITEMS.filter(({ key }) => t[key] === 'todo') }))
+    .filter((g) => g.items.length)
+  if (!open.length) {
+    return (
+      <Card>
+        <EmptyState icon={CircleCheck} title="All booked" description="Nothing left to book for the holidays you're going on." className="py-6" />
+      </Card>
+    )
+  }
+  return (
+    <div className="grid gap-2">
+      {open.map(({ trip: t, items }) => (
+        <Card key={t.id} className="p-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="truncate text-sm font-semibold">{t.name}</h2>
+            <span className="shrink-0 text-xs text-muted-foreground">{dates(t.starts_on, t.ends_on)}</span>
+          </div>
+          <ul className="mt-2 grid gap-1">
+            {items.map(({ key, label }) => (
+              <li key={key}>
+                <button
+                  type="button"
+                  disabled={save.isPending}
+                  aria-label={`${label} for ${t.name}: mark done`}
+                  className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm hover:bg-muted"
+                  onClick={() => save.mutate({ id: t.id, [key]: 'done' }, { onError })}
+                >
+                  <span className="size-4 shrink-0 rounded-full border" />
+                  {label}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {t.plan_url ? (
+            <a href={inBrowser(t.plan_url)} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <ExternalLink className="size-3" /> Plan
+            </a>
+          ) : null}
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+const TABS = ['planned', 'todo'] as const
+type Tab = (typeof TABS)[number]
+
 /**
- * Holidays: every trip to come, soonest first, with what it costs (for both of
- * you), what's paid, what's sorted, and a link to its plan. Ideas (alternatives
- * not yet decided) are marked and left out of the total, and the Travel agent
- * doesn't chase them.
+ * Holidays: two tabs. Planned is every trip to come, soonest first, with what it
+ * costs (for both of you), what's paid, what's sorted, and a link to its plan.
+ * Ideas (alternatives not yet decided) are marked and left out of the total, and
+ * the Travel agent doesn't chase them. Todo is what's still to book.
  */
 export default function HolidaysPage() {
   const trips = useTrips()
   const [editing, setEditing] = useState<Form | null>(null)
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = (TABS as readonly string[]).includes(params.get('tab') ?? '') ? (params.get('tab') as Tab) : 'planned'
 
   const going = (trips.data ?? []).filter((t) => t.confirmed)
   const total = going.reduce((s, t) => s + (t.cost_minor ?? 0), 0)
   const paid = going.reduce((s, t) => s + t.paid_minor, 0)
+  const toBook = going.reduce((n, t) => n + ITEMS.filter(({ key }) => t[key] === 'todo').length, 0)
 
   return (
     <>
@@ -215,19 +271,34 @@ export default function HolidaysPage() {
           </Button>
         }
       />
-      <div className="grid gap-2 md:max-w-2xl">
+      <Tabs value={tab} onValueChange={(v) => setParams((p) => { p.set('tab', v); return p }, { replace: true })} className="md:max-w-2xl">
+        <TabsList>
+          <TabsTrigger value="planned">Planned</TabsTrigger>
+          <TabsTrigger value="todo">Todo{toBook ? ` · ${toBook}` : ''}</TabsTrigger>
+        </TabsList>
         {trips.error ? (
-          <ErrorState error={trips.error} onRetry={() => void trips.refetch()} />
+          <div className="mt-4"><ErrorState error={trips.error} onRetry={() => void trips.refetch()} /></div>
         ) : trips.isPending ? (
-          <ListSkeleton rows={4} />
-        ) : !trips.data.length ? (
-          <Card>
-            <EmptyState icon={Plane} title="No holidays yet" description="Add one with its dates, cost and the link to its plan." className="py-6" />
-          </Card>
+          <div className="mt-4"><ListSkeleton rows={4} /></div>
         ) : (
-          trips.data.map((t) => <HolidayCard key={t.id} trip={t} onEdit={() => setEditing(toForm(t))} />)
+          <>
+            <TabsContent value="planned">
+              <div className="grid gap-2">
+                {!trips.data.length ? (
+                  <Card>
+                    <EmptyState icon={Plane} title="No holidays yet" description="Add one with its dates, cost and the link to its plan." className="py-6" />
+                  </Card>
+                ) : (
+                  trips.data.map((t) => <HolidayCard key={t.id} trip={t} onEdit={() => setEditing(toForm(t))} />)
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="todo">
+              <TodoList trips={trips.data} />
+            </TabsContent>
+          </>
         )}
-      </div>
+      </Tabs>
       {editing ? <HolidayDialog initial={editing} trips={trips.data ?? []} onClose={() => setEditing(null)} /> : null}
     </>
   )
