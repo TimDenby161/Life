@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import { usePots } from '@/modules/finances/hooks'
 import { inBrowser } from '@/modules/agents/components/AgentView'
 import { dates, ITEMS, NEXT, STATUS_TEXT } from '@/modules/agents/components/Trips'
-import { type TripRow, useDeleteTrip, useSaveTrip, useTrips } from '@/modules/agents/api'
+import { type TripBookingRow, type TripRow, useDeleteTrip, useDeleteTripBooking, useSaveTrip, useSaveTripBooking, useTripBookings, useTrips } from '@/modules/agents/api'
 import type { ItemStatus } from '../../../supabase/functions/_shared/agents/travel.ts'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
@@ -191,14 +191,59 @@ function HolidayCard({ trip: t, onEdit }: { trip: TripRow; onEdit: () => void })
   )
 }
 
-/** What's left to book: every item still to do on the trips you're going on, soonest trip first; tap one when it's booked. */
-function TodoList({ trips }: { trips: TripRow[] }) {
+/** Add a booking to a trip's list. */
+function AddBooking({ trip, next }: { trip: TripRow; next: number }) {
+  const save = useSaveTripBooking()
+  const [title, setTitle] = useState('')
+  return (
+    <form
+      className="mt-1 flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const t = title.trim()
+        if (!t) return
+        save.mutate({ trip_id: trip.id, title: t, sort: next }, { onSuccess: () => setTitle(''), onError })
+      }}
+    >
+      <Input aria-label={`Add a booking for ${trip.name}`} placeholder="Add a booking" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 text-sm" />
+      <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!title.trim() || save.isPending}>Add</Button>
+    </form>
+  )
+}
+
+function Row({ label, onDone, onRemove, busy }: { label: string; onDone: () => void; onRemove?: () => void; busy: boolean }) {
+  return (
+    <li className="flex items-center gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        aria-label={`${label}: mark booked`}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm hover:bg-muted"
+        onClick={onDone}
+      >
+        <span className="size-4 shrink-0 rounded-full border" />
+        <span className="min-w-0">{label}</span>
+      </button>
+      {onRemove ? (
+        <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label={`Remove ${label}`} onClick={onRemove}>
+          <Trash2 />
+        </Button>
+      ) : null}
+    </li>
+  )
+}
+
+/**
+ * What's left to book on the trips you're going on, soonest trip first: the
+ * bookings from each plan's "Book now" list, then time off, travel, stay and
+ * insurance where still to do. Tap one when it's booked.
+ */
+function TodoList({ trips, bookings }: { trips: TripRow[]; bookings: TripBookingRow[] }) {
   const save = useSaveTrip()
-  const open = trips
-    .filter((t) => t.confirmed)
-    .map((t) => ({ trip: t, items: ITEMS.filter(({ key }) => t[key] === 'todo') }))
-    .filter((g) => g.items.length)
-  if (!open.length) {
+  const saveBooking = useSaveTripBooking()
+  const delBooking = useDeleteTripBooking()
+  const going = trips.filter((t) => t.confirmed)
+  if (!going.length) {
     return (
       <Card>
         <EmptyState icon={CircleCheck} title="All booked" description="Nothing left to book for the holidays you're going on." className="py-6" />
@@ -207,35 +252,46 @@ function TodoList({ trips }: { trips: TripRow[] }) {
   }
   return (
     <div className="grid gap-2">
-      {open.map(({ trip: t, items }) => (
-        <Card key={t.id} className="p-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="truncate text-sm font-semibold">{t.name}</h2>
-            <span className="shrink-0 text-xs text-muted-foreground">{dates(t.starts_on, t.ends_on)}</span>
-          </div>
-          <ul className="mt-2 grid gap-1">
-            {items.map(({ key, label }) => (
-              <li key={key}>
-                <button
-                  type="button"
-                  disabled={save.isPending}
-                  aria-label={`${label} for ${t.name}: mark done`}
-                  className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm hover:bg-muted"
-                  onClick={() => save.mutate({ id: t.id, [key]: 'done' }, { onError })}
-                >
-                  <span className="size-4 shrink-0 rounded-full border" />
-                  {label}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {t.plan_url ? (
-            <a href={inBrowser(t.plan_url)} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-              <ExternalLink className="size-3" /> Plan
-            </a>
-          ) : null}
-        </Card>
-      ))}
+      {going.map((t) => {
+        const mine = bookings.filter((b) => b.trip_id === t.id)
+        const open = mine.filter((b) => !b.done)
+        const items = ITEMS.filter(({ key }) => t[key] === 'todo')
+        return (
+          <Card key={t.id} className="p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="truncate text-sm font-semibold">{t.name}</h2>
+              <span className="shrink-0 text-xs text-muted-foreground">{dates(t.starts_on, t.ends_on)}</span>
+            </div>
+            {open.length || items.length ? (
+              <ul className="mt-2 grid gap-0.5">
+                {open.map((b) => (
+                  <Row
+                    key={b.id}
+                    label={b.title}
+                    busy={saveBooking.isPending}
+                    onDone={() => saveBooking.mutate({ id: b.id, done: true }, { onError })}
+                    onRemove={() => delBooking.mutate(b.id, { onError })}
+                  />
+                ))}
+                {items.map(({ key, label }) => (
+                  <Row key={key} label={label} busy={save.isPending} onDone={() => save.mutate({ id: t.id, [key]: 'done' }, { onError })} />
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-success"><Check className="size-4" /> All booked</p>
+            )}
+            <AddBooking trip={t} next={mine.reduce((m, b) => Math.max(m, b.sort), 0) + 1} />
+            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>{mine.length - open.length ? `${mine.length - open.length} booked` : ''}</span>
+              {t.plan_url ? (
+                <a href={inBrowser(t.plan_url)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 hover:text-foreground">
+                  <ExternalLink className="size-3" /> Plan
+                </a>
+              ) : null}
+            </div>
+          </Card>
+        )
+      })}
     </div>
   )
 }
@@ -251,6 +307,7 @@ type Tab = (typeof TABS)[number]
  */
 export default function HolidaysPage() {
   const trips = useTrips()
+  const bookings = useTripBookings()
   const [editing, setEditing] = useState<Form | null>(null)
   const [params, setParams] = useSearchParams()
   const tab: Tab = (TABS as readonly string[]).includes(params.get('tab') ?? '') ? (params.get('tab') as Tab) : 'planned'
@@ -258,7 +315,10 @@ export default function HolidaysPage() {
   const going = (trips.data ?? []).filter((t) => t.confirmed)
   const total = going.reduce((s, t) => s + (t.cost_minor ?? 0), 0)
   const paid = going.reduce((s, t) => s + t.paid_minor, 0)
-  const toBook = going.reduce((n, t) => n + ITEMS.filter(({ key }) => t[key] === 'todo').length, 0)
+  const goingIds = new Set(going.map((t) => t.id))
+  const toBook =
+    going.reduce((n, t) => n + ITEMS.filter(({ key }) => t[key] === 'todo').length, 0) +
+    (bookings.data ?? []).filter((b) => !b.done && goingIds.has(b.trip_id)).length
 
   return (
     <>
@@ -294,7 +354,7 @@ export default function HolidaysPage() {
               </div>
             </TabsContent>
             <TabsContent value="todo">
-              <TodoList trips={trips.data} />
+              <TodoList trips={trips.data} bookings={bookings.data ?? []} />
             </TabsContent>
           </>
         )}

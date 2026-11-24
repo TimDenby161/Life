@@ -278,6 +278,27 @@ export const useDeleteTrip = () =>
     unwrap(await supabase.from('trips').delete().eq('id', id))
   })
 
+export type TripBookingRow = Tables<'trip_bookings'>
+
+/** What each trip's plan says to book, in the plan's order. */
+export const useTripBookings = () =>
+  useQuery({
+    queryKey: [...agentKeys.all, 'trip-bookings'],
+    queryFn: async () => unwrap(await supabase.from('trip_bookings').select('*').order('sort').order('created_at')),
+  })
+
+export const useSaveTripBooking = () =>
+  useAgentMutation(async (householdId, b: { id?: string; trip_id?: string; title?: string; done?: boolean; sort?: number }) => {
+    const { id, ...fields } = b
+    if (id) unwrap(await supabase.from('trip_bookings').update(fields).eq('id', id))
+    else unwrap(await supabase.from('trip_bookings').insert({ household_id: householdId, trip_id: fields.trip_id!, title: fields.title!, sort: fields.sort ?? 0 }))
+  })
+
+export const useDeleteTripBooking = () =>
+  useAgentMutation(async (_h, id: string) => {
+    unwrap(await supabase.from('trip_bookings').delete().eq('id', id))
+  })
+
 export type GoalRow = Tables<'career_goals'>
 
 /** Both of our goals (each person edits only their own). */

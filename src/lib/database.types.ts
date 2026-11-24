@@ -3423,6 +3423,57 @@ export type Database = {
           },
         ]
       }
+      trip_bookings: {
+        Row: {
+          created_at: string
+          created_by: string
+          done: boolean
+          household_id: string
+          id: string
+          sort: number
+          title: string
+          trip_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          done?: boolean
+          household_id: string
+          id?: string
+          sort?: number
+          title: string
+          trip_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          done?: boolean
+          household_id?: string
+          id?: string
+          sort?: number
+          title?: string
+          trip_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_bookings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_bookings_trip_id_household_id_fkey"
+            columns: ["trip_id", "household_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id", "household_id"]
+          },
+        ]
+      }
       trips: {
         Row: {
           abroad: boolean
