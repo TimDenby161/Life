@@ -19,6 +19,7 @@ import { inBrowser } from '@/modules/agents/components/AgentView'
 import { dates, ITEMS, NEXT, STATUS_TEXT } from '@/modules/agents/components/Trips'
 import { type TripBookingRow, type TripRow, useDeleteTrip, useDeleteTripBooking, useSaveTrip, useSaveTripBooking, useTripBookings, useTrips } from '@/modules/agents/api'
 import type { ItemStatus } from '../../../supabase/functions/_shared/agents/travel.ts'
+import { byDate, todoItems, type Urgency, URGENCY_LABELS, urgency } from './lib/todo'
 
 const onError = (e: unknown) => toast.error(getErrorMessage(e))
 const money = (minor: number) => formatMoney(minor, 'GBP', { hidePence: true })
@@ -191,107 +192,104 @@ function HolidayCard({ trip: t, onEdit }: { trip: TripRow; onEdit: () => void })
   )
 }
 
-/** Add a booking to a trip's list. */
-function AddBooking({ trip, next }: { trip: TripRow; next: number }) {
+/** Add a booking to a trip, with the date to book it by. */
+function AddBooking({ trips }: { trips: TripRow[] }) {
   const save = useSaveTripBooking()
-  const [title, setTitle] = useState('')
+  const [f, setF] = useState({ trip_id: trips[0]?.id ?? '', title: '', book_by: '' })
+  const ready = Boolean(f.trip_id && f.title.trim())
   return (
     <form
-      className="mt-1 flex gap-2"
+      className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[8rem_1fr_9rem_auto]"
       onSubmit={(e) => {
         e.preventDefault()
-        const t = title.trim()
-        if (!t) return
-        save.mutate({ trip_id: trip.id, title: t, sort: next }, { onSuccess: () => setTitle(''), onError })
+        if (!ready) return
+        save.mutate(
+          { trip_id: f.trip_id, title: f.title.trim(), book_by: f.book_by || null, sort: Date.now() % 1_000_000_000 },
+          { onSuccess: () => setF({ ...f, title: '', book_by: '' }), onError },
+        )
       }}
     >
-      <Input aria-label={`Add a booking for ${trip.name}`} placeholder="Add a booking" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 text-sm" />
-      <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!title.trim() || save.isPending}>Add</Button>
+      <NativeSelect aria-label="Holiday" className="col-span-2 h-8 text-sm sm:col-span-1" value={f.trip_id} onChange={(e) => setF({ ...f, trip_id: e.target.value })}>
+        {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </NativeSelect>
+      <Input aria-label="Booking" placeholder="Add a booking" maxLength={200} className="h-8 text-sm" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+      <Input aria-label="Book by" type="date" className="h-8 text-sm" value={f.book_by} onChange={(e) => setF({ ...f, book_by: e.target.value })} />
+      <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!ready || save.isPending}>Add</Button>
     </form>
   )
 }
 
-function Row({ label, onDone, onRemove, busy }: { label: string; onDone: () => void; onRemove?: () => void; busy: boolean }) {
-  return (
-    <li className="flex items-center gap-1">
-      <button
-        type="button"
-        disabled={busy}
-        aria-label={`${label}: mark booked`}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left text-sm hover:bg-muted"
-        onClick={onDone}
-      >
-        <span className="size-4 shrink-0 rounded-full border" />
-        <span className="min-w-0">{label}</span>
-      </button>
-      {onRemove ? (
-        <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label={`Remove ${label}`} onClick={onRemove}>
-          <Trash2 />
-        </Button>
-      ) : null}
-    </li>
-  )
+const URGENCY_TONE: Record<Urgency, string> = {
+  overdue: 'text-destructive',
+  month: 'text-warning',
+  quarter: 'text-foreground',
+  later: 'text-muted-foreground',
 }
 
 /**
- * What's left to book on the trips you're going on, soonest trip first: the
- * bookings from each plan's "Book now" list, then time off, travel, stay and
- * insurance where still to do. Tap one when it's booked.
+ * Everything still to book on the trips you're going on, as one list in the
+ * order it needs booking: each plan's "Book now" bookings (by their book-by
+ * date), then time off, travel, stay and insurance where still to do (dated
+ * from the trip; see lib/todo.ts). Tap one when it's booked.
  */
 function TodoList({ trips, bookings }: { trips: TripRow[]; bookings: TripBookingRow[] }) {
   const save = useSaveTrip()
   const saveBooking = useSaveTripBooking()
   const delBooking = useDeleteTripBooking()
+  const today = todayISO()
   const going = trips.filter((t) => t.confirmed)
-  if (!going.length) {
-    return (
-      <Card>
-        <EmptyState icon={CircleCheck} title="All booked" description="Nothing left to book for the holidays you're going on." className="py-6" />
-      </Card>
-    )
-  }
+  const items = todoItems(going, bookings)
+  const groups = (['overdue', 'month', 'quarter', 'later'] as const)
+    .map((u) => ({ u, items: items.filter((i) => urgency(i.bookBy, today) === u) }))
+    .filter((g) => g.items.length)
+
   return (
-    <div className="grid gap-2">
-      {going.map((t) => {
-        const mine = bookings.filter((b) => b.trip_id === t.id)
-        const open = mine.filter((b) => !b.done)
-        const items = ITEMS.filter(({ key }) => t[key] === 'todo')
-        return (
-          <Card key={t.id} className="p-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="truncate text-sm font-semibold">{t.name}</h2>
-              <span className="shrink-0 text-xs text-muted-foreground">{dates(t.starts_on, t.ends_on)}</span>
-            </div>
-            {open.length || items.length ? (
-              <ul className="mt-2 grid gap-0.5">
-                {open.map((b) => (
-                  <Row
-                    key={b.id}
-                    label={b.title}
-                    busy={saveBooking.isPending}
-                    onDone={() => saveBooking.mutate({ id: b.id, done: true }, { onError })}
-                    onRemove={() => delBooking.mutate(b.id, { onError })}
-                  />
-                ))}
-                {items.map(({ key, label }) => (
-                  <Row key={key} label={label} busy={save.isPending} onDone={() => save.mutate({ id: t.id, [key]: 'done' }, { onError })} />
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-success"><Check className="size-4" /> All booked</p>
-            )}
-            <AddBooking trip={t} next={mine.reduce((m, b) => Math.max(m, b.sort), 0) + 1} />
-            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{mine.length - open.length ? `${mine.length - open.length} booked` : ''}</span>
-              {t.plan_url ? (
-                <a href={inBrowser(t.plan_url)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 hover:text-foreground">
-                  <ExternalLink className="size-3" /> Plan
-                </a>
-              ) : null}
-            </div>
-          </Card>
-        )
-      })}
+    <div className="grid gap-3">
+      {!items.length ? (
+        <Card>
+          <EmptyState icon={CircleCheck} title="All booked" description="Nothing left to book for the holidays you're going on." className="py-6" />
+        </Card>
+      ) : (
+        groups.map(({ u, items: rows }) => (
+          <section key={u} aria-label={URGENCY_LABELS[u]}>
+            <h2 className={cn('mb-1 px-1 text-xs font-semibold uppercase tracking-wide', URGENCY_TONE[u])}>
+              {URGENCY_LABELS[u]} · {rows.length}
+            </h2>
+            <Card className="divide-y p-0">
+              {rows.map((i) => (
+                <div key={i.id} className="flex items-center gap-1 px-2">
+                  <button
+                    type="button"
+                    disabled={save.isPending || saveBooking.isPending}
+                    aria-label={`${i.label} for ${i.trip.name}: mark booked`}
+                    className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left"
+                    onClick={() =>
+                      i.kind === 'booking'
+                        ? saveBooking.mutate({ id: i.id, done: true }, { onError })
+                        : save.mutate({ id: i.trip.id, [i.key]: 'done' }, { onError })
+                    }
+                  >
+                    <span className="size-4 shrink-0 rounded-full border" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm leading-snug">{i.label}</span>
+                      <span className="block text-xs text-muted-foreground">{i.trip.name}</span>
+                    </span>
+                    <span className={cn('shrink-0 text-xs tabular', URGENCY_TONE[u])}>{i.bookBy ? byDate(i.bookBy, today) : '—'}</span>
+                  </button>
+                  {i.kind === 'booking' ? (
+                    <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label={`Remove ${i.label}`} onClick={() => delBooking.mutate(i.id, { onError })}>
+                      <Trash2 />
+                    </Button>
+                  ) : (
+                    <span className="size-7 shrink-0" />
+                  )}
+                </div>
+              ))}
+            </Card>
+          </section>
+        ))
+      )}
+      {going.length ? <AddBooking trips={going} /> : null}
     </div>
   )
 }
@@ -315,10 +313,7 @@ export default function HolidaysPage() {
   const going = (trips.data ?? []).filter((t) => t.confirmed)
   const total = going.reduce((s, t) => s + (t.cost_minor ?? 0), 0)
   const paid = going.reduce((s, t) => s + t.paid_minor, 0)
-  const goingIds = new Set(going.map((t) => t.id))
-  const toBook =
-    going.reduce((n, t) => n + ITEMS.filter(({ key }) => t[key] === 'todo').length, 0) +
-    (bookings.data ?? []).filter((b) => !b.done && goingIds.has(b.trip_id)).length
+  const toBook = todoItems(going, bookings.data ?? []).length
 
   return (
     <>
