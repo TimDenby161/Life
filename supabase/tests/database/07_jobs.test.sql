@@ -47,7 +47,10 @@ select lives_ok(format('select complete_task_occurrence(%L)', current_setting('t
 select is(pg_temp.open_due(current_setting('t.job')), current_setting('t.today')::date + 7, 'next one is due a week after it was done');
 select is((select generated_from from task_occurrences where task_id = current_setting('t.job')::uuid and status = 'open'),
   current_setting('t.occ')::uuid, 'next occurrence is linked to the completion');
+-- An internal helper (only the job functions call it), so read it as the owner, not as Tim.
+reset role;
 select is(public.task_last_done_on(current_setting('t.job')::uuid), current_setting('t.today')::date, 'last done is today');
+select pg_temp.as_user(current_setting('t.tim')::uuid);
 
 -- Undo puts it back as it was --------------------------------------------------
 select lives_ok(format('select reopen_task_occurrence(%L)', current_setting('t.occ')), 'Tim undoes the completion');

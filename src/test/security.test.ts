@@ -32,6 +32,12 @@ describe('database migrations', () => {
     expect(sql).not.toMatch(/grant [^;]* to [^;]*\banon\b/i)
   })
 
+  it('closes new functions to PUBLIC globally and never grants a function to anon', () => {
+    // A per-schema default can't take away PUBLIC's EXECUTE; only the global one can.
+    expect(sql).toMatch(/alter default privileges revoke execute on functions from public;/)
+    expect(sql).not.toMatch(/grant execute on function [^;]* to [^;]*\b(anon|public)\b/i)
+  })
+
   it('keeps every SECURITY DEFINER function on an empty search_path', () => {
     const fns = sql.split(/create or replace function /).slice(1)
     for (const fn of fns.filter((f) => /security definer/.test(f.split('$$')[0]))) {
