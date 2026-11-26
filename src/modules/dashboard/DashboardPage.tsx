@@ -12,6 +12,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 import { Composer } from '@/modules/feed/components/FeedItems'
 import { useAgentSettings, useAiPicks } from '@/modules/agents/api'
+import { AgentHealthNotice } from '@/modules/agents/components/AgentHealthNotice'
 import { aiFirst, canDoAnywhere, todaysPlan } from '@/modules/agents/lib/aiOrder'
 import { awayToday, freeMinutesToday, longestGapToday, withoutWork, workMinutesToday } from '@/modules/agents/lib/away'
 import { useCalendarEvents, useCalendarIntegrations } from '@/modules/calendar/api'
@@ -57,6 +58,7 @@ export default function DashboardPage() {
   return (
     <div className="grid grid-cols-1 gap-5">
       <h1 className="sr-only">Home</h1>
+      <AgentHealthNotice />
       <PotTiles />
 
       {adding ? <AddTask onAdded={() => setAdding(false)} /> : null}
