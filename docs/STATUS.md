@@ -1,6 +1,14 @@
 # Status
 
-_Last updated: 22 October 2026_
+_Last updated: 26 November 2026_
+
+**Live since 26 October 2026**: the app on GitHub Pages and the hosted Supabase project (Ireland),
+with migrations applied by `supabase db push`, Google Calendar and Sheets sync, push notifications
+and the agents. Open work is kept in the owner's task list, not here.
+
+The rest of this page is the local verification done on 22 October 2026, before going live. The
+suites have grown since (26 November 2026: 795 Vitest tests, 551 pgTAP tests). The "needs your
+accounts" and "decisions" lists from then are settled and have been removed.
 
 ## Verified locally
 
@@ -13,29 +21,9 @@ Validation actually run against the local Supabase stack (Docker):
 - Manual browser checks: sign-in; create a recurring task, complete it, see the next occurrence and history; finances overview and account history; feed and realtime (a post made as Sophie appeared live in Tim's open feed); health partner view showing only shared categories; dashboard; statistics; settings; phone-width layouts; light and dark modes.
 - Edge Function `calendar-events` tested on the local edge runtime: rejects missing auth and bad ranges, reports "not configured" honestly, and doesn't expose one household's calendar config to another.
 
-## Not yet verified (needs your accounts)
-
-- Real Google Calendar data through the service account (no Google credentials were used).
-- Google Sheet balance sync against the real Sheets API. It was tested end to end on the local stack against a fake Google server serving a copy of the MonthReport layout.
-- `external-feed` against live RSS hosts and API-Football (no API key used). The code paths for missing configuration were exercised; live responses were not.
-- Hosted Supabase project, invite emails and the GitHub Pages deployment (nothing was deployed or pushed).
-- Installing the PWA on a physical iPhone or Android phone.
-- The Meals recipes' real call to Claude (no API key was used locally): the `recipes` mode was run for a bad mode, an empty week and no key, and the Recipes view was checked in the browser with recipes saved through `recipes_save`.
-- The Meals shopping list's real call to Claude (no API key was used). Locally the `shopping-list` function was run for a bad week, an empty week, no login and no key, and the list was checked in the browser with rows saved through `shopping_save_list`; the prompt input and the check on Claude's answer are unit-tested.
-
-## Decisions for you
-
-1. **Repository name and visibility.** The app is served at `/<repo>/`. GitHub Pages on a private repo needs a paid plan; a public repo is safe (no secrets) but the code is visible.
-2. **Supabase project.** Region (London suggested), and the two email addresses for the accounts.
-3. **Google Calendar method.** Service account (recommended; needs a free Google Cloud project) or the simpler embed fallback (see DECISIONS.md, ADR 6).
-4. **Chesterfield FC scores.** Whether to create a free API-Football key, plus any news feeds you want (hosts must be allow-listed).
-5. **Health privacy.** Decided 2026-10-27: no privacy settings; all health records are visible to both of you.
-6. **Units.** Weight is kg; stones/pounds display isn't implemented.
-
 ## Next steps (suggested)
 
 - CSV import for bank statements (seam in `finances/integrations/types.ts`; `external_id` gives idempotent re-imports).
-- Push notifications for tasks due today (Web Push + a scheduled Edge Function).
 - Apple Health / Health Connect import (columns `source` / `external_id` are ready).
 - Recurring transactions (e.g. salary, bills) and budget roll-over.
 - Editing transfers in place (today: delete and re-create).
