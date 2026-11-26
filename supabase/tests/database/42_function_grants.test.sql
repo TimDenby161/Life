@@ -1,10 +1,10 @@
 -- Functions are closed unless granted: anon (signed out) runs none, PUBLIC holds no EXECUTE,
 -- internal helpers can't be called over /rest/v1/rpc by a signed-in user, and the RPCs the app
--- uses still work. A function made later starts closed too.
+-- uses still work. A function made later starts closed too, and every function fixes its search_path.
 -- Run with: npm run test:db   (requires the local stack: supabase start)
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(9);
 
 create temporary view own_functions as
   select p.oid, p.oid::regprocedure::text as sig, p.proname, p.proacl
@@ -63,6 +63,12 @@ select ok(
 select ok(
   (select proconfig @> array['search_path=""'] from pg_proc where oid = 'public.exercise_plan_touch()'::regprocedure),
   'exercise_plan_touch runs on an empty search_path');
+
+select is_empty(
+  $$ select sig from own_functions f where f.proname <> 'zz_grants_probe' and not exists (
+       select 1 from pg_proc p, unnest(coalesce(p.proconfig, '{}')) c
+       where p.oid = f.oid and c like 'search_path=%') $$,
+  'every function in public fixes its search_path (the advisor''s other finding)');
 
 select * from finish();
 rollback;
